@@ -13,10 +13,21 @@
   // The modal we should close after the user dismisses the popup
   let modalToClose = null;
 
-  function openPopup({ title, body, isError }) {
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, (ch) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+  }
+
+  function openPopup({ title, bodyHtml, untrustedDetail, isError }) {
     if (!popup) return;
     if (popupTitle) popupTitle.textContent = title;
-    if (popupBody)  popupBody.innerHTML    = body;
+    if (popupBody) {
+      // bodyHtml is a fixed template under our control. untrustedDetail
+      // (e.g. data.message from the API) is HTML-escaped before injection.
+      const safeDetail = untrustedDetail ? escapeHtml(untrustedDetail) + ' ' : '';
+      popupBody.innerHTML = safeDetail + bodyHtml;
+    }
     popup.classList.toggle('is-error', !!isError);
     popup.classList.add('show');
     popup.setAttribute('aria-hidden', 'false');
@@ -105,14 +116,14 @@
         if (res.ok && data.success !== false) {
           openPopup({
             title: 'Thanks — your request is in.',
-            body: 'We\'ll be in touch soon. If you don\'t hear back within a few days, drop us a note at <a href="mailto:info@dropshotfolks.co.uk">info@dropshotfolks.co.uk</a>.',
+            bodyHtml: 'We\'ll be in touch soon. If you don\'t hear back within a few days, drop us a note at <a href="mailto:info@dropshotfolks.co.uk">info@dropshotfolks.co.uk</a>.',
           });
           form.reset();
         } else {
           openPopup({
             title: 'Sorry — that didn\'t go through.',
-            body: ((data && data.message) ? data.message + ' ' : '') +
-                  'Please try again or email <a href="mailto:info@dropshotfolks.co.uk">info@dropshotfolks.co.uk</a>.',
+            untrustedDetail: data && data.message ? data.message : '',
+            bodyHtml: 'Please try again or email <a href="mailto:info@dropshotfolks.co.uk">info@dropshotfolks.co.uk</a>.',
             isError: true,
           });
         }
@@ -120,7 +131,7 @@
         modalToClose = form.closest('.coach-modal') || null;
         openPopup({
           title: 'Sorry — that didn\'t go through.',
-          body: 'Please check your connection and try again, or email <a href="mailto:info@dropshotfolks.co.uk">info@dropshotfolks.co.uk</a>.',
+          bodyHtml: 'Please check your connection and try again, or email <a href="mailto:info@dropshotfolks.co.uk">info@dropshotfolks.co.uk</a>.',
           isError: true,
         });
       } finally {

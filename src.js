@@ -81,13 +81,21 @@
         form.reportValidity();
         return;
       }
-    const hCaptcha = form.querySelector('textarea[name=h-captcha-response]').value;
 
-    if (!hCaptcha) {
-        e.preventDefault();
-        alert("Please fill out captcha field")
-        return
-    }
+      // hCaptcha guard. The widget injects a textarea[name="h-captcha-response"]
+      // with the user's token once solved. Until then it's empty (or missing).
+      const captchaField = form.querySelector('textarea[name="h-captcha-response"]');
+      const captchaToken = captchaField ? captchaField.value.trim() : '';
+      if (!captchaToken) {
+        openPopup({
+          title: 'Please complete the captcha.',
+          bodyHtml: 'Tick the "I\'m not a robot" box at the bottom of the form, then try again.',
+          isError: true,
+        });
+        // Don't latch the parent modal to be closed — the user needs to stay on the form
+        modalToClose = null;
+        return;
+      }
 
       const formData = new FormData(form);
       // Collapse multi-value checkbox groups (e.g. `roles`) into one

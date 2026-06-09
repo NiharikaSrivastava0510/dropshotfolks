@@ -1,0 +1,139 @@
+From df2d2e0e000a4893ba85ff5a9810b7c046a9f624 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 9 Jun 2026 20:08:21 +0000
+Subject: [PATCH] Fix hCaptcha integration
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- CSP: allow hCaptcha origins (js.hcaptcha.com, *.hcaptcha.com) in
+  script-src, style-src, connect-src, frame-src, child-src — without
+  this the captcha could never render under the existing CSP
+- Drop the conflicting web3forms.com/client/script.js loader; our
+  src.js submit handler already POSTs directly to Web3Forms, so two
+  interceptors were fighting each other
+- Load hCaptcha API directly (js.hcaptcha.com/1/api.js) and switch the
+  captcha div from data-captcha="true" (Web3Forms-loader convention) to
+  the standard data-sitekey attribute using Web3Forms' public sitekey
+- Move the captcha widget from the top of each form down to just above
+  the submit button (better UX, doesn't push the form fields down)
+- Replace the null-deref captcha check in src.js (the textarea doesn't
+  exist before the widget mounts) with a safe lookup; if the captcha
+  isn't solved, show a friendly message via the existing popup instead
+  of a browser alert()
+- Add a small captcha-field style so the widget centers and scales on
+  very narrow phones
+
+https://claude.ai/code/session_01CQhaur5bgTcTG5y3ok9zon
+---
+ index.html | 19 ++++++++++++++-----
+ src.js     | 20 ++++++++++++++------
+ 2 files changed, 28 insertions(+), 11 deletions(-)
+
+diff --git a/index.html b/index.html
+index e703232..2599273 100644
+--- a/index.html
++++ b/index.html
+@@ -9,7 +9,7 @@
+ <!-- Security headers (set via meta since GitHub Pages doesn't allow custom HTTP headers).
+      If you move to a host that supports response headers, also add: Strict-Transport-Security,
+      X-Frame-Options: DENY, X-Content-Type-Options: nosniff, and frame-ancestors 'none' in CSP. -->
+-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://api.web3forms.com; form-action 'self' https://api.web3forms.com; frame-src 'none'; object-src 'none'; base-uri 'self'; upgrade-insecure-requests">
++<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://js.hcaptcha.com https://*.hcaptcha.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.hcaptcha.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://api.web3forms.com https://*.hcaptcha.com https://hcaptcha.com; form-action 'self' https://api.web3forms.com; frame-src https://*.hcaptcha.com https://hcaptcha.com; child-src https://*.hcaptcha.com https://hcaptcha.com; object-src 'none'; base-uri 'self'; upgrade-insecure-requests">
+ <meta name="referrer" content="strict-origin-when-cross-origin">
+ <meta name="robots" content="index, follow">
+ 
+@@ -35,7 +35,8 @@
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+ 
+-<script src="https://web3forms.com/client/script.js" async defer></script>
++<!-- hCaptcha widget script (Web3Forms verifies the token server-side via the h-captcha-response field) -->
++<script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+ <style>
+ :root{
+   --maroon:        #5a1620;
+@@ -1255,6 +1256,9 @@ section{
+   transition:all .2s ease;
+ }
+ .coach-modal-close:hover{background:var(--maroon);color:var(--cream);border-color:var(--maroon)}
++.captcha-field{display:flex;justify-content:center;margin:.4rem 0 1.1rem}
++.captcha-field .h-captcha{transform-origin:center top}
++@media (max-width:340px){.captcha-field .h-captcha{transform:scale(.85)}}
+ @media (max-width:520px){.coach-modal-close{top:6px;right:6px}}
+ 
+ /* form success popup — sits above the form modal */
+@@ -1906,7 +1910,6 @@ footer ul a:hover{color:var(--maroon)}
+     
+     <!-- <form class="vol-form" id="coachForm" novalidate> -->
+       <form class="vol-form" id="coachForm" novalidate action="https://api.web3forms.com/submit" method="POST">
+-         <div class="h-captcha" data-captcha="true"></div>
+   <input type="hidden" name="access_key" value="32edf551-fab5-4e79-b9e1-b225ca342b76">
+   <!-- Web3Forms honeypot — keep hidden; if a bot ticks it, submission is rejected -->
+   <input type="checkbox" name="botcheck" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden">
+@@ -1968,6 +1971,10 @@ footer ul a:hover{color:var(--maroon)}
+         <textarea id="coach-conditions" name="conditions" placeholder="e.g. illness, injury, or past playing experience we should know about…"></textarea>
+       </div>
+ 
++      <div class="field captcha-field">
++        <div class="h-captcha" data-sitekey="50b2fe65-b00b-4b9e-ad62-3ba471098be2"></div>
++      </div>
++
+       <button type="submit" class="btn-submit">
+         Send my request
+         <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 10h12m0 0l-4-4m4 4l-4 4"/></svg>
+@@ -2087,8 +2094,6 @@ footer ul a:hover{color:var(--maroon)}
+     <!-- <form class="vol-form" id="volunteerForm" novalidate> -->
+ 
+       <form class="vol-form" id="volunteerForm" novalidate action="https://api.web3forms.com/submit" method="POST">
+-     
+-   <div class="h-captcha" data-captcha="true"></div>
+   <input type="hidden" name="access_key" value="59e5a553-45c4-406b-bd8c-c05cc26ebbe2">
+   <!-- Web3Forms honeypot — keep hidden; if a bot ticks it, submission is rejected -->
+   <input type="checkbox" name="botcheck" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden">
+@@ -2176,6 +2181,10 @@ footer ul a:hover{color:var(--maroon)}
+         </div>
+       </div> -->
+ 
++      <div class="field captcha-field">
++        <div class="h-captcha" data-sitekey="50b2fe65-b00b-4b9e-ad62-3ba471098be2"></div>
++      </div>
++
+       <button type="submit" class="btn-submit">
+         Send my application
+         <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 10h12m0 0l-4-4m4 4l-4 4"/></svg>
+diff --git a/src.js b/src.js
+index 8a40a0a..5d20067 100644
+--- a/src.js
++++ b/src.js
+@@ -81,13 +81,21 @@
+         form.reportValidity();
+         return;
+       }
+-    const hCaptcha = form.querySelector('textarea[name=h-captcha-response]').value;
+ 
+-    if (!hCaptcha) {
+-        e.preventDefault();
+-        alert("Please fill out captcha field")
+-        return
+-    }
++      // hCaptcha guard. The widget injects a textarea[name="h-captcha-response"]
++      // with the user's token once solved. Until then it's empty (or missing).
++      const captchaField = form.querySelector('textarea[name="h-captcha-response"]');
++      const captchaToken = captchaField ? captchaField.value.trim() : '';
++      if (!captchaToken) {
++        openPopup({
++          title: 'Please complete the captcha.',
++          bodyHtml: 'Tick the "I\'m not a robot" box at the bottom of the form, then try again.',
++          isError: true,
++        });
++        // Don't latch the parent modal to be closed — the user needs to stay on the form
++        modalToClose = null;
++        return;
++      }
+ 
+       const formData = new FormData(form);
+       // Collapse multi-value checkbox groups (e.g. `roles`) into one
+-- 
+2.43.0
+

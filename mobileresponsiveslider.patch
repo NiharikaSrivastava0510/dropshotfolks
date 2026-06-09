@@ -1,0 +1,241 @@
+From 2b80ff473a2aff65409897f489103648b8b6468a Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 9 Jun 2026 13:03:15 +0000
+Subject: [PATCH] Responsive fixes + photos slider
+
+- Convert photos & video grid into a horizontal scroll-snap slider with
+  prev/next buttons (works on mobile and desktop)
+- Hero: override inline margin-left:500px on tablet/mobile so content
+  stops bleeding off-screen; stack CTA buttons full-width on small phones
+- Team card: override inline 831x400 px dimensions on tablet/mobile so
+  the card fits the viewport
+- Add a hamburger toggle for the top nav at <880px (menu collapses into
+  a stacked panel)
+- Coaching modal: tighter padding and single-column field rows on small
+  screens
+- Section padding and titles tuned for narrow widths
+
+https://claude.ai/code/session_01CQhaur5bgTcTG5y3ok9zon
+---
+ index.html | 184 +++++++++++++++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 171 insertions(+), 13 deletions(-)
+
+diff --git a/index.html b/index.html
+index ef99961..040342f 100644
+--- a/index.html
++++ b/index.html
+@@ -1251,6 +1251,127 @@ section{
+ 
+ @media (max-width:880px){.volunteer-inner{grid-template-columns:1fr}}
+ 
++/* ---------- Photo slider ---------- */
++.gallery-slider-wrap{position:relative}
++.gallery-grid{
++  display:flex !important;
++  grid-template-columns:none !important;
++  grid-auto-rows:auto !important;
++  gap:1rem !important;
++  overflow-x:auto;
++  scroll-snap-type:x mandatory;
++  scroll-behavior:smooth;
++  scrollbar-width:none;
++  -ms-overflow-style:none;
++  padding-bottom:.5rem;
++}
++.gallery-grid::-webkit-scrollbar{display:none}
++.gallery-grid .tile{
++  flex:0 0 auto;
++  width:clamp(260px, 32%, 420px);
++  aspect-ratio:4/3;
++  grid-column:auto !important;grid-row:auto !important;
++  scroll-snap-align:start;
++  border-radius:8px;
++}
++@media (max-width:780px){
++  .gallery-grid .tile{width:85%;aspect-ratio:4/3}
++}
++.gallery-nav{
++  position:absolute;top:50%;transform:translateY(-50%);
++  width:44px;height:44px;border-radius:50%;
++  border:1px solid rgba(90,22,32,.2);
++  background:var(--cream);color:var(--maroon);
++  font-size:1.4rem;line-height:1;
++  display:flex;align-items:center;justify-content:center;
++  cursor:pointer;z-index:5;
++  box-shadow:0 10px 22px -10px rgba(0,0,0,.3);
++  transition:all .2s ease;
++}
++.gallery-nav:hover{background:var(--maroon);color:var(--cream);border-color:var(--maroon)}
++.gallery-prev{left:-8px}
++.gallery-next{right:-8px}
++@media (max-width:520px){.gallery-prev{left:4px}.gallery-next{right:4px}}
++
++/* ---------- Mobile / tablet overrides ---------- */
++/* Hero — kill the inline margin-left:500px on tablet/mobile */
++@media (max-width:1080px){
++  .hero-inner h1.display[style*="margin-left"],
++  .hero-inner .hero-actions[style*="margin-left"],
++  .hero-meta[style*="margin-left"]{
++    margin-left:0 !important;
++  }
++}
++@media (max-width:880px){
++  .hero-meta .stats{gap:1.4rem}
++  .hero-meta{position:static;margin-top:2rem}
++  .hero{padding-top:7rem}
++}
++@media (max-width:520px){
++  .hero h1.display{font-size:clamp(2.6rem,12vw,4rem)}
++  .hero-actions{flex-direction:column;align-items:stretch}
++  .hero-actions .btn-primary, .hero-actions .btn-ghost{justify-content:center}
++}
++
++/* Cards grid — already responds via earlier breakpoints */
++
++/* Section padding — keep room on mobile */
++@media (max-width:520px){
++  section{padding-left:1rem;padding-right:1rem}
++  .section-head{margin-bottom:1.5rem}
++  .section-title{font-size:clamp(1.8rem,7vw,2.4rem)}
++  .foundation-grid{gap:1rem}
++}
++
++/* About section — drop inline px font-size friendly */
++@media (max-width:780px){
++  #about h1{font-size:clamp(2rem,8vw,3rem) !important}
++}
++
++/* Team card — kill inline fixed dimensions on tablet/mobile */
++@media (max-width:880px){
++  .team-card[style*="height"][style*="width"]{
++    height:auto !important;
++    width:100% !important;
++    max-width:420px;
++    margin:0 auto;
++  }
++}
++
++/* Coaching modal — make sure form fits */
++@media (max-width:520px){
++  .coach-modal{padding:.5rem}
++  .coach-modal-dialog{margin:0 auto}
++  .field-row{grid-template-columns:1fr}
++}
++
++/* Reviews — already responsive */
++
++/* Top nav — show a hamburger on narrow screens */
++.nav-toggle{
++  display:none;
++  background:transparent;border:1px solid rgba(250,243,227,.5);
++  color:var(--cream);
++  border-radius:8px;padding:.45rem .6rem;
++  cursor:pointer;
++}
++.nav-toggle svg{display:block;width:22px;height:22px}
++@media (max-width:880px){
++  .nav-toggle{display:inline-flex;align-items:center;justify-content:center;order:2}
++  nav.top{flex-wrap:wrap;gap:.6rem}
++  nav.top .logo{order:1;flex:1}
++  nav.top .nav-cta{order:3}
++  nav.top ul.open{
++    display:flex !important;
++    order:4;flex-basis:100%;
++    flex-direction:column;align-items:flex-start;
++    gap:.6rem;padding:1rem 1.2rem;margin-top:.6rem;
++    background:rgba(28,10,13,.85);backdrop-filter:blur(8px);
++    border-radius:10px;
++  }
++  nav.top ul.open a{color:var(--cream)}
++}
++
+ /* ---------- Footer ---------- */
+ footer{
+   background:var(--beige);
+@@ -1366,7 +1487,10 @@ footer ul a:hover{color:var(--maroon)}
+       <span class="logo-mark" aria-hidden="true"></span>
+       Dropshot <em>Folks</em>
+     </a>
+-    <ul>
++    <button type="button" class="nav-toggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false" aria-controls="navMenu">
++      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
++    </button>
++    <ul id="navMenu">
+       <li><a href="#about">About</a></li>
+       <li><a href="#games">Games</a></li>
+       <li><a href="#photos">Photos</a></li>
+@@ -1642,18 +1766,19 @@ footer ul a:hover{color:var(--maroon)}
+       <div class="section-label">03 · Photos</div>
+       <h2 class="section-title">Every smash, every <em>net cord</em>, every photo we forgot to delete.</h2>
+     </div>
+-    <div class="gallery-grid">
+-      <!-- <div class="tile t1 video reveal"><span class="play"></span><span class="cap">Doubles smash · highlight reel</span></div> -->
+-       <div class="tile t1 reveal"><div class="img v1"></div></div>
+-      <div class="tile t2 reveal"><span class="cap">Post-match high fives</span></div>
+-      <div class="tile t3 reveal"><span class="cap">Mid-rally · Court 3</span></div>
+-      <div class="tile t4 reveal"><span class="cap">Tuesday night doubles</span></div>
+-      <div class="tile t5 reveal"><span class="cap">Set point energy</span></div>
+-      <!-- <div class="tile t6 video reveal"><span class="play"></span><span class="cap">Between games</span></div> -->
+-       <div class="tile t6 reveal"><div class="img v2"></div></div>
+-      <div class="tile t7 reveal"><span class="cap">Service ready</span></div>
+-      <div class="tile t8 reveal"><span class="cap">Backhand defence</span></div>
+-       <div class="tile t9 reveal"><div class="img v3"></div></div>
++    <div class="gallery-slider-wrap">
++      <button type="button" class="gallery-nav gallery-prev" id="galleryPrev" aria-label="Previous photo">&#8249;</button>
++      <div class="gallery-grid" id="gallerySlider">
++        <div class="tile t1 reveal"><div class="img v1"></div></div>
++        <div class="tile t2 reveal"><span class="cap">Post-match high fives</span></div>
++        <div class="tile t3 reveal"><span class="cap">Mid-rally · Court 3</span></div>
++        <div class="tile t4 reveal"><span class="cap">Tuesday night doubles</span></div>
++        <div class="tile t5 reveal"><span class="cap">Set point energy</span></div>
++        <div class="tile t6 reveal"><div class="img v2"></div></div>
++        <div class="tile t7 reveal"><span class="cap">Service ready</span></div>
++        <div class="tile t8 reveal"><span class="cap">Backhand defence</span></div>
++      </div>
++      <button type="button" class="gallery-nav gallery-next" id="galleryNext" aria-label="Next photo">&#8250;</button>
+     </div>
+   </div>
+ </div>
+@@ -2493,6 +2618,39 @@ if (coachForm){
+   });
+ })();
+ 
++// Photo slider — prev/next buttons
++(function(){
++  const slider = document.getElementById('gallerySlider');
++  const prev   = document.getElementById('galleryPrev');
++  const next   = document.getElementById('galleryNext');
++  if (!slider || !prev || !next) return;
++  const stepFor = () => {
++    const first = slider.querySelector('.tile');
++    if (!first) return slider.clientWidth * 0.8;
++    const rect = first.getBoundingClientRect();
++    const styles = getComputedStyle(slider);
++    const gap = parseFloat(styles.columnGap || styles.gap || 16) || 16;
++    return rect.width + gap;
++  };
++  prev.addEventListener('click', () => slider.scrollBy({left: -stepFor(), behavior:'smooth'}));
++  next.addEventListener('click', () => slider.scrollBy({left:  stepFor(), behavior:'smooth'}));
++})();
++
++// Mobile nav toggle
++(function(){
++  const btn  = document.getElementById('navToggle');
++  const menu = document.getElementById('navMenu');
++  if (!btn || !menu) return;
++  btn.addEventListener('click', () => {
++    const open = menu.classList.toggle('open');
++    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
++  });
++  menu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
++    menu.classList.remove('open');
++    btn.setAttribute('aria-expanded', 'false');
++  }));
++})();
++
+ </script>
+ 
+ </body>
+-- 
+2.43.0
+

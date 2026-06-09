@@ -1,0 +1,123 @@
+From fd6dff79f56d86e8faea3e12ab7b42bf40379955 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 9 Jun 2026 01:03:57 +0000
+Subject: [PATCH] Add remove button for CV upload in volunteer modal
+
+- "Remove" button appears once a CV is selected, clearing the file input
+- Button hidden again on clear, on form reset after submit, and on modal open
+- Volunteer section now opens via the single sign-up button (roles list removed)
+
+https://claude.ai/code/session_01CQhaur5bgTcTG5y3ok9zon
+---
+ dropshotfolks.html | 52 ++++++++++++++++++++++++++++++++++++++++------
+ 1 file changed, 46 insertions(+), 6 deletions(-)
+
+diff --git a/dropshotfolks.html b/dropshotfolks.html
+index f750c5a..dc4be39 100644
+--- a/dropshotfolks.html
++++ b/dropshotfolks.html
+@@ -1141,6 +1141,25 @@ section{
+   min-height:1em;
+ }
+ .file-name.error{color:#9b1c1c}
++.file-status{
++  display:flex;align-items:center;justify-content:space-between;gap:1rem;
++}
++.file-remove{
++  flex-shrink:0;
++  display:inline-flex;align-items:center;gap:.4rem;
++  margin-top:.55rem;
++  padding:.4rem .8rem;
++  border:1px solid var(--rule);
++  border-radius:999px;
++  background:#fff;color:#9b1c1c;
++  font-family:'Geist Mono',monospace;
++  font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;
++  cursor:pointer;
++  transition:all .2s ease;
++}
++.file-remove svg{width:14px;height:14px}
++.file-remove:hover{background:#9b1c1c;color:#fff;border-color:#9b1c1c}
++.file-remove[hidden]{display:none}
+ 
+ .vol-form .btn-submit{
+   background:var(--maroon);color:var(--cream);
+@@ -1927,7 +1946,13 @@ footer ul a:hover{color:var(--maroon)}
+           </span>
+         </label>
+         <input type="file" id="vol-cv" name="cv" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required>
+-        <p class="file-name" id="vol-cv-name" aria-live="polite"></p>
++        <div class="file-status">
++          <p class="file-name" id="vol-cv-name" aria-live="polite"></p>
++          <button type="button" class="file-remove" id="vol-cv-remove" hidden aria-label="Remove uploaded file">
++            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 7h12M9 7V5h6v2m-7 0l1 12h6l1-12"/></svg>
++            Remove
++          </button>
++        </div>
+       </div>
+ 
+       <button type="submit" class="btn-submit">
+@@ -2051,22 +2076,33 @@ window.addEventListener('load', () => {
+   const cvInput = document.getElementById('vol-cv');
+   const drop    = document.getElementById('vol-cv-drop');
+   const note    = document.getElementById('vol-cv-name');
++  const removeBtn = document.getElementById('vol-cv-remove');
+   if (!cvInput || !drop) return;
+ 
+   const showName = (file) => {
+-    if (!note) return;
+-    note.classList.remove('error');
++    if (note) note.classList.remove('error');
+     if (file){
+-      const kb = Math.max(1, Math.round(file.size / 1024));
+-      note.textContent = `Selected: ${file.name} (${kb} KB)`;
++      if (note){
++        const kb = Math.max(1, Math.round(file.size / 1024));
++        note.textContent = `Selected: ${file.name} (${kb} KB)`;
++      }
+       drop.classList.add('has-file');
++      if (removeBtn) removeBtn.hidden = false;
+     } else {
+-      note.textContent = '';
++      if (note) note.textContent = '';
+       drop.classList.remove('has-file');
++      if (removeBtn) removeBtn.hidden = true;
+     }
+   };
+ 
++  const clearFile = () => {
++    cvInput.value = '';
++    showName(null);
++    cvInput.focus();
++  };
++
+   cvInput.addEventListener('change', () => showName(cvInput.files && cvInput.files[0]));
++  if (removeBtn) removeBtn.addEventListener('click', clearFile);
+ 
+   ['dragenter','dragover'].forEach(evt => drop.addEventListener(evt, (e) => {
+     e.preventDefault(); e.stopPropagation();
+@@ -2162,8 +2198,10 @@ if (volForm){
+       f.reset();
+       const drop = document.getElementById('vol-cv-drop');
+       const note = document.getElementById('vol-cv-name');
++      const rm   = document.getElementById('vol-cv-remove');
+       if (drop) drop.classList.remove('has-file');
+       if (note){ note.textContent = ''; note.classList.remove('error'); }
++      if (rm) rm.hidden = true;
+     }, 400);
+   });
+ }
+@@ -2280,8 +2318,10 @@ if (coachForm){
+       if (success) success.classList.remove('show');
+       const drop = document.getElementById('vol-cv-drop');
+       const note = document.getElementById('vol-cv-name');
++      const rm   = document.getElementById('vol-cv-remove');
+       if (drop) drop.classList.remove('has-file');
+       if (note){ note.textContent = ''; note.classList.remove('error'); }
++      if (rm) rm.hidden = true;
+       if (role){
+         const cb = form.querySelector(`input[name="roles"][value="${role}"]`);
+         if (cb) cb.checked = true;
+-- 
+2.43.0
+

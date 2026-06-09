@@ -1,0 +1,379 @@
+From b82a642ffe8dd96773230e22bb5ca9a2dff66768 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 9 Jun 2026 19:28:40 +0000
+Subject: [PATCH] Fix coaching and volunteer forms to use Web3Forms cleanly
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Move src.js to the bottom of body so forms exist before it runs
+  (was throwing 'Cannot read properties of null' in the console)
+- Remove the old mailto submit handlers for coachForm and volunteerForm
+  that conflicted with the Web3Forms POST flow
+- Rewrite src.js:
+  * Null-safe wiring for both forms
+  * Use the existing success boxes instead of alert()
+  * Disable the submit button and show "Sending…" during the request
+  * Set a friendly subject and from_name on the Web3Forms payload
+  * Show an inline error in the same box on network/API failure
+  * Reset the form on success
+
+https://claude.ai/code/session_01CQhaur5bgTcTG5y3ok9zon
+---
+ index.html | 139 +----------------------------------------
+ src.js     | 177 ++++++++++++++++++++++++++++++++---------------------
+ 2 files changed, 108 insertions(+), 208 deletions(-)
+
+diff --git a/index.html b/index.html
+index daab48e..181f696 100644
+--- a/index.html
++++ b/index.html
+@@ -27,7 +27,6 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+-<script src="./src.js"></script>
+ <style>
+ :root{
+   --maroon:        #5a1620;
+@@ -2279,143 +2278,6 @@ window.addEventListener('load', () => {
+   });
+ })();
+ 
+-// Volunteer form — opens a pre-filled email (works without a backend)
+-const volForm = document.getElementById('volunteerForm');
+-if (volForm){
+-  volForm.addEventListener('submit', (e) => {
+-    e.preventDefault();
+-    const f = volForm;
+-    const get = n => (f.elements[n] && f.elements[n].value || '').trim();
+-    const first = get('firstName');
+-    const last  = get('lastName');
+-    const email = get('email');
+-
+-    const cvInput = f.elements['cv'];
+-    const cvFile  = cvInput && cvInput.files && cvInput.files[0];
+-    const cvNote  = document.getElementById('vol-cv-name');
+-    const MAX_CV_BYTES = 5 * 1024 * 1024;
+-    const CV_TYPES = /\.(pdf|docx?|DOC|DOCX|PDF)$/;
+-
+-    if (!first || !email || !cvFile){
+-      // basic native validation surface
+-      if (!first) f.elements['firstName'].focus();
+-      else if (!email) f.elements['email'].focus();
+-      else cvInput.focus();
+-      f.reportValidity();
+-      return;
+-    }
+-    if (!CV_TYPES.test(cvFile.name)){
+-      if (cvNote){ cvNote.textContent = 'Please upload a PDF, DOC or DOCX file.'; cvNote.classList.add('error'); }
+-      cvInput.focus();
+-      return;
+-    }
+-    if (cvFile.size > MAX_CV_BYTES){
+-      if (cvNote){ cvNote.textContent = 'File is over 5 MB — please upload a smaller version.'; cvNote.classList.add('error'); }
+-      cvInput.focus();
+-      return;
+-    }
+-
+-    // collect checked roles
+-    const roles = Array.from(f.querySelectorAll('input[name="roles"]:checked'))
+-      .map(i => i.value);
+-    const avail = get('availability');
+-    const phone = get('phone');
+-    const msg   = get('message');
+-
+-    const sizeKb = Math.max(1, Math.round(cvFile.size / 1024));
+-
+-    const lines = [
+-      `Hi Dropshot Folks team,`,
+-      ``,
+-      `I'd like to volunteer with the club. My details:`,
+-      ``,
+-      `Name: ${first}${last ? ' ' + last : ''}`,
+-      `Email: ${email}`,
+-    ];
+-    if (phone)         lines.push(`Phone: ${phone}`);
+-    if (roles.length)  lines.push(`Roles: ${roles.join(', ')}`);
+-    if (avail)         lines.push(`Availability: ${avail}`);
+-    if (msg){
+-      lines.push(``, `Message:`, msg);
+-    }
+-    lines.push(``, `CV: ${cvFile.name} (${sizeKb} KB) — please attach the file to this email before sending.`);
+-    lines.push(``, `Thanks!`, first);
+-
+-    const subject = encodeURIComponent(`Volunteer application — ${first}${last ? ' ' + last : ''}`);
+-    const body    = encodeURIComponent(lines.join('\n'));
+-    // EDIT-ME: change to your real address (data-edit="email")
+-    const to = 'info@dropshotfolks.co.uk';
+-
+-    window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
+-
+-    // show success message
+-    const ok = document.getElementById('volSuccess');
+-    if (ok) ok.classList.add('show');
+-    setTimeout(() => {
+-      f.reset();
+-      const drop = document.getElementById('vol-cv-drop');
+-      const note = document.getElementById('vol-cv-name');
+-      const rm   = document.getElementById('vol-cv-remove');
+-      if (drop) drop.classList.remove('has-file');
+-      if (note){ note.textContent = ''; note.classList.remove('error'); }
+-      if (rm) rm.hidden = true;
+-    }, 400);
+-  });
+-}
+-
+-// Coaching request form
+-const coachForm = document.getElementById('coachForm');
+-if (coachForm){
+-  coachForm.addEventListener('submit', (e) => {
+-    e.preventDefault();
+-    const f = coachForm;
+-    const get = n => (f.elements[n] && f.elements[n].value || '').trim();
+-
+-    const type    = (f.querySelector('input[name="coachType"]:checked') || {}).value || '';
+-    const name    = get('name');
+-    const address = get('address');
+-    const age     = get('age');
+-    const level   = get('level');
+-    const email   = get('email');
+-    const phone   = get('phone');
+-    const conds   = get('conditions');
+-
+-    if (!type || !name || !address || !age || !level || !email || !phone){
+-      f.reportValidity();
+-      return;
+-    }
+-
+-    const lines = [
+-      `Hi Dropshot Folks team,`,
+-      ``,
+-      `I'd like to book a coaching session. My details:`,
+-      ``,
+-      `Coaching type: ${type}`,
+-      `Name: ${name}`,
+-      `Address: ${address}`,
+-      `Age: ${age}`,
+-      `Email: ${email}`,
+-      `Contact number: ${phone}`,
+-      `Current badminton level: ${level}`,
+-    ];
+-    if (conds){
+-      lines.push(``, `Specific conditions (illness / injury / past experience):`, conds);
+-    }
+-    lines.push(``, `Thanks!`, name);
+-
+-    const subject = encodeURIComponent(`Coaching request — ${name} (${type})`);
+-    const body    = encodeURIComponent(lines.join('\n'));
+-    // EDIT-ME: change to your real address (data-edit="email")
+-    const to = 'info@dropshotfolks.co.uk';
+-
+-    window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
+-
+-    const ok = document.getElementById('coachSuccess');
+-    if (ok) ok.classList.add('show');
+-    setTimeout(() => { f.reset(); }, 400);
+-  });
+-}
+-
+ // Coaching modal open/close
+ (function(){
+   const modal = document.getElementById('coachModal');
+@@ -2653,5 +2515,6 @@ if (coachForm){
+ 
+ </script>
+ 
++<script src="./src.js" defer></script>
+ </body>
+ </html>
+diff --git a/src.js b/src.js
+index 2c142ee..6546c34 100644
+--- a/src.js
++++ b/src.js
+@@ -1,74 +1,111 @@
+-const formCoach = document.getElementById('coachForm');
+-const submitBtnCoach = formCoach.querySelector('button[type="submit"]');
+-
+-formCoach.addEventListener('submit', async (e) => {
+-    e.preventDefault();
+-
+-    const formData = new FormData(formCoach);
+-    formData.append("access_key", "32edf551-fab5-4e79-b9e1-b225ca342b76");
+-
+-    const originalText = submitBtnCoach.textContent;
+-
+-    submitBtnCoach.textContent = "Sending...";
+-    submitBtnCoach.disabled = true;
+-
+-    try {
+-        const response = await fetch("https://api.web3forms.com/submit", {
+-            method: "POST",
+-            body: formData
++// Web3Forms submission — coaching + volunteer forms
++// Loaded with `defer` from index.html, so the DOM is parsed before this runs.
++
++(function () {
++  const WEB3FORMS_URL = 'https://api.web3forms.com/submit';
++
++  function showSuccess(box) {
++    if (!box) return;
++    box.classList.add('show');
++    box.querySelector('strong')?.replaceChildren(document.createTextNode('Thanks — your message has been sent!'));
++    box.lastChild && (box.lastChild.nodeValue = '');
++    // Replace the body text so it doesn't still say "your email app should have opened…"
++    box.innerHTML =
++      '<strong>Thanks — your request is in.</strong> We\'ll be in touch soon. ' +
++      'If you don\'t hear back within a few days, drop us a note at ' +
++      '<span data-edit="email">info@dropshotfolks.co.uk</span>.';
++  }
++
++  function showError(box, message) {
++    if (!box) return;
++    box.classList.add('show');
++    box.style.background = 'rgba(155,28,28,.08)';
++    box.style.borderColor = '#9b1c1c';
++    box.style.color = '#7a1414';
++    box.innerHTML =
++      '<strong>Sorry — that didn\'t go through.</strong> ' +
++      (message ? message + ' ' : '') +
++      'Please try again or email <span data-edit="email">info@dropshotfolks.co.uk</span>.';
++  }
++
++  function wireForm(formId, opts) {
++    const form = document.getElementById(formId);
++    if (!form) return;
++    const submitBtn = form.querySelector('button[type="submit"]');
++    const successBox = document.getElementById(opts.successId);
++
++    form.addEventListener('submit', async (e) => {
++      e.preventDefault();
++      // Use the browser's native validation for required fields
++      if (!form.checkValidity()) {
++        form.reportValidity();
++        return;
++      }
++
++      const formData = new FormData(form);
++      // Friendly subject + sender name for the email Web3Forms sends
++      if (opts.subject) formData.set('subject', opts.subject(form));
++      if (opts.fromName) formData.set('from_name', opts.fromName(form));
++
++      const originalLabel = submitBtn ? submitBtn.innerHTML : '';
++      if (submitBtn) {
++        submitBtn.disabled = true;
++        submitBtn.dataset.originalLabel = originalLabel;
++        submitBtn.textContent = 'Sending…';
++      }
++      if (successBox) successBox.classList.remove('show');
++
++      try {
++        const res = await fetch(WEB3FORMS_URL, {
++          method: 'POST',
++          headers: { Accept: 'application/json' },
++          body: formData,
+         });
+-
+-        const data = await response.json();
+-
+-        if (response.ok) {
+-            alert("Success! Your message has been sent.");
+-            formCoach.reset();
++        const data = await res.json().catch(() => ({}));
++        if (res.ok && data.success !== false) {
++          showSuccess(successBox);
++          form.reset();
+         } else {
+-            alert("Error: " + data.message);
++          showError(successBox, data && data.message);
+         }
+-
+-    } catch (error) {
+-        alert("Something went wrong. Please try again.");
+-    } finally {
+-        submitBtnCoach.textContent = originalText;
+-        submitBtnCoach.disabled = false;
+-    }
+-});
+-
+-
+-const formVolunteer = document.getElementById('volunteerForm');
+-const submitBtnVolunteer = formVolunteer.querySelector('button[type="submit"]');
+-
+-formVolunteer.addEventListener('submit', async (e) => {
+-    e.preventDefault();
+-
+-    const formData = new FormData(formVolunteer);
+-    formData.append("access_key", "59e5a553-45c4-406b-bd8c-c05cc26ebbe2");
+-
+-    const originalText = submitBtnVolunteer.textContent;
+-
+-    submitBtnVolunteer.textContent = "Sending...";
+-    submitBtnVolunteer.disabled = true;
+-
+-    try {
+-        const response = await fetch("https://api.web3forms.com/submit", {
+-            method: "POST",
+-            body: formData
+-        });
+-
+-        const data = await response.json();
+-
+-        if (response.ok) {
+-            alert("Success! Your message has been sent.");
+-            formVolunteer.reset();
+-        } else {
+-            alert("Error: " + data.message);
++      } catch (err) {
++        showError(successBox);
++      } finally {
++        if (submitBtn) {
++          submitBtn.disabled = false;
++          submitBtn.innerHTML = submitBtn.dataset.originalLabel || originalLabel;
+         }
+-
+-    } catch (error) {
+-        alert("Something went wrong. Please try again.");
+-    } finally {
+-        submitBtnVolunteer.textContent = originalText;
+-        submitBtnVolunteer.disabled = false;
+-    }
+-});
+\ No newline at end of file
++      }
++    });
++  }
++
++  function val(form, name) {
++    const el = form.elements[name];
++    return (el && el.value || '').trim();
++  }
++
++  wireForm('coachForm', {
++    successId: 'coachSuccess',
++    subject: (f) => {
++      const name = val(f, 'name') || 'Unknown';
++      const type = val(f, 'coachType') || 'Coaching';
++      return `Coaching request — ${name} (${type})`;
++    },
++    fromName: (f) => val(f, 'name') || 'Dropshot Folks website',
++  });
++
++  wireForm('volunteerForm', {
++    successId: 'volSuccess',
++    subject: (f) => {
++      const first = val(f, 'firstName');
++      const last = val(f, 'lastName');
++      const name = [first, last].filter(Boolean).join(' ').trim() || 'Unknown';
++      return `Volunteer application — ${name}`;
++    },
++    fromName: (f) => {
++      const first = val(f, 'firstName');
++      const last = val(f, 'lastName');
++      return [first, last].filter(Boolean).join(' ').trim() || 'Dropshot Folks website';
++    },
++  });
++})();
+-- 
+2.43.0
+

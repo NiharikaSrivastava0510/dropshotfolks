@@ -1,0 +1,110 @@
+From ffe735c9d7af0dc00ad13dc1fab830c863751f7d Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 9 Jun 2026 00:52:10 +0000
+Subject: [PATCH] Add Reviews & Ratings section
+
+- New #reviews section between Photos and Coaching showing the three
+  Google review screenshots from images/review1-3.jpeg
+- Responsive 3 / 2 / 1 column grid with hover lift and shadow
+- "Reviews" added to the top nav
+
+https://claude.ai/code/session_01CQhaur5bgTcTG5y3ok9zon
+---
+ dropshotfolks.html | 67 ++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 67 insertions(+)
+
+diff --git a/dropshotfolks.html b/dropshotfolks.html
+index aad886e..48d1afe 100644
+--- a/dropshotfolks.html
++++ b/dropshotfolks.html
+@@ -596,6 +596,46 @@ section{
+   .foundation-grid{grid-template-columns:1fr}
+ }
+ 
++/* ---------- Reviews & Ratings ---------- */
++#reviews{padding-top:clamp(3rem,5vw,5rem)}
++.reviews-grid{
++  display:grid;
++  grid-template-columns:repeat(3,1fr);
++  gap:1.6rem;
++  margin-top:2rem;
++}
++.review-card{
++  background:#fff;
++  border:1px solid var(--rule);
++  border-radius:10px;
++  padding:1rem;
++  box-shadow:0 18px 40px -22px rgba(90,22,32,.25);
++  transition:transform .35s ease, box-shadow .35s ease;
++  display:flex;flex-direction:column;
++}
++.review-card:hover{
++  transform:translateY(-6px);
++  box-shadow:0 28px 55px -22px rgba(90,22,32,.4);
++}
++.review-card img{
++  width:100%;height:auto;display:block;
++  border-radius:6px;
++  cursor:zoom-in;
++}
++.review-stars{
++  margin-top:.9rem;
++  font-size:.85rem;letter-spacing:.1em;
++  color:#e8a200;
++}
++.review-source{
++  margin-top:.3rem;
++  font-family:'Geist Mono',monospace;
++  font-size:.68rem;letter-spacing:.22em;text-transform:uppercase;
++  color:var(--maroon-soft);
++}
++@media (max-width:1080px){.reviews-grid{grid-template-columns:repeat(2,1fr)}}
++@media (max-width:600px){.reviews-grid{grid-template-columns:1fr}}
++
+ /* ---------- Our Team ---------- */
+ .team-grid{
+   display:grid;
+@@ -1302,6 +1342,7 @@ footer ul a:hover{color:var(--maroon)}
+       <li><a href="#about">About</a></li>
+       <li><a href="#games">Games</a></li>
+       <li><a href="#photos">Photos</a></li>
++      <li><a href="#reviews">Reviews</a></li>
+       <li><a href="#coaching">Coaching</a></li>
+       <li><a href="#join">Join</a></li>
+       <li><a href="#volunteer">Volunteer</a></li>
+@@ -1582,6 +1623,32 @@ footer ul a:hover{color:var(--maroon)}
+   </div>
+ </div>
+ 
++<!-- ============================================== REVIEWS & RATINGS -->
++<section id="reviews">
++  <div class="section-head reveal">
++    <div class="section-label">Reviews &amp; ratings</div>
++    <h2 class="section-title">From the <em>folks</em> who play with us.</h2>
++  </div>
++
++  <div class="reviews-grid reveal">
++    <figure class="review-card">
++      <img src="images/review1.jpeg" alt="Five-star Google review from Aarushi: Fantastic badminton club! The organiser is very friendly and keeps everything well organised. The sessions are enjoyable, and the club offers social events as well, which is a great way to make new friends. A welcoming and supportive community. Highly recommended!!" loading="lazy">
++      <div class="review-stars">★★★★★</div>
++      <div class="review-source">Google review · Aarushi</div>
++    </figure>
++    <figure class="review-card">
++      <img src="images/review2.jpeg" alt="Five-star Google review from 原田豪太: This is easily the best badminton club in London! What makes it so special is the host, Anamika. She is incredibly sincere and radiates such a passionate, positive energy that makes everyone feel welcome. Unlike other badminton organizers, she has built something truly unique here. It's not just a place to play sports; it's a genuine community where you feel like you truly belong." loading="lazy">
++      <div class="review-stars">★★★★★</div>
++      <div class="review-source">Google review · 原田豪太</div>
++    </figure>
++    <figure class="review-card">
++      <img src="images/review3.jpeg" alt="Five-star Google review from Moiz Ahmed: Amazing club" loading="lazy">
++      <div class="review-stars">★★★★★</div>
++      <div class="review-source">Google review · Moiz Ahmed</div>
++    </figure>
++  </div>
++</section>
++
+ <!-- ============================================== COACHING -->
+ <section id="coaching">
+   <div class="section-head reveal">
+-- 
+2.43.0
+

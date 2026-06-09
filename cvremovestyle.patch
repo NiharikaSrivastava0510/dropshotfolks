@@ -1,0 +1,56 @@
+From 20bd30d124a18aa3c2258dbe3937491fdecd8188 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 9 Jun 2026 01:07:34 +0000
+Subject: [PATCH] Restyle CV remove button to match site design
+
+- Use site button language: Geist font, maroon outline pill, fills maroon on hover
+- Keep button on the right next to the filename text
+
+https://claude.ai/code/session_01CQhaur5bgTcTG5y3ok9zon
+---
+ dropshotfolks.html | 23 ++++++++++++-----------
+ 1 file changed, 12 insertions(+), 11 deletions(-)
+
+diff --git a/dropshotfolks.html b/dropshotfolks.html
+index dc4be39..64269cf 100644
+--- a/dropshotfolks.html
++++ b/dropshotfolks.html
+@@ -1142,23 +1142,24 @@ section{
+ }
+ .file-name.error{color:#9b1c1c}
+ .file-status{
+-  display:flex;align-items:center;justify-content:space-between;gap:1rem;
++  display:flex;align-items:center;justify-content:space-between;gap:.8rem;
++  margin-top:.55rem;
+ }
++.file-status .file-name{margin:0}
+ .file-remove{
+   flex-shrink:0;
+-  display:inline-flex;align-items:center;gap:.4rem;
+-  margin-top:.55rem;
+-  padding:.4rem .8rem;
+-  border:1px solid var(--rule);
++  display:inline-flex;align-items:center;gap:.45rem;
++  padding:.6rem 1.1rem;
++  border:1.5px solid var(--maroon-soft);
+   border-radius:999px;
+-  background:#fff;color:#9b1c1c;
+-  font-family:'Geist Mono',monospace;
+-  font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;
++  background:transparent;color:var(--maroon);
++  font-family:'Geist',sans-serif;
++  font-size:.85rem;font-weight:500;
+   cursor:pointer;
+-  transition:all .2s ease;
++  transition:all .25s ease;
+ }
+-.file-remove svg{width:14px;height:14px}
+-.file-remove:hover{background:#9b1c1c;color:#fff;border-color:#9b1c1c}
++.file-remove svg{width:15px;height:15px}
++.file-remove:hover{background:var(--maroon);color:var(--cream);border-color:var(--maroon)}
+ .file-remove[hidden]{display:none}
+ 
+ .vol-form .btn-submit{
+-- 
+2.43.0
+

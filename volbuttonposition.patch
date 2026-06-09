@@ -1,0 +1,52 @@
+From 02572948d23e80682f4849e0941582fc242fb5b2 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 9 Jun 2026 01:15:56 +0000
+Subject: [PATCH] Move volunteer sign-up button to the right of the text
+
+- Two-column volunteer layout: intro text left, sign-up button right
+- Vertically centered; stacks below the text on narrow screens
+
+https://claude.ai/code/session_01CQhaur5bgTcTG5y3ok9zon
+---
+ dropshotfolks.html | 16 ++++++++++++----
+ 1 file changed, 12 insertions(+), 4 deletions(-)
+
+diff --git a/dropshotfolks.html b/dropshotfolks.html
+index 64269cf..37f6f38 100644
+--- a/dropshotfolks.html
++++ b/dropshotfolks.html
+@@ -956,11 +956,17 @@ section{
+   pointer-events:none;
+ }
+ .volunteer-inner{
+-  max-width:760px;margin:0 auto;
+-  display:grid;grid-template-columns:1fr;
+-  gap:clamp(2rem,5vw,5rem);align-items:start;
++  max-width:1100px;margin:0 auto;
++  display:grid;grid-template-columns:1.4fr auto;
++  gap:clamp(2rem,5vw,5rem);align-items:center;
+   position:relative;z-index:1;
+ }
++.vol-cta{display:flex;justify-content:flex-end}
++.vol-cta .vol-open{max-width:320px;white-space:nowrap}
++@media (max-width:880px){
++  .volunteer-inner{align-items:start}
++  .vol-cta{justify-content:flex-start}
++}
+ .volunteer .intro h2{
+   font-family:'Fraunces',serif;font-weight:300;
+   font-size:clamp(2.2rem,4.5vw,3.8rem);
+@@ -1859,7 +1865,9 @@ footer ul a:hover{color:var(--maroon)}
+         <li class="vol-role" data-role="Marketing"><strong>Marketing</strong><span>Ad hoc</span></li>
+         <li class="vol-role" data-role="Wherever needed"><strong>Wherever needed</strong><span>Happy to help wherever the need is greatest</span></li>
+       </ul> -->
+-      <button type="button" class="btn-submit vol-open" id="volOpen" style="margin-top:2rem;max-width:320px">
++    </div>
++    <div class="vol-cta">
++      <button type="button" class="btn-submit vol-open" id="volOpen">
+         Volunteer sign-up
+         <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 10h12m0 0l-4-4m4 4l-4 4"/></svg>
+       </button>
+-- 
+2.43.0
+

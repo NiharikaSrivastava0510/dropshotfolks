@@ -1,74 +1,111 @@
-const formCoach = document.getElementById('coachForm');
-const submitBtnCoach = formCoach.querySelector('button[type="submit"]');
+// Web3Forms submission — coaching + volunteer forms
+// Loaded with `defer` from index.html, so the DOM is parsed before this runs.
 
-formCoach.addEventListener('submit', async (e) => {
-    e.preventDefault();
+(function () {
+  const WEB3FORMS_URL = 'https://api.web3forms.com/submit';
 
-    const formData = new FormData(formCoach);
-    formData.append("access_key", "32edf551-fab5-4e79-b9e1-b225ca342b76");
+  function showSuccess(box) {
+    if (!box) return;
+    box.classList.add('show');
+    box.querySelector('strong')?.replaceChildren(document.createTextNode('Thanks — your message has been sent!'));
+    box.lastChild && (box.lastChild.nodeValue = '');
+    // Replace the body text so it doesn't still say "your email app should have opened…"
+    box.innerHTML =
+      '<strong>Thanks — your request is in.</strong> We\'ll be in touch soon. ' +
+      'If you don\'t hear back within a few days, drop us a note at ' +
+      '<span data-edit="email">info@dropshotfolks.co.uk</span>.';
+  }
 
-    const originalText = submitBtnCoach.textContent;
+  function showError(box, message) {
+    if (!box) return;
+    box.classList.add('show');
+    box.style.background = 'rgba(155,28,28,.08)';
+    box.style.borderColor = '#9b1c1c';
+    box.style.color = '#7a1414';
+    box.innerHTML =
+      '<strong>Sorry — that didn\'t go through.</strong> ' +
+      (message ? message + ' ' : '') +
+      'Please try again or email <span data-edit="email">info@dropshotfolks.co.uk</span>.';
+  }
 
-    submitBtnCoach.textContent = "Sending...";
-    submitBtnCoach.disabled = true;
+  function wireForm(formId, opts) {
+    const form = document.getElementById(formId);
+    if (!form) return;
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const successBox = document.getElementById(opts.successId);
 
-    try {
-        const response = await fetch("https://api.web3forms.com/submit", {
-            method: "POST",
-            body: formData
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      // Use the browser's native validation for required fields
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+
+      const formData = new FormData(form);
+      // Friendly subject + sender name for the email Web3Forms sends
+      if (opts.subject) formData.set('subject', opts.subject(form));
+      if (opts.fromName) formData.set('from_name', opts.fromName(form));
+
+      const originalLabel = submitBtn ? submitBtn.innerHTML : '';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.dataset.originalLabel = originalLabel;
+        submitBtn.textContent = 'Sending…';
+      }
+      if (successBox) successBox.classList.remove('show');
+
+      try {
+        const res = await fetch(WEB3FORMS_URL, {
+          method: 'POST',
+          headers: { Accept: 'application/json' },
+          body: formData,
         });
-
-        const data = await response.json();
-
-        if (response.ok) {
-            alert("Success! Your message has been sent.");
-            formCoach.reset();
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success !== false) {
+          showSuccess(successBox);
+          form.reset();
         } else {
-            alert("Error: " + data.message);
+          showError(successBox, data && data.message);
         }
-
-    } catch (error) {
-        alert("Something went wrong. Please try again.");
-    } finally {
-        submitBtnCoach.textContent = originalText;
-        submitBtnCoach.disabled = false;
-    }
-});
-
-
-const formVolunteer = document.getElementById('volunteerForm');
-const submitBtnVolunteer = formVolunteer.querySelector('button[type="submit"]');
-
-formVolunteer.addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    const formData = new FormData(formVolunteer);
-    formData.append("access_key", "59e5a553-45c4-406b-bd8c-c05cc26ebbe2");
-
-    const originalText = submitBtnVolunteer.textContent;
-
-    submitBtnVolunteer.textContent = "Sending...";
-    submitBtnVolunteer.disabled = true;
-
-    try {
-        const response = await fetch("https://api.web3forms.com/submit", {
-            method: "POST",
-            body: formData
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-            alert("Success! Your message has been sent.");
-            formVolunteer.reset();
-        } else {
-            alert("Error: " + data.message);
+      } catch (err) {
+        showError(successBox);
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = submitBtn.dataset.originalLabel || originalLabel;
         }
+      }
+    });
+  }
 
-    } catch (error) {
-        alert("Something went wrong. Please try again.");
-    } finally {
-        submitBtnVolunteer.textContent = originalText;
-        submitBtnVolunteer.disabled = false;
-    }
-});
+  function val(form, name) {
+    const el = form.elements[name];
+    return (el && el.value || '').trim();
+  }
+
+  wireForm('coachForm', {
+    successId: 'coachSuccess',
+    subject: (f) => {
+      const name = val(f, 'name') || 'Unknown';
+      const type = val(f, 'coachType') || 'Coaching';
+      return `Coaching request — ${name} (${type})`;
+    },
+    fromName: (f) => val(f, 'name') || 'Dropshot Folks website',
+  });
+
+  wireForm('volunteerForm', {
+    successId: 'volSuccess',
+    subject: (f) => {
+      const first = val(f, 'firstName');
+      const last = val(f, 'lastName');
+      const name = [first, last].filter(Boolean).join(' ').trim() || 'Unknown';
+      return `Volunteer application — ${name}`;
+    },
+    fromName: (f) => {
+      const first = val(f, 'firstName');
+      const last = val(f, 'lastName');
+      return [first, last].filter(Boolean).join(' ').trim() || 'Dropshot Folks website';
+    },
+  });
+})();

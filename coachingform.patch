@@ -1,0 +1,167 @@
+From 3cf43e0dd36024b687e76324f430dcc61ecfd034 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 9 Jun 2026 00:04:11 +0000
+Subject: [PATCH] Add coaching request form
+
+- Request form inside #coaching for 1-to-1 / group coaching selection
+- Captures name, address, age, email, contact number, badminton level
+- Optional conditions field for illness / injury / past experience
+- mailto submit handler matching the volunteer form pattern
+
+https://claude.ai/code/session_01CQhaur5bgTcTG5y3ok9zon
+---
+ dropshotfolks.html | 124 +++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 124 insertions(+)
+
+diff --git a/dropshotfolks.html b/dropshotfolks.html
+index 1ab4d04..611d985 100644
+--- a/dropshotfolks.html
++++ b/dropshotfolks.html
+@@ -1123,6 +1123,9 @@ section{
+ .vol-success.show{display:block}
+ .vol-success strong{display:block;margin-bottom:.2rem;font-family:'Fraunces',serif;font-weight:500;font-size:1.05rem}
+ 
++/* coaching request form */
++.coach-form-wrap{max-width:680px;margin:3rem auto 0}
++
+ @media (max-width:880px){.volunteer-inner{grid-template-columns:1fr}}
+ 
+ /* ---------- Footer ---------- */
+@@ -1483,6 +1486,74 @@ footer ul a:hover{color:var(--maroon)}
+       </p>
+     </div>
+   </div>
++
++  <div class="coach-form-wrap reveal">
++    <form class="vol-form" id="coachForm" novalidate>
++      <h3>Coaching request</h3>
++
++      <div class="vol-success" id="coachSuccess">
++        <strong>Cheers — your email's ready to send!</strong>
++        Your email app should have opened with your details pre-filled. If nothing happened, drop us a note at <span data-edit="email">info@dropshotfolks.co.uk</span>.
++      </div>
++
++      <div class="field">
++        <label>Which coaching would you like? <span class="req">*</span></label>
++        <div class="checks">
++          <label><input type="radio" name="coachType" value="1-to-1 Coaching" required> 1-to-1 Coaching</label>
++          <label><input type="radio" name="coachType" value="Group Coaching"> Group Coaching</label>
++        </div>
++      </div>
++
++      <div class="field">
++        <label for="coach-name">Full name <span class="req">*</span></label>
++        <input type="text" id="coach-name" name="name" required autocomplete="name">
++      </div>
++
++      <div class="field">
++        <label for="coach-address">Address <span class="req">*</span></label>
++        <textarea id="coach-address" name="address" required autocomplete="street-address" placeholder="House/flat, street, city, postcode"></textarea>
++      </div>
++
++      <div class="field-row">
++        <div class="field">
++          <label for="coach-age">Age <span class="req">*</span></label>
++          <input type="number" id="coach-age" name="age" min="1" max="120" required>
++        </div>
++        <div class="field">
++          <label for="coach-level">Current badminton level <span class="req">*</span></label>
++          <select id="coach-level" name="level" required>
++            <option value="">Choose one…</option>
++            <option>Beginner</option>
++            <option>Improver</option>
++            <option>Intermediate</option>
++            <option>Advanced</option>
++          </select>
++        </div>
++      </div>
++
++      <div class="field-row">
++        <div class="field">
++          <label for="coach-email">Email <span class="req">*</span></label>
++          <input type="email" id="coach-email" name="email" required autocomplete="email" placeholder="you@example.com">
++        </div>
++        <div class="field">
++          <label for="coach-phone">Contact number <span class="req">*</span></label>
++          <input type="tel" id="coach-phone" name="phone" required autocomplete="tel">
++        </div>
++      </div>
++
++      <div class="field">
++        <label for="coach-conditions">Any specific conditions? (optional)</label>
++        <textarea id="coach-conditions" name="conditions" placeholder="e.g. illness, injury, or past playing experience we should know about…"></textarea>
++      </div>
++
++      <button type="submit" class="btn-submit">
++        Send my request
++        <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 10h12m0 0l-4-4m4 4l-4 4"/></svg>
++      </button>
++      <p class="small-print">We'll only use your details to get in touch about coaching.</p>
++    </form>
++  </div>
+ </section>
+ 
+ <!-- ============================================== PHOTOS & VIDEO -->
+@@ -1955,6 +2026,59 @@ if (volForm){
+   });
+ }
+ 
++// Coaching request form
++const coachForm = document.getElementById('coachForm');
++if (coachForm){
++  coachForm.addEventListener('submit', (e) => {
++    e.preventDefault();
++    const f = coachForm;
++    const get = n => (f.elements[n] && f.elements[n].value || '').trim();
++
++    const type    = (f.querySelector('input[name="coachType"]:checked') || {}).value || '';
++    const name    = get('name');
++    const address = get('address');
++    const age     = get('age');
++    const level   = get('level');
++    const email   = get('email');
++    const phone   = get('phone');
++    const conds   = get('conditions');
++
++    if (!type || !name || !address || !age || !level || !email || !phone){
++      f.reportValidity();
++      return;
++    }
++
++    const lines = [
++      `Hi Dropshot Folks team,`,
++      ``,
++      `I'd like to book a coaching session. My details:`,
++      ``,
++      `Coaching type: ${type}`,
++      `Name: ${name}`,
++      `Address: ${address}`,
++      `Age: ${age}`,
++      `Email: ${email}`,
++      `Contact number: ${phone}`,
++      `Current badminton level: ${level}`,
++    ];
++    if (conds){
++      lines.push(``, `Specific conditions (illness / injury / past experience):`, conds);
++    }
++    lines.push(``, `Thanks!`, name);
++
++    const subject = encodeURIComponent(`Coaching request — ${name} (${type})`);
++    const body    = encodeURIComponent(lines.join('\n'));
++    // EDIT-ME: change to your real address (data-edit="email")
++    const to = 'info@dropshotfolks.co.uk';
++
++    window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
++
++    const ok = document.getElementById('coachSuccess');
++    if (ok) ok.classList.add('show');
++    setTimeout(() => { f.reset(); }, 400);
++  });
++}
++
+ // Lightbox gallery
+ (function(){
+   const overlay = document.getElementById('lightbox');
+-- 
+2.43.0
+

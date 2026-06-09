@@ -1,0 +1,173 @@
+From 25500ab42fdbffa9c38eb35629cdb8f4014b0e84 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 9 Jun 2026 00:08:26 +0000
+Subject: [PATCH] Convert coaching form into a modal
+
+- 1-to-1 and Group coaching cards are now clickable triggers
+- Clicking a card opens a modal with the request form, pre-selecting the chosen coaching type
+- Modal closes via close button, overlay click, or Escape; body scroll locked while open
+
+https://claude.ai/code/session_01CQhaur5bgTcTG5y3ok9zon
+---
+ dropshotfolks.html | 110 +++++++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 101 insertions(+), 9 deletions(-)
+
+diff --git a/dropshotfolks.html b/dropshotfolks.html
+index 611d985..b37392a 100644
+--- a/dropshotfolks.html
++++ b/dropshotfolks.html
+@@ -1123,8 +1123,52 @@ section{
+ .vol-success.show{display:block}
+ .vol-success strong{display:block;margin-bottom:.2rem;font-family:'Fraunces',serif;font-weight:500;font-size:1.05rem}
+ 
+-/* coaching request form */
+-.coach-form-wrap{max-width:680px;margin:3rem auto 0}
++/* coaching request — clickable cards */
++.coach-trigger{
++  font-family:inherit;text-align:left;
++  cursor:pointer;
++  width:100%;
++}
++.coach-trigger .coach-cta{
++  display:inline-block;margin-top:1.1rem;
++  font-family:'Geist Mono',monospace;
++  font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;
++  color:var(--maroon);
++  transition:gap .2s ease, color .2s ease;
++}
++.coach-trigger:hover .coach-cta{color:var(--maroon-deep)}
++
++/* coaching request modal */
++.coach-modal{
++  position:fixed;inset:0;
++  background:rgba(28,10,13,.92);
++  z-index:200;
++  display:none;
++  align-items:flex-start;justify-content:center;
++  padding:clamp(1rem,5vh,4rem) 1rem;
++  overflow-y:auto;
++}
++.coach-modal.show{display:flex}
++.coach-modal-dialog{
++  position:relative;
++  width:100%;max-width:680px;
++  margin:auto;
++  animation:coachIn .3s cubic-bezier(.2,.6,.2,1);
++}
++@keyframes coachIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
++.coach-modal-close{
++  position:absolute;top:-14px;right:-6px;
++  width:42px;height:42px;border-radius:50%;
++  border:1px solid var(--rule);
++  background:var(--cream);color:var(--maroon);
++  font-size:1.6rem;line-height:1;
++  display:flex;align-items:center;justify-content:center;
++  cursor:pointer;z-index:2;
++  box-shadow:0 8px 24px -8px rgba(0,0,0,.5);
++  transition:all .2s ease;
++}
++.coach-modal-close:hover{background:var(--maroon);color:var(--cream);border-color:var(--maroon)}
++@media (max-width:520px){.coach-modal-close{top:6px;right:6px}}
+ 
+ @media (max-width:880px){.volunteer-inner{grid-template-columns:1fr}}
+ 
+@@ -1470,26 +1514,32 @@ footer ul a:hover{color:var(--maroon)}
+   </p>
+ 
+   <div class="foundation-grid reveal" style="grid-template-columns:repeat(2,1fr);">
+-    <div class="foundation-card">
++    <button type="button" class="foundation-card coach-trigger" data-coach="1-to-1 Coaching">
+       <div class="foundation-num">01.</div>
+       <h3>1-to-1 Coaching</h3>
+       <p>
+         £45 per hour<br>
+         £90 for a 2-hour session — includes court booking and shuttlecocks.
+       </p>
+-    </div>
+-    <div class="foundation-card">
++      <span class="coach-cta">Request this →</span>
++    </button>
++    <button type="button" class="foundation-card coach-trigger" data-coach="Group Coaching">
+       <div class="foundation-num">02.</div>
+       <h3>Group Coaching</h3>
+       <p>
+         £60 for a 2-hour session — includes court booking and shuttlecocks.
+       </p>
+-    </div>
++      <span class="coach-cta">Request this →</span>
++    </button>
+   </div>
++</section>
+ 
+-  <div class="coach-form-wrap reveal">
++<!-- ============================================== COACHING MODAL -->
++<div class="coach-modal" id="coachModal" aria-hidden="true">
++  <div class="coach-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="coachModalTitle">
++    <button type="button" class="coach-modal-close" id="coachModalClose" aria-label="Close">&times;</button>
+     <form class="vol-form" id="coachForm" novalidate>
+-      <h3>Coaching request</h3>
++      <h3 id="coachModalTitle">Coaching request</h3>
+ 
+       <div class="vol-success" id="coachSuccess">
+         <strong>Cheers — your email's ready to send!</strong>
+@@ -1554,7 +1604,7 @@ footer ul a:hover{color:var(--maroon)}
+       <p class="small-print">We'll only use your details to get in touch about coaching.</p>
+     </form>
+   </div>
+-</section>
++</div>
+ 
+ <!-- ============================================== PHOTOS & VIDEO -->
+ <div class="gallery-section" id="photos">
+@@ -2079,6 +2129,48 @@ if (coachForm){
+   });
+ }
+ 
++// Coaching modal open/close
++(function(){
++  const modal = document.getElementById('coachModal');
++  if (!modal) return;
++  const dialog  = modal.querySelector('.coach-modal-dialog');
++  const closeBtn = document.getElementById('coachModalClose');
++  const success = document.getElementById('coachSuccess');
++  let lastFocus = null;
++
++  function openModal(type){
++    lastFocus = document.activeElement;
++    if (coachForm){
++      coachForm.reset();
++      if (success) success.classList.remove('show');
++      if (type){
++        const radio = coachForm.querySelector(`input[name="coachType"][value="${type}"]`);
++        if (radio) radio.checked = true;
++      }
++    }
++    modal.classList.add('show');
++    modal.setAttribute('aria-hidden', 'false');
++    document.body.style.overflow = 'hidden';
++    const firstField = document.getElementById('coach-name');
++    if (firstField) setTimeout(() => firstField.focus(), 50);
++  }
++  function closeModal(){
++    modal.classList.remove('show');
++    modal.setAttribute('aria-hidden', 'true');
++    document.body.style.overflow = '';
++    if (lastFocus && lastFocus.focus) lastFocus.focus();
++  }
++
++  document.querySelectorAll('.coach-trigger').forEach(btn => {
++    btn.addEventListener('click', () => openModal(btn.getAttribute('data-coach')));
++  });
++  closeBtn.addEventListener('click', closeModal);
++  modal.addEventListener('click', (e) => { if (!dialog.contains(e.target)) closeModal(); });
++  document.addEventListener('keydown', (e) => {
++    if (e.key === 'Escape' && modal.classList.contains('show')) closeModal();
++  });
++})();
++
+ // Lightbox gallery
+ (function(){
+   const overlay = document.getElementById('lightbox');
+-- 
+2.43.0
+

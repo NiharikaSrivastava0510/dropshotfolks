@@ -1,0 +1,322 @@
+From e1e5ddb5b96d3493613c8ed09a82b3c06e317a0d Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 9 Jun 2026 00:25:39 +0000
+Subject: [PATCH] Reorder sections: Games before Photos, Team last
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Card grid order: About / Games / Photos / Coaching / Group Chat
+- Section labels renumbered (Games → 02, Photos → 03)
+- Top nav reordered to match; Our Team moved to end of nav
+- Our Team section moved to the bottom of <main>, after Volunteer
+
+https://claude.ai/code/session_01CQhaur5bgTcTG5y3ok9zon
+---
+ dropshotfolks.html | 243 +++++++++++++++++++++++----------------------
+ 1 file changed, 122 insertions(+), 121 deletions(-)
+
+diff --git a/dropshotfolks.html b/dropshotfolks.html
+index b37392a..38f1161 100644
+--- a/dropshotfolks.html
++++ b/dropshotfolks.html
+@@ -1286,12 +1286,12 @@ footer ul a:hover{color:var(--maroon)}
+     </a>
+     <ul>
+       <li><a href="#about">About</a></li>
+-      <li><a href="#team">Our Team</a></li>
+-      <li><a href="#photos">Photos</a></li>
+       <li><a href="#games">Games</a></li>
++      <li><a href="#photos">Photos</a></li>
+       <li><a href="#coaching">Coaching</a></li>
+-      <li><a href="#volunteer">Volunteer</a></li>
+       <li><a href="#join">Join</a></li>
++      <li><a href="#volunteer">Volunteer</a></li>
++      <li><a href="#team">Our Team</a></li>
+       <li><a href="https://www.instagram.com/dropshot_folks/" target="_blank" rel="noopener">Instagram</a></li>
+     </ul>
+     <a href="https://baddygo.com/clubdetail/?clubId=e32aa4ea-e978-43ad-9425-a4c04bd24be3" class="nav-cta">Book a slot →</a>
+@@ -1371,24 +1371,24 @@ footer ul a:hover{color:var(--maroon)}
+       <span class="tag">Read the story →</span>
+     </a>
+ 
+-    <a href="#photos" class="card c-photos reveal">
++    <a href="#games" class="card c-games reveal">
+       <div class="num">
+         02
+         <span class="arrow"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8h10m0 0l-4-4m4 4l-4 4"/></svg></span>
+       </div>
+-      <h3>Photos &amp; <em>video</em></h3>
+-      <p>The smashes, the slips, the post-match high-fives. A scrapbook of the moments that make it worth the bus ride.</p>
+-      <span class="tag">Open the album →</span>
++      <h3>Games &amp; <em>timing</em></h3>
++      <p>Six sessions a week across London. From beginner-friendly Wednesdays to sharp-elbow Tuesdays.</p>
++      <span class="tag">See the schedule →</span>
+     </a>
+ 
+-    <a href="#games" class="card c-games reveal">
++    <a href="#photos" class="card c-photos reveal">
+       <div class="num">
+         03
+         <span class="arrow"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8h10m0 0l-4-4m4 4l-4 4"/></svg></span>
+       </div>
+-      <h3>Games &amp; <em>timing</em></h3>
+-      <p>Six sessions a week across London. From beginner-friendly Wednesdays to sharp-elbow Tuesdays.</p>
+-      <span class="tag">See the schedule →</span>
++      <h3>Photos &amp; <em>video</em></h3>
++      <p>The smashes, the slips, the post-match high-fives. A scrapbook of the moments that make it worth the bus ride.</p>
++      <span class="tag">Open the album →</span>
+     </a>
+ 
+     <a href="#coaching" class="card c-coach reveal">
+@@ -1477,31 +1477,97 @@ footer ul a:hover{color:var(--maroon)}
+   </div> -->
+ </section>
+ 
+-<!-- ============================================== OUR TEAM -->
+-<section id="team">
++<!-- ============================================== GAMES & TIMING -->
++<section id="games">
+   <div class="section-head reveal">
+-    <div class="section-label">Our Team</div>
+-    <h2 class="section-title">The <em>folks</em> behind Dropshot Folks.</h2>
++    <div class="section-label">02 · Games &amp; timing</div>
++    <h2 class="section-title">Show up to <em>any</em> session, You will love it.</h2>
+   </div>
+ 
+-  <div class="team-grid reveal">
+-    <div class="team-card" style="
+-    height: 831px;
+-    width: 400px;
+-">
+-      <img class="team-photo" src="images/anamika.jpg" alt="Anamika Srivastava — Founder of Dropshot Folks">
+-      <div class="team-body">
+-        <div class="team-name">Anamika Srivastava</div>
+-        <div class="team-role">Founder</div>
+-        <p class="team-bio">
+-          By profession she's an actress and model, but by passion she loves sports that's the reason she started Dropshot Folks. She believes in fairness, women empowerment, and is a bit crazy because she is loud, fun and a bit dramatic. One thing about her — you will enjoy with her.
+-        </p>
+-        <div class="team-fun"><b>Fun fact:</b> she speaks Korean.</div>
+-      </div>
+-    </div>
++  <div class="games-wrap reveal">
++    <table class="games-table">
++      <thead>
++        <tr>
++          <th>Day</th>
++          <th>Time</th>
++          <th>Venue</th>
++          <th>Level</th>
++          <th></th>
++        </tr>
++      </thead>
++      <tbody>
++        <!-- <tr>
++          <td><span class="day">Mon</span></td>
++          <td><span class="time">19:30 – 21:30</span></td>
++          <td><div class="venue">Camden Sports Hall<small>4 courts · NW1</small></div></td>
++          <td><span class="level green">All levels</span></td>
++          <td><a href="https://baddygo.com/clubdetail/?clubId=e32aa4ea-e978-43ad-9425-a4c04bd24be3" class="book-btn" data-edit="booking">Book →</a></td>
++        </tr>
++        <tr>
++          <td><span class="day">Tue</span></td>
++          <td><span class="time">20:00 – 22:00</span></td>
++          <td><div class="venue">Islington Leisure<small>6 courts · N7</small></div></td>
++          <td><span class="level">Intermediate+</span></td>
++          <td><a href="https://baddygo.com/clubdetail/?clubId=e32aa4ea-e978-43ad-9425-a4c04bd24be3" class="book-btn" data-edit="booking">Book →</a></td>
++        </tr>
++        <tr>
++          <td><span class="day">Wed</span></td>
++          <td><span class="time">19:00 – 20:30</span></td>
++          <td><div class="venue">Shoreditch Box Arena<small>3 courts · E2</small></div></td>
++          <td><span class="level amber">Beginner</span></td>
++          <td><a href="https://baddygo.com/clubdetail/?clubId=e32aa4ea-e978-43ad-9425-a4c04bd24be3" class="book-btn" data-edit="booking">Book →</a></td>
++        </tr> -->
++        <tr>
++          <td><span class="day">Thu</span></td>
++          <td><span class="time">19:00 – 21:00</span></td>
++          <td><div class="venue">Swanlea School<small>4 courts ·  31 Brady St, London E1 5DJ</small></div></td>
++          <td><span class="level green">All levels</span></td>
++          <td><a href="https://baddygo.com/clubdetail/?clubId=e32aa4ea-e978-43ad-9425-a4c04bd24be3" class="book-btn" data-edit="booking">Book →</a></td>
++        </tr>
++        <tr>
++          <td><span class="day">Sat</span></td>
++          <td><span class="time">14:00 – 16:00</span></td>
++          <td><div class="venue">Qmotion Sport and Fitness Centre<small>3 courts ·  15 Bancroft Rd, Bethnal Green, London E1 4FZ</small></div></td>
++          <!-- <td><span class="level">Open play</span></td> -->
++              <td><span class="level green">All levels</span></td>
++          <td><a href="https://baddygo.com/clubdetail/?clubId=e32aa4ea-e978-43ad-9425-a4c04bd24be3" class="book-btn" data-edit="booking">Book →</a></td>
++        </tr>
++        <tr>
++          <td><span class="day">Sun</span></td>
++          <td><span class="time">14:00 – 16:00</span></td>
++          <td><div class="venue">Qmotion Sport and Fitness Centre<small>3 courts ·  15 Bancroft Rd, Bethnal Green, London E1 4FZ</small></div></td>
++          <!-- <td><span class="level amber">Social</span></td> -->
++              <td><span class="level green">All levels</span></td>
++          <td><a href="https://baddygo.com/clubdetail/?clubId=e32aa4ea-e978-43ad-9425-a4c04bd24be3" class="book-btn" data-edit="booking">Book →</a></td>
++        </tr>
++      </tbody>
++    </table>
+   </div>
+ </section>
+ 
++<!-- ============================================== PHOTOS & VIDEO -->
++<div class="gallery-section" id="photos">
++  <div class="gallery-inner">
++    <div class="section-head reveal">
++      <div class="section-label">03 · Photos</div>
++      <h2 class="section-title">Every smash, every <em>net cord</em>, every photo we forgot to delete.</h2>
++    </div>
++    <div class="gallery-grid">
++      <!-- <div class="tile t1 video reveal"><span class="play"></span><span class="cap">Doubles smash · highlight reel</span></div> -->
++       <div class="tile t1 reveal"><div class="img v1"></div></div>
++      <div class="tile t2 reveal"><span class="cap">Post-match high fives</span></div>
++      <div class="tile t3 reveal"><span class="cap">Mid-rally · Court 3</span></div>
++      <div class="tile t4 reveal"><span class="cap">Tuesday night doubles</span></div>
++      <div class="tile t5 reveal"><span class="cap">Set point energy</span></div>
++      <!-- <div class="tile t6 video reveal"><span class="play"></span><span class="cap">Between games</span></div> -->
++       <div class="tile t6 reveal"><div class="img v2"></div></div>
++      <div class="tile t7 reveal"><span class="cap">Service ready</span></div>
++      <div class="tile t8 reveal"><span class="cap">Backhand defence</span></div>
++       <div class="tile t9 reveal"><div class="img v3"></div></div>
++    </div>
++  </div>
++</div>
++
+ <!-- ============================================== COACHING -->
+ <section id="coaching">
+   <div class="section-head reveal">
+@@ -1606,97 +1672,6 @@ footer ul a:hover{color:var(--maroon)}
+   </div>
+ </div>
+ 
+-<!-- ============================================== PHOTOS & VIDEO -->
+-<div class="gallery-section" id="photos">
+-  <div class="gallery-inner">
+-    <div class="section-head reveal">
+-      <div class="section-label">02 · Photos</div>
+-      <h2 class="section-title">Every smash, every <em>net cord</em>, every photo we forgot to delete.</h2>
+-    </div>
+-    <div class="gallery-grid">
+-      <!-- <div class="tile t1 video reveal"><span class="play"></span><span class="cap">Doubles smash · highlight reel</span></div> -->
+-       <div class="tile t1 reveal"><div class="img v1"></div></div>
+-      <div class="tile t2 reveal"><span class="cap">Post-match high fives</span></div>
+-      <div class="tile t3 reveal"><span class="cap">Mid-rally · Court 3</span></div>
+-      <div class="tile t4 reveal"><span class="cap">Tuesday night doubles</span></div>
+-      <div class="tile t5 reveal"><span class="cap">Set point energy</span></div>
+-      <!-- <div class="tile t6 video reveal"><span class="play"></span><span class="cap">Between games</span></div> -->
+-       <div class="tile t6 reveal"><div class="img v2"></div></div>
+-      <div class="tile t7 reveal"><span class="cap">Service ready</span></div>
+-      <div class="tile t8 reveal"><span class="cap">Backhand defence</span></div>
+-       <div class="tile t9 reveal"><div class="img v3"></div></div>
+-    </div>
+-  </div>
+-</div>
+-
+-<!-- ============================================== GAMES & TIMING -->
+-<section id="games">
+-  <div class="section-head reveal">
+-    <div class="section-label">03 · Games &amp; timing</div>
+-    <h2 class="section-title">Show up to <em>any</em> session, You will love it.</h2>
+-  </div>
+-
+-  <div class="games-wrap reveal">
+-    <table class="games-table">
+-      <thead>
+-        <tr>
+-          <th>Day</th>
+-          <th>Time</th>
+-          <th>Venue</th>
+-          <th>Level</th>
+-          <th></th>
+-        </tr>
+-      </thead>
+-      <tbody>
+-        <!-- <tr>
+-          <td><span class="day">Mon</span></td>
+-          <td><span class="time">19:30 – 21:30</span></td>
+-          <td><div class="venue">Camden Sports Hall<small>4 courts · NW1</small></div></td>
+-          <td><span class="level green">All levels</span></td>
+-          <td><a href="https://baddygo.com/clubdetail/?clubId=e32aa4ea-e978-43ad-9425-a4c04bd24be3" class="book-btn" data-edit="booking">Book →</a></td>
+-        </tr>
+-        <tr>
+-          <td><span class="day">Tue</span></td>
+-          <td><span class="time">20:00 – 22:00</span></td>
+-          <td><div class="venue">Islington Leisure<small>6 courts · N7</small></div></td>
+-          <td><span class="level">Intermediate+</span></td>
+-          <td><a href="https://baddygo.com/clubdetail/?clubId=e32aa4ea-e978-43ad-9425-a4c04bd24be3" class="book-btn" data-edit="booking">Book →</a></td>
+-        </tr>
+-        <tr>
+-          <td><span class="day">Wed</span></td>
+-          <td><span class="time">19:00 – 20:30</span></td>
+-          <td><div class="venue">Shoreditch Box Arena<small>3 courts · E2</small></div></td>
+-          <td><span class="level amber">Beginner</span></td>
+-          <td><a href="https://baddygo.com/clubdetail/?clubId=e32aa4ea-e978-43ad-9425-a4c04bd24be3" class="book-btn" data-edit="booking">Book →</a></td>
+-        </tr> -->
+-        <tr>
+-          <td><span class="day">Thu</span></td>
+-          <td><span class="time">19:00 – 21:00</span></td>
+-          <td><div class="venue">Swanlea School<small>4 courts ·  31 Brady St, London E1 5DJ</small></div></td>
+-          <td><span class="level green">All levels</span></td>
+-          <td><a href="https://baddygo.com/clubdetail/?clubId=e32aa4ea-e978-43ad-9425-a4c04bd24be3" class="book-btn" data-edit="booking">Book →</a></td>
+-        </tr>
+-        <tr>
+-          <td><span class="day">Sat</span></td>
+-          <td><span class="time">14:00 – 16:00</span></td>
+-          <td><div class="venue">Qmotion Sport and Fitness Centre<small>3 courts ·  15 Bancroft Rd, Bethnal Green, London E1 4FZ</small></div></td>
+-          <!-- <td><span class="level">Open play</span></td> -->
+-              <td><span class="level green">All levels</span></td>
+-          <td><a href="https://baddygo.com/clubdetail/?clubId=e32aa4ea-e978-43ad-9425-a4c04bd24be3" class="book-btn" data-edit="booking">Book →</a></td>
+-        </tr>
+-        <tr>
+-          <td><span class="day">Sun</span></td>
+-          <td><span class="time">14:00 – 16:00</span></td>
+-          <td><div class="venue">Qmotion Sport and Fitness Centre<small>3 courts ·  15 Bancroft Rd, Bethnal Green, London E1 4FZ</small></div></td>
+-          <!-- <td><span class="level amber">Social</span></td> -->
+-              <td><span class="level green">All levels</span></td>
+-          <td><a href="https://baddygo.com/clubdetail/?clubId=e32aa4ea-e978-43ad-9425-a4c04bd24be3" class="book-btn" data-edit="booking">Book →</a></td>
+-        </tr>
+-      </tbody>
+-    </table>
+-  </div>
+-</section>
+-
+ <!-- ============================================== JOIN SOCIALS -->
+ <div class="socials" id="join">
+   <div class="socials-inner">
+@@ -1873,6 +1848,32 @@ footer ul a:hover{color:var(--maroon)}
+   </div>
+ </div>
+ 
++<!-- ============================================== OUR TEAM -->
++<section id="team">
++  <div class="section-head reveal">
++    <div class="section-label">Our Team</div>
++    <h2 class="section-title">The <em>folks</em> behind Dropshot Folks.</h2>
++  </div>
++
++  <div class="team-grid reveal">
++    <div class="team-card" style="
++    height: 831px;
++    width: 400px;
++">
++      <img class="team-photo" src="images/anamika.jpg" alt="Anamika Srivastava — Founder of Dropshot Folks">
++      <div class="team-body">
++        <div class="team-name">Anamika Srivastava</div>
++        <div class="team-role">Founder</div>
++        <p class="team-bio">
++          By profession she's an actress and model, but by passion she loves sports that's the reason she started Dropshot Folks. She believes in fairness, women empowerment, and is a bit crazy because she is loud, fun and a bit dramatic. One thing about her — you will enjoy with her.
++        </p>
++        <div class="team-fun"><b>Fun fact:</b> she speaks Korean.</div>
++      </div>
++    </div>
++  </div>
++</section>
++
++
+ </main>
+ 
+ <!-- ============================================== LIGHTBOX -->
+-- 
+2.43.0
+

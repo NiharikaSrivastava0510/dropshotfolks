@@ -1,0 +1,125 @@
+From e20b0b3a0e767ab2c17c1279fb66bd56b7583135 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 9 Jun 2026 19:53:54 +0000
+Subject: [PATCH] Security hardening for the static site
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Add a Content-Security-Policy meta tag locking sources down to self,
+  Google Fonts and Web3Forms; restricts form-action, frame-src,
+  object-src, and base-uri; upgrades any insecure requests
+- Add referrer-policy and robots meta tags
+- Add a Web3Forms honeypot (botcheck) field on both coaching and
+  volunteer forms — bots that fill the hidden checkbox get rejected
+- Sanitize untrusted server response messages before injecting into the
+  success/error popup (prevents reflected XSS via data.message)
+
+Notes:
+- 'unsafe-inline' is kept on script-src/style-src because the page still
+  has inline scripts and styles; removing it would require extracting
+  them into separate files.
+- For full security headers (HSTS, X-Frame-Options, CSP frame-ancestors)
+  the site would need to move to a host that allows custom HTTP headers
+  (Cloudflare Pages / Netlify / Vercel).
+
+https://claude.ai/code/session_01CQhaur5bgTcTG5y3ok9zon
+---
+ index.html | 11 +++++++++++
+ src.js     | 23 +++++++++++++++++------
+ 2 files changed, 28 insertions(+), 6 deletions(-)
+
+diff --git a/index.html b/index.html
+index d677be7..1108da5 100644
+--- a/index.html
++++ b/index.html
+@@ -6,6 +6,13 @@
+ <title>Dropshot Folks — A Badminton Community</title>
+ <meta name="description" content="Dropshot Folks — a badminton community for the folks who love the game. Sessions, photos, socials, slots." />
+ 
++<!-- Security headers (set via meta since GitHub Pages doesn't allow custom HTTP headers).
++     If you move to a host that supports response headers, also add: Strict-Transport-Security,
++     X-Frame-Options: DENY, X-Content-Type-Options: nosniff, and frame-ancestors 'none' in CSP. -->
++<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://api.web3forms.com; form-action 'self' https://api.web3forms.com; frame-src 'none'; object-src 'none'; base-uri 'self'; upgrade-insecure-requests">
++<meta name="referrer" content="strict-origin-when-cross-origin">
++<meta name="robots" content="index, follow">
++
+ <!--
+   ============================================================
+   EDIT-ME · Quick reference of placeholders to update later
+@@ -1898,6 +1905,8 @@ footer ul a:hover{color:var(--maroon)}
+     <!-- <form class="vol-form" id="coachForm" novalidate> -->
+       <form class="vol-form" id="coachForm" novalidate action="https://api.web3forms.com/submit" method="POST">
+   <input type="hidden" name="access_key" value="32edf551-fab5-4e79-b9e1-b225ca342b76">
++  <!-- Web3Forms honeypot — keep hidden; if a bot ticks it, submission is rejected -->
++  <input type="checkbox" name="botcheck" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden">
+       <h3 id="coachModalTitle">Coaching request</h3>
+ 
+       <div class="vol-success" id="coachSuccess">
+@@ -2076,6 +2085,8 @@ footer ul a:hover{color:var(--maroon)}
+ 
+       <form class="vol-form" id="volunteerForm" novalidate action="https://api.web3forms.com/submit" method="POST">
+   <input type="hidden" name="access_key" value="59e5a553-45c4-406b-bd8c-c05cc26ebbe2">
++  <!-- Web3Forms honeypot — keep hidden; if a bot ticks it, submission is rejected -->
++  <input type="checkbox" name="botcheck" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden">
+       <h3 id="volModalTitle">Volunteer sign-up</h3>
+ 
+       <div class="vol-success" id="volSuccess">
+diff --git a/src.js b/src.js
+index bc295e2..0ffffcf 100644
+--- a/src.js
++++ b/src.js
+@@ -13,10 +13,21 @@
+   // The modal we should close after the user dismisses the popup
+   let modalToClose = null;
+ 
+-  function openPopup({ title, body, isError }) {
++  function escapeHtml(str) {
++    return String(str).replace(/[&<>"']/g, (ch) => ({
++      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
++    }[ch]));
++  }
++
++  function openPopup({ title, bodyHtml, untrustedDetail, isError }) {
+     if (!popup) return;
+     if (popupTitle) popupTitle.textContent = title;
+-    if (popupBody)  popupBody.innerHTML    = body;
++    if (popupBody) {
++      // bodyHtml is a fixed template under our control. untrustedDetail
++      // (e.g. data.message from the API) is HTML-escaped before injection.
++      const safeDetail = untrustedDetail ? escapeHtml(untrustedDetail) + ' ' : '';
++      popupBody.innerHTML = safeDetail + bodyHtml;
++    }
+     popup.classList.toggle('is-error', !!isError);
+     popup.classList.add('show');
+     popup.setAttribute('aria-hidden', 'false');
+@@ -105,14 +116,14 @@
+         if (res.ok && data.success !== false) {
+           openPopup({
+             title: 'Thanks — your request is in.',
+-            body: 'We\'ll be in touch soon. If you don\'t hear back within a few days, drop us a note at <a href="mailto:info@dropshotfolks.co.uk">info@dropshotfolks.co.uk</a>.',
++            bodyHtml: 'We\'ll be in touch soon. If you don\'t hear back within a few days, drop us a note at <a href="mailto:info@dropshotfolks.co.uk">info@dropshotfolks.co.uk</a>.',
+           });
+           form.reset();
+         } else {
+           openPopup({
+             title: 'Sorry — that didn\'t go through.',
+-            body: ((data && data.message) ? data.message + ' ' : '') +
+-                  'Please try again or email <a href="mailto:info@dropshotfolks.co.uk">info@dropshotfolks.co.uk</a>.',
++            untrustedDetail: data && data.message ? data.message : '',
++            bodyHtml: 'Please try again or email <a href="mailto:info@dropshotfolks.co.uk">info@dropshotfolks.co.uk</a>.',
+             isError: true,
+           });
+         }
+@@ -120,7 +131,7 @@
+         modalToClose = form.closest('.coach-modal') || null;
+         openPopup({
+           title: 'Sorry — that didn\'t go through.',
+-          body: 'Please check your connection and try again, or email <a href="mailto:info@dropshotfolks.co.uk">info@dropshotfolks.co.uk</a>.',
++          bodyHtml: 'Please check your connection and try again, or email <a href="mailto:info@dropshotfolks.co.uk">info@dropshotfolks.co.uk</a>.',
+           isError: true,
+         });
+       } finally {
+-- 
+2.43.0
+

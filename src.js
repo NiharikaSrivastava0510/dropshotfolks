@@ -72,6 +72,17 @@
       }
 
       const formData = new FormData(form);
+      // Collapse multi-value checkbox groups (e.g. `roles`) into one
+      // comma-separated string so Web3Forms emails them on a single line.
+      if (opts.csvGroups && Array.isArray(opts.csvGroups)) {
+        opts.csvGroups.forEach((groupName) => {
+          const values = formData.getAll(groupName);
+          if (values.length > 0) {
+            formData.delete(groupName);
+            formData.set(groupName, values.join(', '));
+          }
+        });
+      }
       if (opts.subject)  formData.set('subject', opts.subject(form));
       if (opts.fromName) formData.set('from_name', opts.fromName(form));
 
@@ -138,6 +149,7 @@
 
   wireForm('volunteerForm', {
     successId: 'volSuccess',
+    csvGroups: ['roles'],
     subject: (f) => {
       const first = val(f, 'firstName');
       const last  = val(f, 'lastName');

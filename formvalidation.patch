@@ -1,0 +1,99 @@
+From ba07c2be40e3e9da6e8763b6fd5e995e3a5e58a0 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 9 Jun 2026 19:49:10 +0000
+Subject: [PATCH] Tighten form validation and roles formatting
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Email (coach + volunteer): add a stricter regex pattern + title hint
+  on top of type="email" so invalid input is rejected before submit
+- Phone (coach + volunteer): require, add pattern (7–15 digits, optional
+  +/spaces/dashes/parens), inputmode="tel" and placeholder for clarity
+- Age (coach): drop max from 120 to 90
+- Roles checkboxes: collapse multiple selections into one
+  comma-separated value before sending to Web3Forms, via a new
+  csvGroups option in the form wiring
+
+https://claude.ai/code/session_01CQhaur5bgTcTG5y3ok9zon
+---
+ index.html | 12 ++++++------
+ src.js     | 12 ++++++++++++
+ 2 files changed, 18 insertions(+), 6 deletions(-)
+
+diff --git a/index.html b/index.html
+index 338f291..d677be7 100644
+--- a/index.html
++++ b/index.html
+@@ -1926,7 +1926,7 @@ footer ul a:hover{color:var(--maroon)}
+       <div class="field-row">
+         <div class="field">
+           <label for="coach-age">Age <span class="req">*</span></label>
+-          <input type="number" id="coach-age" name="age" min="1" max="120" required>
++          <input type="number" id="coach-age" name="age" min="1" max="90" required>
+         </div>
+         <div class="field">
+           <label for="coach-level">Current badminton level <span class="req">*</span></label>
+@@ -1943,11 +1943,11 @@ footer ul a:hover{color:var(--maroon)}
+       <div class="field-row">
+         <div class="field">
+           <label for="coach-email">Email <span class="req">*</span></label>
+-          <input type="email" id="coach-email" name="email" required autocomplete="email" placeholder="you@example.com">
++          <input type="email" id="coach-email" name="email" required autocomplete="email" placeholder="you@example.com" pattern="^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$" title="Please enter a valid email address (e.g. you@example.com)">
+         </div>
+         <div class="field">
+           <label for="coach-phone">Contact number <span class="req">*</span></label>
+-          <input type="tel" id="coach-phone" name="phone" required autocomplete="tel">
++          <input type="tel" id="coach-phone" name="phone" required autocomplete="tel" pattern="^\+?[0-9\s\-()]{7,15}$" inputmode="tel" placeholder="e.g. 07123 456789" title="Please enter a valid phone number (7–15 digits, optional +, spaces, dashes)">
+         </div>
+       </div>
+ 
+@@ -2096,12 +2096,12 @@ footer ul a:hover{color:var(--maroon)}
+ 
+       <div class="field">
+         <label for="vol-email">Email <span class="req">*</span></label>
+-        <input type="email" id="vol-email" name="email" required autocomplete="email" placeholder="you@example.com">
++        <input type="email" id="vol-email" name="email" required autocomplete="email" placeholder="you@example.com" pattern="^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$" title="Please enter a valid email address (e.g. you@example.com)">
+       </div>
+ 
+       <div class="field">
+-        <label for="vol-phone">Phone (optional)</label>
+-        <input type="tel" id="vol-phone" name="phone" autocomplete="tel">
++        <label for="vol-phone">Phone <span class="req">*</span></label>
++        <input type="tel" id="vol-phone" name="phone" required autocomplete="tel" pattern="^\+?[0-9\s\-()]{7,15}$" inputmode="tel" placeholder="e.g. 07123 456789" title="Please enter a valid phone number (7–15 digits, optional +, spaces, dashes)">
+       </div>
+ 
+       <div class="field">
+diff --git a/src.js b/src.js
+index d9215c0..bc295e2 100644
+--- a/src.js
++++ b/src.js
+@@ -72,6 +72,17 @@
+       }
+ 
+       const formData = new FormData(form);
++      // Collapse multi-value checkbox groups (e.g. `roles`) into one
++      // comma-separated string so Web3Forms emails them on a single line.
++      if (opts.csvGroups && Array.isArray(opts.csvGroups)) {
++        opts.csvGroups.forEach((groupName) => {
++          const values = formData.getAll(groupName);
++          if (values.length > 0) {
++            formData.delete(groupName);
++            formData.set(groupName, values.join(', '));
++          }
++        });
++      }
+       if (opts.subject)  formData.set('subject', opts.subject(form));
+       if (opts.fromName) formData.set('from_name', opts.fromName(form));
+ 
+@@ -138,6 +149,7 @@
+ 
+   wireForm('volunteerForm', {
+     successId: 'volSuccess',
++    csvGroups: ['roles'],
+     subject: (f) => {
+       const first = val(f, 'firstName');
+       const last  = val(f, 'lastName');
+-- 
+2.43.0
+

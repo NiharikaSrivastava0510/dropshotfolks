@@ -1,0 +1,265 @@
+From 4769bbd421a17c41fd8bbe373747b4cd5dc4457c Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 9 Jun 2026 19:36:46 +0000
+Subject: [PATCH] Show form success in an overlay popup and close the modal on
+ dismiss
+
+- New centered success popup (#formSuccessPopup) rendered above the
+  coaching/volunteer modal with a higher z-index
+- Popup carries a check icon, title, body, and an OK button
+- src.js now shows the popup on success/error instead of mutating the
+  inline banner inside the form
+- Clicking OK, the backdrop, or pressing Escape closes the popup AND
+  closes the parent modal (volunteer or coaching) and unlocks scroll
+- Error state reuses the same popup with a red icon and styled heading
+
+https://claude.ai/code/session_01CQhaur5bgTcTG5y3ok9zon
+---
+ index.html |  61 +++++++++++++++++++++++++++++++
+ src.js     | 104 +++++++++++++++++++++++++++++++++++++----------------
+ 2 files changed, 134 insertions(+), 31 deletions(-)
+
+diff --git a/index.html b/index.html
+index 181f696..338f291 100644
+--- a/index.html
++++ b/index.html
+@@ -1248,6 +1248,55 @@ section{
+ .coach-modal-close:hover{background:var(--maroon);color:var(--cream);border-color:var(--maroon)}
+ @media (max-width:520px){.coach-modal-close{top:6px;right:6px}}
+ 
++/* form success popup — sits above the form modal */
++.form-popup{
++  position:fixed;inset:0;
++  background:rgba(28,10,13,.75);
++  z-index:400;
++  display:none;
++  align-items:center;justify-content:center;
++  padding:1.2rem;
++}
++.form-popup.show{display:flex;animation:popupFade .25s ease}
++@keyframes popupFade{from{opacity:0}to{opacity:1}}
++.form-popup-dialog{
++  background:var(--cream);
++  border-radius:12px;
++  padding:clamp(1.8rem,4vw,2.6rem);
++  max-width:460px;width:100%;
++  text-align:center;
++  box-shadow:0 30px 60px -20px rgba(0,0,0,.6);
++  animation:popupIn .35s cubic-bezier(.2,.6,.2,1);
++}
++@keyframes popupIn{from{opacity:0;transform:translateY(20px) scale(.96)}to{opacity:1;transform:none}}
++.form-popup-icon{
++  width:64px;height:64px;border-radius:50%;
++  background:rgba(61,107,65,.12);
++  color:#3d6b41;
++  display:flex;align-items:center;justify-content:center;
++  margin:0 auto 1.2rem;
++}
++.form-popup-icon svg{width:30px;height:30px}
++.form-popup-dialog h3{
++  font-family:'Fraunces',serif;font-weight:400;
++  font-size:1.7rem;line-height:1.15;letter-spacing:-.02em;
++  color:var(--maroon-deep);
++  margin-bottom:.8rem;
++}
++.form-popup-dialog p{
++  font-size:.95rem;line-height:1.55;
++  color:#3a1d22;
++  margin-bottom:1.6rem;
++}
++.form-popup-dialog p a{color:var(--maroon);text-decoration:underline}
++.form-popup-ok{
++  max-width:200px;margin:0 auto;
++}
++.form-popup.is-error .form-popup-icon{
++  background:rgba(155,28,28,.1);color:#9b1c1c;
++}
++.form-popup.is-error .form-popup-dialog h3{color:#7a1414}
++
+ @media (max-width:880px){.volunteer-inner{grid-template-columns:1fr}}
+ 
+ /* ---------- Photo slider ---------- */
+@@ -2148,6 +2197,18 @@ footer ul a:hover{color:var(--maroon)}
+ 
+ </main>
+ 
++<!-- ============================================== FORM SUCCESS POPUP -->
++<div class="form-popup" id="formSuccessPopup" aria-hidden="true">
++  <div class="form-popup-dialog" role="dialog" aria-modal="true" aria-labelledby="formSuccessTitle">
++    <div class="form-popup-icon" aria-hidden="true">
++      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
++    </div>
++    <h3 id="formSuccessTitle">Thanks — your request is in.</h3>
++    <p id="formSuccessBody">We'll be in touch soon. If you don't hear back within a few days, drop us a note at <a href="mailto:info@dropshotfolks.co.uk">info@dropshotfolks.co.uk</a>.</p>
++    <button type="button" class="btn-submit form-popup-ok" id="formSuccessClose">OK</button>
++  </div>
++</div>
++
+ <!-- ============================================== LIGHTBOX -->
+ <div class="lightbox-overlay" id="lightbox">
+   <button class="lightbox-close" id="lightboxClose" aria-label="Close">&times;</button>
+diff --git a/src.js b/src.js
+index 6546c34..d9215c0 100644
+--- a/src.js
++++ b/src.js
+@@ -4,47 +4,75 @@
+ (function () {
+   const WEB3FORMS_URL = 'https://api.web3forms.com/submit';
+ 
+-  function showSuccess(box) {
+-    if (!box) return;
+-    box.classList.add('show');
+-    box.querySelector('strong')?.replaceChildren(document.createTextNode('Thanks — your message has been sent!'));
+-    box.lastChild && (box.lastChild.nodeValue = '');
+-    // Replace the body text so it doesn't still say "your email app should have opened…"
+-    box.innerHTML =
+-      '<strong>Thanks — your request is in.</strong> We\'ll be in touch soon. ' +
+-      'If you don\'t hear back within a few days, drop us a note at ' +
+-      '<span data-edit="email">info@dropshotfolks.co.uk</span>.';
++  const popup       = document.getElementById('formSuccessPopup');
++  const popupDialog = popup ? popup.querySelector('.form-popup-dialog') : null;
++  const popupTitle  = document.getElementById('formSuccessTitle');
++  const popupBody   = document.getElementById('formSuccessBody');
++  const popupClose  = document.getElementById('formSuccessClose');
++
++  // The modal we should close after the user dismisses the popup
++  let modalToClose = null;
++
++  function openPopup({ title, body, isError }) {
++    if (!popup) return;
++    if (popupTitle) popupTitle.textContent = title;
++    if (popupBody)  popupBody.innerHTML    = body;
++    popup.classList.toggle('is-error', !!isError);
++    popup.classList.add('show');
++    popup.setAttribute('aria-hidden', 'false');
++    document.body.style.overflow = 'hidden';
++    if (popupClose) setTimeout(() => popupClose.focus(), 50);
++  }
++
++  function closePopupOnly() {
++    if (!popup) return;
++    popup.classList.remove('show');
++    popup.classList.remove('is-error');
++    popup.setAttribute('aria-hidden', 'true');
++  }
++
++  function closeParentModal() {
++    if (!modalToClose) return;
++    modalToClose.classList.remove('show');
++    modalToClose.setAttribute('aria-hidden', 'true');
++    modalToClose = null;
+   }
+ 
+-  function showError(box, message) {
+-    if (!box) return;
+-    box.classList.add('show');
+-    box.style.background = 'rgba(155,28,28,.08)';
+-    box.style.borderColor = '#9b1c1c';
+-    box.style.color = '#7a1414';
+-    box.innerHTML =
+-      '<strong>Sorry — that didn\'t go through.</strong> ' +
+-      (message ? message + ' ' : '') +
+-      'Please try again or email <span data-edit="email">info@dropshotfolks.co.uk</span>.';
++  function handlePopupDismiss() {
++    closePopupOnly();
++    closeParentModal();
++    document.body.style.overflow = '';
+   }
+ 
++  if (popupClose) popupClose.addEventListener('click', handlePopupDismiss);
++  if (popup) {
++    popup.addEventListener('click', (e) => {
++      if (e.target === popup) handlePopupDismiss();
++    });
++  }
++  document.addEventListener('keydown', (e) => {
++    if (e.key === 'Escape' && popup && popup.classList.contains('show')) {
++      handlePopupDismiss();
++    }
++  });
++
+   function wireForm(formId, opts) {
+     const form = document.getElementById(formId);
+     if (!form) return;
+     const submitBtn = form.querySelector('button[type="submit"]');
+-    const successBox = document.getElementById(opts.successId);
++    // Hide the legacy inline success/banner — popup is the new path
++    const inlineBox = document.getElementById(opts.successId);
++    if (inlineBox) inlineBox.classList.remove('show');
+ 
+     form.addEventListener('submit', async (e) => {
+       e.preventDefault();
+-      // Use the browser's native validation for required fields
+       if (!form.checkValidity()) {
+         form.reportValidity();
+         return;
+       }
+ 
+       const formData = new FormData(form);
+-      // Friendly subject + sender name for the email Web3Forms sends
+-      if (opts.subject) formData.set('subject', opts.subject(form));
++      if (opts.subject)  formData.set('subject', opts.subject(form));
+       if (opts.fromName) formData.set('from_name', opts.fromName(form));
+ 
+       const originalLabel = submitBtn ? submitBtn.innerHTML : '';
+@@ -53,7 +81,6 @@
+         submitBtn.dataset.originalLabel = originalLabel;
+         submitBtn.textContent = 'Sending…';
+       }
+-      if (successBox) successBox.classList.remove('show');
+ 
+       try {
+         const res = await fetch(WEB3FORMS_URL, {
+@@ -62,14 +89,29 @@
+           body: formData,
+         });
+         const data = await res.json().catch(() => ({}));
++        // Remember the parent modal so the popup can close it on dismiss
++        modalToClose = form.closest('.coach-modal') || null;
+         if (res.ok && data.success !== false) {
+-          showSuccess(successBox);
++          openPopup({
++            title: 'Thanks — your request is in.',
++            body: 'We\'ll be in touch soon. If you don\'t hear back within a few days, drop us a note at <a href="mailto:info@dropshotfolks.co.uk">info@dropshotfolks.co.uk</a>.',
++          });
+           form.reset();
+         } else {
+-          showError(successBox, data && data.message);
++          openPopup({
++            title: 'Sorry — that didn\'t go through.',
++            body: ((data && data.message) ? data.message + ' ' : '') +
++                  'Please try again or email <a href="mailto:info@dropshotfolks.co.uk">info@dropshotfolks.co.uk</a>.',
++            isError: true,
++          });
+         }
+       } catch (err) {
+-        showError(successBox);
++        modalToClose = form.closest('.coach-modal') || null;
++        openPopup({
++          title: 'Sorry — that didn\'t go through.',
++          body: 'Please check your connection and try again, or email <a href="mailto:info@dropshotfolks.co.uk">info@dropshotfolks.co.uk</a>.',
++          isError: true,
++        });
+       } finally {
+         if (submitBtn) {
+           submitBtn.disabled = false;
+@@ -98,13 +140,13 @@
+     successId: 'volSuccess',
+     subject: (f) => {
+       const first = val(f, 'firstName');
+-      const last = val(f, 'lastName');
+-      const name = [first, last].filter(Boolean).join(' ').trim() || 'Unknown';
++      const last  = val(f, 'lastName');
++      const name  = [first, last].filter(Boolean).join(' ').trim() || 'Unknown';
+       return `Volunteer application — ${name}`;
+     },
+     fromName: (f) => {
+       const first = val(f, 'firstName');
+-      const last = val(f, 'lastName');
++      const last  = val(f, 'lastName');
+       return [first, last].filter(Boolean).join(' ').trim() || 'Dropshot Folks website';
+     },
+   });
+-- 
+2.43.0
+

@@ -1,0 +1,68 @@
+From 24fd68d2ec8201925c2157d521eff21ff9a60634 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 10 Jun 2026 10:09:47 +0000
+Subject: [PATCH] Fix mobile hero overlap + socials overflow
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- The mobile nav was wrapping to two rows, dropping the "Book a slot"
+  pill onto the same line as the hero eyebrow text and creating an
+  overlap. Keep nav on a single row (logo + CTA + hamburger), and on
+  small phones hide the nav's "Book a slot" pill entirely — the hero
+  already has one
+- Bump hero top padding on phones so the eyebrow + headline sit clearly
+  below the (now single-row) nav
+- Socials "Join the folks" grid was forcing two columns at all widths,
+  causing the cards to push past the section's right edge on phones.
+  Stack to a single column at <=640px with tighter card padding
+
+Desktop layout is unchanged.
+
+https://claude.ai/code/session_01CQhaur5bgTcTG5y3ok9zon
+---
+ index.html | 21 +++++++++++++++++----
+ 1 file changed, 17 insertions(+), 4 deletions(-)
+
+diff --git a/index.html b/index.html
+index 2af08c7..5b333d8 100644
+--- a/index.html
++++ b/index.html
+@@ -1435,10 +1435,10 @@ section{
+ }
+ .nav-toggle svg{display:block;width:22px;height:22px}
+ @media (max-width:880px){
+-  .nav-toggle{display:inline-flex;align-items:center;justify-content:center;order:2}
+-  nav.top{flex-wrap:wrap;gap:.6rem}
+-  nav.top .logo{order:1;flex:1}
+-  nav.top .nav-cta{order:3}
++  .nav-toggle{display:inline-flex;align-items:center;justify-content:center;order:3}
++  nav.top{flex-wrap:nowrap;gap:.6rem;align-items:center}
++  nav.top .logo{order:1;flex:1;min-width:0}
++  nav.top .nav-cta{order:2;padding:.5rem 1rem;font-size:.82rem;white-space:nowrap}
+   nav.top ul.open{
+     display:flex !important;
+     order:4;flex-basis:100%;
+@@ -1449,6 +1449,19 @@ section{
+   }
+   nav.top ul.open a{color:var(--cream)}
+ }
++@media (max-width:520px){
++  /* Drop the nav "Book a slot" pill on phones — the hero already has one */
++  nav.top .nav-cta{display:none}
++  /* Give the hero content room to start below the (still-visible) logo + hamburger row */
++  .hero{padding-top:8.5rem}
++}
++
++/* Socials grid — stack into one column on mobile (cards were overflowing the section) */
++@media (max-width:640px){
++  .social-grid{grid-template-columns:1fr}
++  .social-card{padding:1.2rem}
++  .social-card p{letter-spacing:.12em}
++}
+ 
+ /* ---------- Footer ---------- */
+ footer{
+-- 
+2.43.0
+

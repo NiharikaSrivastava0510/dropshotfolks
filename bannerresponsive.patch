@@ -1,0 +1,106 @@
+From ca604ade6b7626b6ea8c13aafc962015fc70b72d Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 9 Jun 2026 20:46:10 +0000
+Subject: [PATCH] Fix top banner for mobile and desktop
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Drop the inline margin-left:240px on .banner-title that was shoving
+  the logo+text off the right edge on mobile
+- Move logo+text alignment into CSS: a centered flex row that wraps
+  cleanly at any width
+- Scale .banner-title font-size down (clamp 1.8rem → 4rem instead of
+  3rem → 6rem) so the banner no longer eats the full first screen
+- Scale the logo via clamp() with hard caps at small breakpoints
+  (40–80px desktop, 36px on phones)
+- Reduce overall banner padding so the hero is visible without scroll
+- Subtitle scaled to clamp 1.3rem → 2.4rem
+
+https://claude.ai/code/session_01CQhaur5bgTcTG5y3ok9zon
+---
+ index.html | 36 +++++++++++++++++++++++++++---------
+ 1 file changed, 27 insertions(+), 9 deletions(-)
+
+diff --git a/index.html b/index.html
+index 2599273..2af08c7 100644
+--- a/index.html
++++ b/index.html
+@@ -77,7 +77,7 @@ body::before{
+   background:var(--maroon-deep);
+   color:var(--cream);
+   text-align:center;
+-  padding:clamp(2.5rem,5vw,4rem) clamp(1.2rem,4vw,3rem);
++  padding:clamp(1.6rem,3.5vw,2.6rem) clamp(1rem,4vw,3rem);
+   position:relative;
+   overflow:hidden;
+   z-index:30;
+@@ -94,29 +94,46 @@ body::before{
+   max-width:1400px;margin:0 auto;
+ }
+ .banner-title{
++  display:flex;
++  align-items:center;
++  justify-content:center;
++  gap:clamp(.6rem,1.5vw,1rem);
+   font-family:'Fraunces',serif;
+   font-weight:700;
+-  font-size:clamp(3rem,8vw,6rem);
++  font-size:clamp(1.8rem,5.5vw,4rem);
+   line-height:1;
+   letter-spacing:-.03em;
+-  color:var(--cream);
+-  margin-bottom:.4rem;
++  color:#d8c4a0;
++  margin:0 0 .4rem;
+   text-transform:uppercase;
++  flex-wrap:nowrap;
++}
++.banner-title em{font-style:italic;font-weight:400}
++.banner-image{
++  height:clamp(40px,7vw,80px);
++  width:auto;
++  flex-shrink:0;
+ }
+ .banner-subtitle{
+   font-family:'Fraunces',serif;
+   font-weight:300;
+   font-style:italic;
+-  font-size:clamp(2rem,5vw,3.8rem);
+-  line-height:1.1;
++  font-size:clamp(1.3rem,3.4vw,2.4rem);
++  line-height:1.15;
+   letter-spacing:-.02em;
+   color:var(--beige-deep);
++  margin:0;
+ }
+ .banner-subtitle em{
+   font-style:normal;
+   font-weight:600;
+   color:var(--cream);
+ }
++@media (max-width:480px){
++  .top-banner{padding:1.2rem .8rem}
++  .banner-title{gap:.45rem}
++  .banner-image{height:36px}
++}
+ 
+ /* ---------- Top ticker ---------- */
+ .ticker{
+@@ -1487,9 +1504,10 @@ footer ul a:hover{color:var(--maroon)}
+ <div class="top-banner" id="home">
+   <div class="top-banner-inner">
+     
+-    <h3 class="banner-title" style="display:flex;align-items:center; color:#d8c4a0; margin-left: 240px;">
+-      <img src="images/logo.png" alt="Photo of a badminton court with players, taken from above" class="banner-image" style=" height: 100px; margin-right: 12px;">
+-      Dropshot<em>Folks</em></h3>
++    <h3 class="banner-title">
++      <img src="images/logo.png" alt="Dropshot Folks logo" class="banner-image">
++      <span>Dropshot<em>Folks</em></span>
++    </h3>
+     <h1 class="banner-subtitle">Play. Meet. Repeat.</h1>
+   </div>
+ </div>
+-- 
+2.43.0
+

@@ -1398,6 +1398,9 @@ section{
   transition:all .2s ease;
 }
 .coach-modal-close:hover{background:var(--maroon);color:var(--cream);border-color:var(--maroon)}
+.promo-modal{align-items:center}
+.promo-modal .coach-modal-dialog{max-width:480px;margin:auto}
+.promo-modal img{display:block;width:100%;height:auto;border-radius:10px;box-shadow:0 24px 60px -20px rgba(0,0,0,.6)}
 .captcha-field{display:flex;justify-content:center;margin:.4rem 0 1.1rem}
 .captcha-field .h-captcha{transform-origin:center top}
 @media (max-width:340px){.captcha-field .h-captcha{transform:scale(.85)}}
@@ -2435,6 +2438,16 @@ footer ul a:hover{color:var(--maroon)}
 
 </main>
 
+<!-- ============================================== PROMO POPUP (Team Cup) -->
+<!-- Shown once per visit until the event date set in the script below. Delete this block to remove it. -->
+<div class="coach-modal promo-modal" id="promoModal" aria-hidden="true">
+  <div class="coach-modal-dialog" role="dialog" aria-modal="true" aria-label="Badminton Team Cup, 18 October 2026">
+    <button type="button" class="coach-modal-close" id="promoModalClose" aria-label="Close">&times;</button>
+    <img src="images/team-cup-oct-2026.jpg" width="1080" height="1350"
+         alt="Dropshot Folks Badminton Team Cup — 18 Oct 2026, 9:00am–4:00pm, Westminster City School, 55 Palace Street, London SW1E 5HJ. Teams of 4, £22 per person, 18 team slots. Men's, women's and mixed doubles. Registration ends 13 Oct.">
+  </div>
+</div>
+
 <!-- ============================================== FORM SUCCESS POPUP -->
 <div class="form-popup" id="formSuccessPopup" aria-hidden="true">
   <div class="form-popup-dialog" role="dialog" aria-modal="true" aria-labelledby="formSuccessTitle">
@@ -2815,6 +2828,37 @@ window.addEventListener('load', () => {
 
 </script>
 
+<script>
+// Promo popup — shows on first view, once per browser session, until the event ends
+(function(){
+  const modal = document.getElementById('promoModal');
+  const closeBtn = document.getElementById('promoModalClose');
+  if (!modal || !closeBtn) return;
+  if (new Date() > new Date('2026-10-18T23:59:59')) return;
+  let seen = false;
+  try { seen = sessionStorage.getItem('promoSeen') === '1'; } catch(e){}
+  if (seen) return;
+
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  function open(){
+    modal.classList.add('show');
+    modal.setAttribute('aria-hidden','false');
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', onKey);
+    closeBtn.focus();
+  }
+  function close(){
+    modal.classList.remove('show');
+    modal.setAttribute('aria-hidden','true');
+    document.body.style.overflow = '';
+    document.removeEventListener('keydown', onKey);
+    try { sessionStorage.setItem('promoSeen','1'); } catch(e){}
+  }
+  closeBtn.addEventListener('click', close);
+  modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+  open();
+})();
+</script>
 <script src="./src.js" defer></script>
 </body>
 </html>

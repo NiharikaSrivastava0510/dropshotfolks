@@ -330,7 +330,8 @@ const courtsOf = s => [1,2,3,4].filter(c => cap(s,c) > 0);
 const courtLevels = (s,c) => { const v=s?.courts?.[c]?.levels; return Array.isArray(v) && v.length ? v : [lvByCourt(c).code] };
 const courtName = (s,c) => s?.courts?.[c]?.label || lvByCourt(c).name;
 const courtChips = (s,c) => courtLevels(s,c).map(lvChip).join(" ");
-const courtFor = (s,level) => courtsOf(s).find(c => courtLevels(s,c).includes(level)) || null;
+// a player only ever goes on a court that includes their level: the first one with space, else the first one (waiting list)
+const courtFor = (s,level) => { const cs=courtsOf(s).filter(c=>courtLevels(s,c).includes(level)); return cs.find(c=>activeIn(s.id,c).length<cap(s,c)) ?? cs[0] ?? null };
 const myBookings = () => S.bookings.filter(b=>b.playerId===S.me || b.hostId===S.me);
 
 /* ---------- rotation: same answer for everyone, worked out from the roster and the clock ---------- */
@@ -474,7 +475,7 @@ function viewBook(){
       return `<label class="pick ${myB||closed?"booked":""}"><input type="checkbox" id="pick-${s.id}" data-pick="${s.id}" ${myB||closed?"disabled":""} ${myB||(!closed&&S.picks.has(s.id))?"checked":""}>
         <span class="t"><b>${fmtLong(s.date)} · ${esc(s.start)}–${esc(s.end)}</b>
         <span class="muted">${esc(v.venue||"Venue to be confirmed")}${s.title?" · "+esc(s.title):""}</span>
-        <span>${myB?`<span class="chip st-confirmed">✓ Booked</span> Court ${myB.court} ${stChip(myB.status)}`:closed?`<span class="chip st-waitlist">${noCourt?`Not running for ${esc(lv.code)} players`:"Booking closed"}</span>`:left>0?`Court ${ct} · ${esc(courtName(s,ct))}: <b>${left} of ${cap(s,ct)}</b> places left`:`Court ${ct} · ${esc(courtName(s,ct))} is full. You'll go on the waiting list.`}</span></span></label>`}).join("")}</div>
+        <span>${myB?`<span class="chip st-confirmed">✓ Booked</span> Court ${myB.court} ${stChip(myB.status)}`:closed?`<span class="chip st-waitlist">${noCourt?`Not running for ${esc(lv.code)} players`:"Booking closed"}</span>`:left>0?`Court ${ct} · ${esc(courtName(s,ct))}: <b>${left} of ${cap(s,ct)}</b> places left`:`Court ${ct} · ${esc(courtName(s,ct))} is full. You'll go on the waiting list for your level (players can't join another level's court).`}</span></span></label>`}).join("")}</div>
   </section>
   <section class="panel">
     <div><h2>Bring a guest</h2><p class="muted">Guests answer the same five questions and are placed on the court for their level. They're added to every session you tick above.</p></div>
@@ -866,12 +867,13 @@ async function bookSelected(){
       if(full) ok=false;
     };
     const myId=`${s.id}_${p.id}`;
-    const myCourt=courtFor(s,p.level);
+    const pickCourt=lvl=>{ const cs=courtsOf(s).filter(c=>courtLevels(s,c).includes(lvl)); return cs.find(c=>used(c)<cap(s,c)) ?? cs[0] ?? null };
+    const myCourt=pickCourt(p.level);
     if(!myCourt){ ok=false; lines.push(`${fmtDate(s.date)}: this session isn't running a court for ${esc(p.level)} players`); continue }
     if(!S.bookings.find(b=>b.id===myId && b.status!=="cancelled")) await place(myId, {playerId:p.id, name:p.name, level:p.level}, myCourt, "You");
     let k = S.bookings.filter(b=>b.sessionId===s.id && b.hostId===p.id).length;
     for(const g of S.guests){
-      k++; const gid=`${s.id}_${p.id}_g${k}`, gCourt=courtFor(s,g.level);
+      k++; const gid=`${s.id}_${p.id}_g${k}`, gCourt=pickCourt(g.level);
       if(!gCourt){ ok=false; lines.push(`${fmtDate(s.date)} · ${esc(g.name)}: no court for ${esc(g.level)} players this session`); continue }
       await place(gid, {playerId:`guest-${p.id}-${k}`, hostId:p.id, name:`${g.name} (guest of ${p.name.split(" ")[0]})`, level:g.level, quiz:g.ans}, gCourt, g.name);
     }

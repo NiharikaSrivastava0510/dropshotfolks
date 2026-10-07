@@ -12,6 +12,20 @@ service cloud.firestore {
     function onlyChanges(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
     }
+    // Court n plays level n by default; the organiser can change this per session.
+    function defaultLevel(c) {
+      return c == 1 ? 'D-' : (c == 2 ? 'D+' : (c == 3 ? 'C-' : 'C+'));
+    }
+    function courtLevels(sid, c) {
+      return get(/databases/$(database)/documents/sessions/$(sid)).data
+        .get('courts', {}).get(string(c), {}).get('levels', [defaultLevel(c)]);
+    }
+    // A booking must be on a court for its level, and a player's own booking must use their registered level.
+    function levelFitsCourt(d) {
+      return d.court is int && d.level in courtLevels(d.sessionId, d.court)
+        && (d.get('hostId', null) != null
+            || d.level == get(/databases/$(database)/documents/players/$(request.auth.uid)).data.level);
+    }
 
     // Club details and sessions: everyone reads, only the organiser writes.
     match /config/{id} {
@@ -39,7 +53,8 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isAdmin() || (signedIn()
         && (request.resource.data.playerId == request.auth.uid || request.resource.data.hostId == request.auth.uid)
-        && request.resource.data.status in ['awaiting', 'waitlist']);
+        && request.resource.data.status in ['awaiting', 'waitlist']
+        && levelFitsCourt(request.resource.data));
       // Players can only mark their own (or their guests') booking as paid or cancelled.
       allow update: if isAdmin() || (signedIn()
         && (resource.data.playerId == request.auth.uid || resource.data.hostId == request.auth.uid)
@@ -49,7 +64,8 @@ service cloud.firestore {
           || (resource.data.status == 'cancelled'
              && request.resource.data.status in ['awaiting', 'waitlist']
              && request.resource.data.playerId == resource.data.playerId
-             && request.resource.data.get('hostId', null) == resource.data.get('hostId', null))));
+             && request.resource.data.get('hostId', null) == resource.data.get('hostId', null)
+             && levelFitsCourt(request.resource.data))));
       allow delete: if isAdmin();
     }
 

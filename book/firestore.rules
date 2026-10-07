@@ -1,0 +1,62 @@
+rules_version = '2';
+// Paste into Firebase console → Firestore Database → Rules, then Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    // Keep this list in sync with DSF_ADMINS in firebase-config.js.
+    function isAdmin() {
+      return signedIn() && request.auth.token.email_verified == true
+        && request.auth.token.email in ['info@dropshotfolks.co.uk'];
+    }
+    function onlyChanges(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    // Club details and sessions: everyone reads, only the organiser writes.
+    match /config/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /sessions/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Player records hold contact details: only the player and the organiser see them.
+    match /players/{uid} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow create: if isAdmin() || (signedIn() && request.auth.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.verified == false);
+      allow update: if isAdmin() || (signedIn() && request.auth.uid == uid
+        && onlyChanges(['levelRequest', 'name', 'phone']));
+      allow delete: if isAdmin();
+    }
+
+    // Bookings drive the live courts, so everyone can read them (names and courts only, no contact details).
+    match /bookings/{id} {
+      allow read: if true;
+      allow create: if isAdmin() || (signedIn()
+        && (request.resource.data.playerId == request.auth.uid || request.resource.data.hostId == request.auth.uid)
+        && request.resource.data.status in ['awaiting', 'waitlist']);
+      // Players can only mark their own (or their guests') booking as paid or cancelled.
+      allow update: if isAdmin() || (signedIn()
+        && (resource.data.playerId == request.auth.uid || resource.data.hostId == request.auth.uid)
+        && ((onlyChanges(['status', 'log'])
+             && request.resource.data.status in ['paid', 'cancelled'])
+          // rebooking a session they cancelled earlier
+          || (resource.data.status == 'cancelled'
+             && request.resource.data.status in ['awaiting', 'waitlist']
+             && request.resource.data.playerId == resource.data.playerId
+             && request.resource.data.get('hostId', null) == resource.data.get('hostId', null))));
+      allow delete: if isAdmin();
+    }
+
+    // Small profile photos shown on the live courts.
+    match /photos/{uid} {
+      allow read: if true;
+      allow write: if isAdmin() || (signedIn() && request.auth.uid == uid);
+    }
+  }
+}

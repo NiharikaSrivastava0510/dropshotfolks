@@ -837,6 +837,13 @@ section{
 .schedule-download:hover{background:var(--maroon);color:var(--cream)}
 .schedule-download svg{width:16px;height:16px}
 @media (max-width:980px){.schedule-grid{grid-template-columns:1fr}}
+.t-grid{grid-template-columns:repeat(2,1fr)}
+.t-card .schedule-list li{gap:1rem}
+.t-card .t-val{text-align:right;font-size:.88rem;color:#3a1d22}
+.t-card .t-cta{align-self:flex-start;margin-top:auto}
+.t-card .schedule-list{margin-bottom:1.4rem}
+.t-past{max-width:70ch}
+@media (max-width:980px){.t-grid{grid-template-columns:1fr}}
 @media (max-width:520px){
   .schedule-totals{grid-template-columns:repeat(2,1fr);gap:.8rem}
   .schedule-totals div b{font-size:1.8rem}
@@ -1974,7 +1981,7 @@ footer ul a:hover{color:var(--maroon)}
 </section>
 
 <!-- ============================================== TOURNAMENTS -->
-<!-- To announce a date: replace "TBC" in a card with e.g. "Sat 7 Nov" / venue name. -->
+<!-- Each card hides itself the day after its data-ends date. Add a new card by copying one. -->
 <section id="tournaments">
   <div class="section-head reveal">
     <div class="section-label">Tournaments</div>
@@ -1982,58 +1989,57 @@ footer ul a:hover{color:var(--maroon)}
   </div>
 
   <div class="schedule-meta reveal">
-    <b>Compete with the folks</b>
-    <span>Dates announced in the WhatsApp group</span>
+    <b>2026 season</b>
+    <span>Open to all · 18+</span>
   </div>
 
-  <div class="schedule-grid reveal">
-    <div class="schedule-card">
+  <div class="schedule-grid t-grid reveal">
+    <div class="schedule-card t-card" data-ends="2026-10-18">
       <div class="schedule-card-head">
-        <div class="schedule-day">Men's</div>
-        <div class="schedule-time">Monthly</div>
+        <div class="schedule-day">Team Cup</div>
+        <div class="schedule-time">Sat 18 Oct 2026</div>
       </div>
       <p class="schedule-venue">
-        <b>Men's tournament</b>
-        <small>◉ Every month</small>
+        <b>Badminton Team Cup</b>
+        <small>◉ Men's, women's &amp; mixed doubles · teams of 4</small>
       </p>
       <ul class="schedule-list">
-        <li><span class="date">Next date</span><span class="courts">TBC</span></li>
-        <li><span class="date">Venue</span><span class="courts">TBC</span></li>
+        <li><span class="date">Time</span><span class="t-val">9:00am – 4:00pm</span></li>
+        <li><span class="date">Venue</span><span class="t-val">Westminster City School, 55 Palace St, SW1E 5HJ</span></li>
+        <li><span class="date">Entry</span><span class="t-val">£22 per person</span></li>
+        <li><span class="date">Places</span><span class="t-val">18 teams</span></li>
+        <li><span class="date">Prizes</span><span class="t-val">Trophy, medals, prizes · free T-shirts</span></li>
+        <li><span class="date">Registration closes</span><span class="t-val">13 Oct</span></li>
       </ul>
+      <a class="schedule-download t-cta" href="https://docs.google.com/forms/d/1YeTpAgVKE4i6U7R0arluT4bxOf5a0qvxNA_nlLucdu4/viewform" target="_blank" rel="noopener">Register your team →</a>
     </div>
-    <div class="schedule-card">
+    <div class="schedule-card t-card" data-ends="2026-11-21">
       <div class="schedule-card-head">
-        <div class="schedule-day">Women's</div>
-        <div class="schedule-time">Monthly</div>
+        <div class="schedule-day">Net Play</div>
+        <div class="schedule-time">Sat 21 Nov 2026</div>
       </div>
       <p class="schedule-venue">
-        <b>Women's tournament</b>
-        <small>◉ Every month</small>
+        <b>Net Play Badminton Tournament</b>
+        <small>◉ Men's, women's &amp; mixed doubles · all levels, 18+</small>
       </p>
       <ul class="schedule-list">
-        <li><span class="date">Next date</span><span class="courts">TBC</span></li>
-        <li><span class="date">Venue</span><span class="courts">TBC</span></li>
+        <li><span class="date">Time</span><span class="t-val">12:00 – 6:00pm</span></li>
+        <li><span class="date">Venue</span><span class="t-val">Barking Sporthouse, Lodge Ave, Dagenham RM8 2JR</span></li>
+        <li><span class="date">Entry</span><span class="t-val">£30 per player · £27 early bird until 30 Oct</span></li>
+        <li><span class="date">Places</span><span class="t-val">24 teams per category</span></li>
+        <li><span class="date">Format</span><span class="t-val">Groups of 3, then 8-team knockout</span></li>
+        <li><span class="date">Spectators</span><span class="t-val">£2 on the door</span></li>
+        <li><span class="date">Registration closes</span><span class="t-val">18 Nov</span></li>
       </ul>
-    </div>
-    <div class="schedule-card">
-      <div class="schedule-card-head">
-        <div class="schedule-day">Mixed</div>
-        <div class="schedule-time">Quarterly</div>
-      </div>
-      <p class="schedule-venue">
-        <b>Mixed doubles league</b>
-        <small>◉ Every quarter</small>
-      </p>
-      <ul class="schedule-list">
-        <li><span class="date">Next date</span><span class="courts">TBC</span></li>
-        <li><span class="date">Venue</span><span class="courts">TBC</span></li>
-      </ul>
+      <a class="schedule-download t-cta" href="https://chat.whatsapp.com/KLVWEt809gZ3aqLaBhuNL2?mode=gi_t" target="_blank" rel="noopener">Ask about entry on WhatsApp →</a>
     </div>
   </div>
 
-  <a class="schedule-download" href="https://chat.whatsapp.com/KLVWEt809gZ3aqLaBhuNL2?mode=gi_t" target="_blank" rel="noopener">
-    Register interest on WhatsApp →
-  </a>
+  <p class="schedule-tubes t-past reveal">
+    <b>Earlier this year</b> — Men's &amp; Women's Doubles Open (16 Aug, Charter School Bermondsey) ·
+    Men's Doubles Levels D &amp; E (20 Sep, London Enterprise Academy) ·
+    Women's Doubles Open (27 Sep, London Enterprise Academy).
+  </p>
 </section>
 
 <!-- ============================================== PHOTOS & VIDEO -->
@@ -2858,6 +2864,12 @@ window.addEventListener('load', () => {
   modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
   open();
 })();
+</script>
+<script>
+// Hide tournament cards once their date has passed
+document.querySelectorAll('.t-card[data-ends]').forEach(c => {
+  if (new Date() > new Date(c.dataset.ends + 'T23:59:59')) c.remove();
+});
 </script>
 <script src="./src.js" defer></script>
 </body>

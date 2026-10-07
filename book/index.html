@@ -315,12 +315,14 @@ const S = {
   quiz: {},                         // level-guide self-check
   reg: {ans:{}, photo:null},        // registration questions and photo
   gq: {}, guests: [],               // guest questions and guests waiting to be booked
-  liveSess: null, result: null, liveKey: ""
+  liveSess: null, result: null, liveKey: "",
+  rotEdit: {}, pedit: null          // organiser: game being edited per court, player being edited
 };
 const meP = () => S.players.find(p=>p.id===S.me) || null;
 const upcoming = () => S.sessions.filter(s=>sessEnd(s) >= new Date()).sort((a,b)=>sessStart(a)-sessStart(b));
 const activeIn = (sid, court) => S.bookings.filter(b=>b.sessionId===sid && b.court===court && ACTIVE.includes(b.status));
-const cap = (s,court) => Number(s.capacity?.[court] ?? s.capacity ?? PER_COURT) || PER_COURT;
+const cap = (s,court) => { const v = Number(s.capacity?.[court] ?? s.capacity ?? PER_COURT); return Number.isFinite(v) ? v : PER_COURT };
+const courtsOf = s => [1,2,3,4].filter(c => cap(s,c) > 0);
 const myBookings = () => S.bookings.filter(b=>b.playerId===S.me || b.hostId===S.me);
 
 /* ---------- rotation: same answer for everyone, worked out from the roster and the clock ---------- */
@@ -348,7 +350,13 @@ function schedule(ids,total){
   }
   return out;
 }
-function courtPlan(s,c){ const roster=courtRoster(s,c), r=rotInfo(s); return {roster, r, games:schedule(roster.map(b=>b.playerId), r.total), names:Object.fromEntries(roster.map(b=>[b.playerId,b.name]))} }
+function courtPlan(s,c){
+  const roster=courtRoster(s,c), r=rotInfo(s), ids=roster.map(b=>b.playerId), ov=s.rot?.[c]||{};
+  // organiser edits replace a game while all four players are still in the rotation
+  const games=schedule(ids, r.total).map((g,i)=>{ const o=ov[i];
+    if(!Array.isArray(o) || o.length!==4 || new Set(o).size!==4 || o.some(id=>!ids.includes(id))) return g;
+    return {teams:[[o[0],o[1]],[o[2],o[3]]], sit:ids.filter(x=>!o.includes(x)), edited:true} });
+  return {roster, r, games, names:Object.fromEntries(roster.map(b=>[b.playerId,b.name]))} }
 
 /* ---------- rendering ---------- */
 function render(){
@@ -452,11 +460,11 @@ function viewBook(){
     <div><h2>Book a session</h2><p class="muted">Tick as many sessions as you like. You'll play on <b>Court ${lv.court}</b> ${lvChip(lv.code)} with ${esc(lv.name)} players, ${PER_COURT} per court with rotating doubles.</p></div>
     <div class="picks">${ups.map(s=>{
       const myB = S.bookings.find(b=>b.sessionId===s.id && b.playerId===p.id && b.status!=="cancelled");
-      const left = cap(s,lv.court) - activeIn(s.id,lv.court).length, v=venueOf(s), closed = s.open===false;
+      const left = cap(s,lv.court) - activeIn(s.id,lv.court).length, v=venueOf(s), noCourt = cap(s,lv.court)===0, closed = s.open===false || noCourt;
       return `<label class="pick ${myB||closed?"booked":""}"><input type="checkbox" id="pick-${s.id}" data-pick="${s.id}" ${myB||closed?"disabled":""}>
         <span class="t"><b>${fmtLong(s.date)} · ${esc(s.start)}–${esc(s.end)}</b>
         <span class="muted">${esc(v.venue||"Venue to be confirmed")}${s.title?" · "+esc(s.title):""}</span>
-        <span>${myB?`You're booked on Court ${myB.court} ${stChip(myB.status)}`:closed?`<span class="chip st-waitlist">Booking closed</span>`:left>0?`Court ${lv.court}: <b>${left} of ${cap(s,lv.court)}</b> places left`:`Court ${lv.court} is full. You'll go on the waiting list.`}</span></span></label>`}).join("")}</div>
+        <span>${myB?`You're booked on Court ${myB.court} ${stChip(myB.status)}`:closed?`<span class="chip st-waitlist">${noCourt?`Not running for ${esc(lv.code)} players`:"Booking closed"}</span>`:left>0?`Court ${lv.court}: <b>${left} of ${cap(s,lv.court)}</b> places left`:`Court ${lv.court} is full. You'll go on the waiting list.`}</span></span></label>`}).join("")}</div>
   </section>
   <section class="panel">
     <div><h2>Bring a guest</h2><p class="muted">Guests answer the same five questions and are placed on the court for their level. They're added to every session you tick above.</p></div>
@@ -498,7 +506,7 @@ function viewLive(){
     <p>${r.live?`<span class="dot pulse"></span><b>Live now</b> · game ${r.idx+1} of ${r.total} · next rotation in <span class="cd" data-at="${r.at(r.idx+1).toISOString()}">–</span>`:r.done?"This session has finished.":`First game at <b>${hhmm(r.startT)}</b> · starts in <span class="cd" data-at="${r.startT.toISOString()}">–</span>`} ${v.venue?` · ${esc(v.venue)}`:""}</p>
     ${S.isAdmin && S.view==="organiser" && !r.done ? `<div class="row"><button class="btn small" data-restart="${s.id}">Start rotation from now</button><span class="muted" style="font-size:.85rem">Use this if you start late. Mark no-shows with "Not here" under each court.</span></div>` : ""}
   </section>
-  <div class="court-grid">${[1,2,3,4].map(c=>courtLive(s,c)).join("")}</div>`;
+  <div class="court-grid">${courtsOf(s).map(c=>courtLive(s,c)).join("")}</div>`;
 }
 function courtLive(s,c){
   const l=lvByCourt(c), {roster,r,games,names}=courtPlan(s,c);
@@ -511,17 +519,32 @@ function courtLive(s,c){
     ${g.sit.length?`<div class="row"><span class="lbl">Resting</span><span class="stack">${g.sit.map(id=>avatar(id,names[id],"sm")).join("")}</span><span class="muted" style="font-size:.85rem">${g.sit.map(id=>esc(names[id])).join(", ")}</span></div>`:""}
     ${nx?`<div class="row"><span class="lbl">Next up · ${hhmm(r.at(cur+1))}</span><span style="font-size:.88rem">${nx.teams.map(t=>t.map(id=>esc(names[id])).join(" & ")).join(" <i class='muted'>vs</i> ")}</span></div>`:""}
     <details id="rot-${s.id}-${c}"><summary>Full rotation (${games.length} games)</summary><div class="tbl"><table><thead><tr><th>#</th><th>Time</th><th>Team A</th><th>Team B</th><th>Resting</th></tr></thead><tbody>
-      ${games.map((x,i)=>`<tr class="${r.live&&i===r.idx?"now":""}"><td>${i+1}</td><td>${hhmm(r.at(i))}</td><td>${x.teams[0].map(id=>esc(names[id])).join(" & ")}</td><td>${x.teams[1].map(id=>esc(names[id])).join(" & ")}</td><td class="muted">${x.sit.map(id=>esc(names[id])).join(", ")}</td></tr>`).join("")}
+      ${games.map((x,i)=>`<tr class="${r.live&&i===r.idx?"now":""}"><td>${i+1}${x.edited?' <span class="chip st-paid">edited</span>':""}</td><td>${hhmm(r.at(i))}</td><td>${x.teams[0].map(id=>esc(names[id])).join(" & ")}</td><td>${x.teams[1].map(id=>esc(names[id])).join(" & ")}</td><td class="muted">${x.sit.map(id=>esc(names[id])).join(", ")}</td></tr>`).join("")}
     </tbody></table></div></details>`;
   return `<div class="court-live" style="--cc:${CLR[c]}">
     <div class="hd"><span class="num">Court ${c}</span><span>${lvChip(l.code)} ${esc(l.name)}</span><span class="muted" style="font-size:.85rem">${roster.length}/${cap(s,c)} players</span></div>
     ${roster.length?`<div class="stack">${roster.map(b=>avatar(b.playerId,b.name)).join("")}</div>`:""}
     ${body}
     ${S.isAdmin && S.view==="organiser" ? (()=>{ const away=S.bookings.filter(b=>b.sessionId===s.id&&b.court===c&&ACTIVE.includes(b.status)&&b.absent);
-      return `<details id="ctl-${s.id}-${c}"><summary>Who's here (${roster.length})</summary><div style="display:grid;gap:6px;margin-top:8px">
+      return rotEditor(s,c,games,roster,r) + `<details id="ctl-${s.id}-${c}"><summary>Who's here (${roster.length})</summary><div style="display:grid;gap:6px;margin-top:8px">
         ${[...roster,...away].map(b=>`<div class="row" style="justify-content:space-between"><span class="pl">${avatar(b.playerId,b.name,"sm")}<span>${esc(b.name)}</span></span><button class="btn small ghost" data-absent="${b.id}">${b.absent?"Back in rotation":"Not here"}</button></div>`).join("")}
       </div></details>` })() : ""}
   </div>`;
+}
+
+function rotEditor(s,c,games,roster,r){
+  if(!games.length) return "";
+  const k=`${s.id}-${c}`, gi=Math.min(S.rotEdit[k] ?? Math.max(0,r.idx), games.length-1), g=games[gi], cur=g.teams.flat();
+  const pick=(slot)=>`<select id="re-${k}-${gi}-${slot}" aria-label="Player ${slot+1}">${roster.map(b=>`<option value="${esc(b.playerId)}" ${b.playerId===cur[slot]?"selected":""}>${esc(b.name)}</option>`).join("")}</select>`;
+  const anyEdits = Object.keys(s.rot?.[c]||{}).length>0;
+  return `<details id="red-${k}"><summary>Edit rotation</summary><div style="display:grid;gap:10px;margin-top:8px">
+    <label class="f">Game<select data-regame="${k}">${games.map((x,i)=>`<option value="${i}" ${i===gi?"selected":""}>Game ${i+1} · ${hhmm(r.at(i))}${x.edited?" (edited)":""}</option>`).join("")}</select></label>
+    <div class="grid2"><div style="display:grid;gap:6px"><span class="lbl">Team A</span>${pick(0)}${pick(1)}</div><div style="display:grid;gap:6px"><span class="lbl">Team B</span>${pick(2)}${pick(3)}</div></div>
+    <div class="row"><button class="btn small primary" data-resave="${k}" data-sid="${esc(s.id)}" data-c="${c}" data-gi="${gi}">Save game ${gi+1}</button>
+      ${g.edited?`<button class="btn small" data-rereset="${k}" data-sid="${esc(s.id)}" data-c="${c}" data-gi="${gi}">Undo edit</button>`:""}
+      ${anyEdits?`<button class="btn small ghost danger" data-reall="${esc(s.id)}" data-c="${c}">Reset all edits</button>`:""}</div>
+    <div class="row"><button class="btn small" data-jump="${esc(s.id)}" data-gi="${gi}">Play game ${gi+1} now</button><span class="muted" style="font-size:.85rem">Moves the clock so game ${gi+1} starts now, for every court.</span></div>
+  </div></details>`;
 }
 
 /* ----- my bookings ----- */
@@ -640,7 +663,12 @@ function orgParts(){
   </section>`;
   const players = `<section class="panel"><h2>Players</h2>
     ${S.players.length?`<div class="tbl"><table><thead><tr><th></th><th>Player</th><th>Contact</th><th>Level</th><th>Checked</th></tr></thead><tbody>
-    ${S.players.slice().sort((a,b)=>String(a.name).localeCompare(b.name)).map(p=>`<tr><td>${avatar(p.id,p.name,"sm")}</td><td>${esc(p.name)}</td><td class="sel">${esc(p.email||"–")}${p.phone?`<br><span class="muted">${esc(p.phone)}</span>`:""}</td>
+    ${S.players.slice().sort((a,b)=>String(a.name).localeCompare(b.name)).map(p=>(S.pedit===p.id?`<tr><td colspan="5"><div class="grid2">
+        <label class="f">Name<input id="pe-name" value="${esc(p.name)}"></label>
+        <label class="f">Email<input id="pe-email" type="email" value="${esc(p.email||"")}"></label>
+        <label class="f">Mobile<input id="pe-phone" value="${esc(p.phone||"")}"></label>
+        <div class="row" style="align-self:end"><button class="btn small primary" data-psave="${esc(p.id)}">Save</button><button class="btn small" data-pedit="">Close</button><button class="btn small ghost danger" data-pdel="${esc(p.id)}">Delete player</button></div>
+      </div></td></tr>`:"")+`<tr><td>${avatar(p.id,p.name,"sm")}</td><td>${esc(p.name)}<br><button class="btn small ghost" data-pedit="${esc(p.id)}">Edit</button></td><td class="sel">${esc(p.email||"–")}${p.phone?`<br><span class="muted">${esc(p.phone)}</span>`:""}</td>
       <td><select data-setlv="${esc(p.id)}" aria-label="Level for ${esc(p.name)}">${LEVELS.map(l=>`<option value="${l.code}" ${l.code===p.level?"selected":""}>${l.code}</option>`).join("")}</select></td>
       <td><input type="checkbox" data-verify="${esc(p.id)}" ${p.verified?"checked":""} aria-label="Level checked"></td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">Players appear here when they register.</div>`}
   </section>`;
@@ -683,7 +711,7 @@ function orgOverview(){
       <div class="tile"><span class="lbl">Confirmed</span><b>${n("confirmed")}</b><span class="muted">paid and ready</span></div>
       <div class="tile"><span class="lbl">Waiting list</span><b>${n("waitlist")}</b><span class="muted">${n("waitlist")?"offer places if someone cancels":"nobody waiting"}</span></div>
     </div>
-    <div style="display:grid;gap:8px">${[1,2,3,4].map(c=>{const k=activeIn(s.id,c).length, m=cap(s,c); return `<div class="cbar" style="--cc:${CLR[c]}"><span>Court ${c} ${lvChip(lvByCourt(c).code)}</span><span class="meter"><i style="width:${Math.min(100,k/m*100)}%"></i></span><span class="mono">${k}/${m}</span></div>`}).join("")}</div>
+    <div style="display:grid;gap:8px">${courtsOf(s).map(c=>{const k=activeIn(s.id,c).length, m=cap(s,c); return `<div class="cbar" style="--cc:${CLR[c]}"><span>Court ${c} ${lvChip(lvByCourt(c).code)}</span><span class="meter"><i style="width:${Math.min(100,k/m*100)}%"></i></span><span class="mono">${k}/${m}</span></div>`}).join("")}</div>
     <textarea id="msg-${s.id}" rows="6" hidden readonly></textarea>
   </section>`;
   html += `<section class="panel"><h2>Payments to check</h2>
@@ -702,8 +730,9 @@ function adminSession(s){
   const r = rotInfo(s), v = venueOf(s);
   const rows = [1,2,3,4].map(c=>{
     const list = S.bookings.filter(b=>b.sessionId===s.id && b.court===c && b.status!=="cancelled").sort((a,b)=>String(a.createdAt).localeCompare(b.createdAt));
-    return `<tr><td colspan="5" style="background:var(--sunk)"><b>Court ${c}</b> ${lvChip(lvByCourt(c).code)} · ${activeIn(s.id,c).length}/${cap(s,c)}</td></tr>` +
-      (list.length?list.map(b=>{ const em=S.players.find(p=>p.id===b.playerId)?.email; return `<tr><td>${esc(b.name)}${b.hostId?` <span class="chip st-waitlist">guest ${lvChip(b.level)}</span>`:""}${em?`<br><span class="muted" style="font-size:.82rem">${esc(em)}</span>`:""}</td><td class="mono">${esc(b.ref)}</td><td>${stChip(b.status)}${b.absent?' <span class="chip st-cancelled">Not here</span>':""}</td>
+    if(!cap(s,c) && !list.length) return "";
+    return `<tr><td colspan="5" style="background:var(--sunk)"><b>Court ${c}</b> ${lvChip(lvByCourt(c).code)} · ${activeIn(s.id,c).length}/${cap(s,c)}${cap(s,c)?"":" · not running"}</td></tr>` +
+      (list.length?list.map(b=>{ const em=S.players.find(p=>p.id===b.playerId)?.email; return `<tr><td>${esc(b.name)}${b.hostId?` <span class="chip st-waitlist">guest ${lvChip(b.level)}</span>`:""}${em?`<br><span class="muted" style="font-size:.82rem">${esc(em)}</span>`:""}</td><td class="mono">${esc(b.ref)}</td><td><select data-status="${b.id}" aria-label="Status for ${esc(b.name)}">${Object.entries(STATUS).map(([k,v])=>`<option value="${k}" ${k===b.status?"selected":""}>${v.label}</option>`).join("")}</select>${b.absent?' <span class="chip st-cancelled">Not here</span>':""}</td>
         <td><select data-court="${b.id}" aria-label="Court for ${esc(b.name)}">${[1,2,3,4].map(n=>`<option value="${n}" ${n===b.court?"selected":""}>Court ${n}</option>`).join("")}</select></td>
         <td class="row">${b.status==="paid"||b.status==="awaiting"?`<button class="btn small primary" data-confirm="${b.id}">Confirm paid</button>`:""}
         ${b.status==="waitlist"?`<button class="btn small" data-offer="${b.id}">Offer place</button>`:""}
@@ -716,12 +745,33 @@ function adminSession(s){
     <div class="row"><label class="f" style="grid-auto-flow:column;align-items:center">Minutes per game <select data-gamemins="${s.id}" style="width:auto">${[10,12,15,20].map(m=>`<option ${m===r.mins?"selected":""}>${m}</option>`).join("")}</select></label>
       <button class="btn small" data-restart="${s.id}">Start rotation from now</button><span class="muted" style="font-size:.85rem">${r.live?`Game ${r.idx+1} of ${r.total} in progress`:`Rotation starts ${hhmm(r.startT)}`}</span></div>
     <div class="tbl"><table><thead><tr><th>Player</th><th>Ref</th><th>Status</th><th>Court</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${S.bookings.some(b=>b.sessionId===s.id&&b.status==="cancelled")?`<details id="canc-${s.id}"><summary>Cancelled (${S.bookings.filter(b=>b.sessionId===s.id&&b.status==="cancelled").length})</summary><div style="display:grid;gap:6px;margin-top:8px">${S.bookings.filter(b=>b.sessionId===s.id&&b.status==="cancelled").map(b=>`<div class="row" style="justify-content:space-between"><span>${esc(b.name)} · Court ${b.court}</span><span class="row"><button class="btn small" data-restore="${b.id}">Restore</button><button class="btn small ghost danger" data-bdel="${b.id}">Delete</button></span></div>`).join("")}</div></details>`:""}
+    <details id="addp-${s.id}"><summary>Add a player to this session</summary>
+      <div class="grid2" style="margin-top:8px">
+        <label class="f">Name<input id="ap-name-${s.id}" placeholder="First and last name"></label>
+        <label class="f">Court<select id="ap-court-${s.id}">${[1,2,3,4].map(n=>`<option value="${n}">Court ${n} · ${lvByCourt(n).code}</option>`).join("")}</select></label>
+        <label class="f">Status<select id="ap-status-${s.id}">${Object.entries(STATUS).filter(([k])=>k!=="cancelled").map(([k,v])=>`<option value="${k}" ${k==="confirmed"?"selected":""}>${v.label}</option>`).join("")}</select></label>
+        <div class="row" style="align-self:end"><button class="btn small primary" data-addp="${esc(s.id)}">Add player</button></div>
+      </div></details>
+    <details id="es-${s.id}"><summary>Edit session</summary>
+      <div class="grid2" style="margin-top:8px">
+        <label class="f">Date<input id="es-date-${s.id}" type="date" value="${esc(s.date)}"></label>
+        <label class="f">Start<input id="es-start-${s.id}" type="time" value="${esc(s.start)}"></label>
+        <label class="f">End<input id="es-end-${s.id}" type="time" value="${esc(s.end)}"></label>
+        <label class="f">Title<input id="es-title-${s.id}" value="${esc(s.title||"")}"></label>
+        <label class="f">Venue<input id="es-venue-${s.id}" value="${esc(s.venue||"")}"></label>
+        <label class="f">Venue address<input id="es-address-${s.id}" value="${esc(s.address||"")}"></label>
+        <label class="f" style="grid-column:1/-1">Note for players<input id="es-note-${s.id}" value="${esc(s.note||"")}"></label>
+        ${[1,2,3,4].map(n=>`<label class="f">Court ${n} (${lvByCourt(n).code}) places<input id="es-cap${n}-${s.id}" type="number" min="0" max="30" value="${cap(s,n)}"></label>`).join("")}
+        <p class="muted" style="grid-column:1/-1;font-size:.85rem">Set a court to 0 if it isn't running this session.</p>
+        <div class="row" style="grid-column:1/-1"><button class="btn small primary" data-savesess="${esc(s.id)}">Save session</button></div>
+      </div></details>
     <textarea id="msg-${s.id}" rows="6" hidden readonly></textarea></div>`;
 }
 function reminderText(s){
   const v=venueOf(s);
   let t=`🏸 Dropshot Folks reminder: ${fmtLong(s.date)}, ${s.start}–${s.end}\n${v.venue?v.venue+"\n":""}${v.address?v.address+"\n"+mapsFor(v)+"\n":""}\n`;
-  [1,2,3,4].forEach(n=>{const l=lvByCourt(n);const names=S.bookings.filter(b=>b.sessionId===s.id&&b.court===n&&b.status==="confirmed").map(b=>b.name);
+  courtsOf(s).forEach(n=>{const l=lvByCourt(n);const names=S.bookings.filter(b=>b.sessionId===s.id&&b.court===n&&b.status==="confirmed").map(b=>b.name);
     t+=`Court ${n} (${l.code} ${l.name}): ${names.length?names.join(", "):"places available"}\n`});
   const unpaid=S.bookings.filter(b=>b.sessionId===s.id&&b.status==="awaiting").map(b=>b.name);
   if(unpaid.length) t+=`\nStill to pay: ${unpaid.join(", ")}\n`;
@@ -824,6 +874,35 @@ document.addEventListener("click", async e=>{
     if(!list.length){ toast("No player emails for this session yet"); return }
     copyText(list.join(", "), $("#msg-"+s.id)); return }
   if(ds.toggle){ const s=S.sessions.find(x=>x.id===ds.toggle); const {id,...body}=s; save("sessions",id,{...body,open:s.open===false},"Updated"); return }
+  if(ds.pedit!=null){ S.pedit=ds.pedit||null; render(); return }
+  if(ds.psave){ const p=S.players.find(x=>x.id===ds.psave); const name=$("#pe-name").value.trim(), email=$("#pe-email").value.trim(), phone=$("#pe-phone").value.trim();
+    if(!name){ toast("Add a name"); return } if(email && !validEmail(email)){ toast("Enter a valid email address"); return }
+    if(await savePlayer({...p, name, email, phone})){ S.pedit=null; toast("Player updated"); render() } return }
+  if(ds.pdel){ arm(t,"Tap again to delete",()=>Store.del("players",ds.pdel).then(()=>{ S.pedit=null; toast("Player deleted. Their bookings stay until you cancel them.") }).catch(()=>toast("Couldn't delete"))); return }
+  if(ds.restore){ setBooking(ds.restore,{status:"awaiting"},"Booking restored by the organiser.","Booking restored"); return }
+  if(ds.bdel){ arm(t,"Tap again to delete",()=>Store.del("bookings",ds.bdel).then(()=>toast("Booking deleted")).catch(()=>toast("Couldn't delete"))); return }
+  if(ds.addp){ const sid=ds.addp, s=S.sessions.find(x=>x.id===sid); const name=$("#ap-name-"+sid).value.trim(), court=Number($("#ap-court-"+sid).value), status=$("#ap-status-"+sid).value;
+    if(!name){ toast("Add the player's name"); return }
+    const ts=Date.now().toString(36), b={sessionId:sid, playerId:`walkin-${ts}`, name, level:lvByCourt(court).code, court, status, ref:payRef(name,s), createdAt:nowIso(), addedBy:"organiser", log:[]};
+    if(await save("bookings",`${sid}_w${ts}`, addLog(b,`Added to Court ${court} by the organiser.`), `${name} added to Court ${court}`)) $("#ap-name-"+sid).value="";
+    return }
+  if(ds.savesess){ const sid=ds.savesess, s=S.sessions.find(x=>x.id===sid), v=k=>$(`#es-${k}-${sid}`).value.trim();
+    if(!v("date")||!v("start")||!v("end")){ toast("Add a date, start and end time"); return }
+    const capacity={}; [1,2,3,4].forEach(n=>{ const x=Number($(`#es-cap${n}-${sid}`).value); capacity[n]=Number.isFinite(x)&&x>=0?x:0 });
+    const {id,...body}=s;
+    save("sessions",id,{...body, date:v("date"), start:v("start"), end:v("end"), title:v("title"), venue:v("venue"), address:v("address"), note:v("note"), capacity},"Session updated"); return }
+  if(ds.resave){ const s=S.sessions.find(x=>x.id===ds.sid), k=ds.resave, gi=Number(ds.gi), c=ds.c;
+    const ids=[0,1,2,3].map(i=>$(`#re-${k}-${gi}-${i}`).value);
+    if(new Set(ids).size!==4){ toast("Pick four different players"); return }
+    const {id,...body}=s, rot={...(s.rot||{})}; rot[c]={...(rot[c]||{}), [gi]:ids};
+    save("sessions",id,{...body, rot},`Game ${gi+1} updated`); return }
+  if(ds.rereset){ const s=S.sessions.find(x=>x.id===ds.sid), gi=String(ds.gi), c=ds.c;
+    const {id,...body}=s, rot={...(s.rot||{})}, court={...(rot[c]||{})}; delete court[gi]; rot[c]=court;
+    save("sessions",id,{...body, rot},`Game ${Number(gi)+1} back to automatic`); return }
+  if(ds.reall){ const s=S.sessions.find(x=>x.id===ds.reall), c=ds.c; const {id,...body}=s, rot={...(s.rot||{})}; rot[c]={};
+    arm(t,"Tap again to reset",()=>save("sessions",id,{...body, rot},"Rotation back to automatic")); return }
+  if(ds.jump){ const s=S.sessions.find(x=>x.id===ds.jump), gi=Number(ds.gi), mins=Number(s.gameMins)||GAME_MINS;
+    const {id,...body}=s; save("sessions",id,{...body, rotationStart:new Date(Date.now()-gi*mins*60e3).toISOString()},`Game ${gi+1} is on now`); return }
   if(ds.delsess){ arm(t,"Tap again to delete",()=>Store.del("sessions",ds.delsess).then(()=>toast("Session deleted")).catch(()=>toast("Couldn't delete"))); return }
 });
 document.addEventListener("change", async e=>{
@@ -839,6 +918,8 @@ document.addEventListener("change", async e=>{
     return }
   if(t.dataset.setlv){ const p=S.players.find(x=>x.id===t.dataset.setlv); savePlayer({...p, level:t.value, verified:true}).then(ok=>ok&&toast("Level updated")); return }
   if(t.dataset.verify){ const p=S.players.find(x=>x.id===t.dataset.verify); savePlayer({...p, verified:t.checked}); return }
+  if(t.dataset.status){ const st=t.value; setBooking(t.dataset.status,{status:st},`Status set to ${STATUS[st]?.label||st} by the organiser.`,"Status updated"); return }
+  if(t.dataset.regame){ S.rotEdit[t.dataset.regame]=Number(t.value); render(); return }
   if(t.dataset.court){ const n=Number(t.value); setBooking(t.dataset.court,{court:n},`Moved to Court ${n} by the organiser.`,`Moved to Court ${n}`); return }
   if(t.dataset.gamemins){ const s=S.sessions.find(x=>x.id===t.dataset.gamemins); const {id,...body}=s; save("sessions",id,{...body,gameMins:Number(t.value)},"Game length updated"); return }
 });

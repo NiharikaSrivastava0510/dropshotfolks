@@ -27,6 +27,34 @@ service cloud.firestore {
             || d.level == get(/databases/$(database)/documents/players/$(request.auth.uid)).data.level);
     }
 
+    function shortText(v, n) { return v is string && v.size() <= n; }
+    function levelCode(v) { return v in ['E', 'D-', 'D+', 'C-', 'C+']; }
+    // What a player may store on their own record.
+    function validPlayer(d) {
+      return d.keys().hasOnly(['email', 'name', 'phone', 'level', 'quiz', 'verified', 'levelRequest', 'createdAt', 'remind'])
+        && shortText(d.name, 80) && d.name.size() > 0
+        && (!('phone' in d) || shortText(d.phone, 30))
+        && levelCode(d.level)
+        && (d.get('levelRequest', null) == null || levelCode(d.levelRequest))
+        && (!('quiz' in d) || (d.quiz is map && d.quiz.size() <= 10))
+        && (!('remind' in d) || (d.remind is list && d.remind.size() <= 20))
+        && (!('createdAt' in d) || shortText(d.createdAt, 40));
+    }
+    // What a player may store on a booking they make. The document id must be
+    // "<session>_<their uid>" (or "..._g<n>" for a guest) so ids can't carry anything else.
+    function validBooking(id, d) {
+      return d.keys().hasOnly(['playerId', 'hostId', 'name', 'level', 'quiz', 'sessionId', 'court', 'status', 'ref', 'createdAt', 'log'])
+        && d.sessionId is string && d.sessionId.matches('[A-Za-z0-9_-]{1,80}')
+        && shortText(d.name, 120) && levelCode(d.level)
+        && shortText(d.ref, 30) && shortText(d.createdAt, 40)
+        && d.log is list && d.log.size() <= 30
+        && (!('quiz' in d) || (d.quiz is map && d.quiz.size() <= 10))
+        && (d.get('hostId', null) == null
+            ? (id == d.sessionId + '_' + request.auth.uid && d.playerId == request.auth.uid)
+            : (id.matches(d.sessionId + '_' + request.auth.uid + '_g[0-9]{1,2}')
+               && d.playerId.matches('guest-' + request.auth.uid + '-[0-9]{1,2}')));
+    }
+
     // Club details and sessions: everyone reads, only the organiser writes.
     match /config/{id} {
       allow read: if true;
@@ -42,9 +70,12 @@ service cloud.firestore {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
       allow create: if isAdmin() || (signedIn() && request.auth.uid == uid
         && request.resource.data.email == request.auth.token.email
-        && request.resource.data.verified == false);
+        && request.resource.data.verified == false
+        && request.resource.data.get('levelRequest', null) == null
+        && validPlayer(request.resource.data));
       allow update: if isAdmin() || (signedIn() && request.auth.uid == uid
-        && onlyChanges(['levelRequest', 'name', 'phone', 'remind']));
+        && onlyChanges(['levelRequest', 'name', 'phone', 'remind'])
+        && validPlayer(request.resource.data));
       allow delete: if isAdmin();
     }
 
@@ -54,17 +85,20 @@ service cloud.firestore {
       allow create: if isAdmin() || (signedIn()
         && (request.resource.data.playerId == request.auth.uid || request.resource.data.hostId == request.auth.uid)
         && request.resource.data.status in ['awaiting', 'waitlist']
+        && validBooking(id, request.resource.data)
         && levelFitsCourt(request.resource.data));
       // Players can only mark their own (or their guests') booking as paid or cancelled.
       allow update: if isAdmin() || (signedIn()
         && (resource.data.playerId == request.auth.uid || resource.data.hostId == request.auth.uid)
         && ((onlyChanges(['status', 'log'])
-             && request.resource.data.status in ['paid', 'cancelled'])
+             && request.resource.data.status in ['paid', 'cancelled']
+             && request.resource.data.log is list && request.resource.data.log.size() <= 30)
           // rebooking a session they cancelled earlier
           || (resource.data.status == 'cancelled'
              && request.resource.data.status in ['awaiting', 'waitlist']
              && request.resource.data.playerId == resource.data.playerId
              && request.resource.data.get('hostId', null) == resource.data.get('hostId', null)
+             && validBooking(id, request.resource.data)
              && levelFitsCourt(request.resource.data))));
       allow delete: if isAdmin();
     }
@@ -72,7 +106,11 @@ service cloud.firestore {
     // Small profile photos shown on the live courts.
     match /photos/{uid} {
       allow read: if true;
-      allow write: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow create, update: if isAdmin() || (signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['img', 'updatedAt'])
+        && request.resource.data.img is string && request.resource.data.img.size() < 200000
+        && request.resource.data.img.matches('data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+'));
     }
   }
 }

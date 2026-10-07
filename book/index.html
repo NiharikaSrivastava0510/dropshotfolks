@@ -618,15 +618,21 @@ function viewMine(){
 function bookingCard(b,s){
   const c = S.cfg, past = sessEnd(s) < new Date(), v = venueOf(s), isGuest = !!b.hostId;
   const guests = isGuest ? [] : S.bookings.filter(x=>x.hostId===b.playerId && x.sessionId===s.id && x.status==="awaiting");
+  // amount to transfer: the session fee (e.g. "£15") times you + guests, when the fee is a plain number
+  const people = guests.length+1, fee = parseFloat(String(c.price||"").replace(/[^0-9.]/g,""));
+  const amount = Number.isFinite(fee) && fee>0 ? "£"+(fee*people).toFixed(2).replace(/\.00$/,"") : "";
+  const allDetails = [c.accountName&&`Name: ${c.accountName}`, c.sortCode&&`Sort code: ${c.sortCode}`, c.accountNumber&&`Account number: ${c.accountNumber}`, amount&&`Amount: ${amount}`, `Reference: ${b.ref}`].filter(Boolean).join("\n");
   const pay = b.status==="awaiting" && !isGuest ? `
-    <p><b>Pay ${c.price?esc(c.price):"the session fee"}${guests.length?` × ${guests.length+1} (you + ${guests.length} guest${guests.length>1?"s":""})`:""}</b> by bank transfer with this reference so the organiser can match it.</p>
+    <p><b>Pay ${amount?amount:(c.price?esc(c.price):"the session fee")}${guests.length?` (you + ${guests.length} guest${guests.length>1?"s":""})`:""}</b> by bank transfer from your banking app, using this reference so the organiser can match it.</p>
     <dl class="paybox">
       ${c.accountName?`<dt>Name</dt><dd>${esc(c.accountName)}</dd><span></span>`:""}
       ${c.bankName?`<dt>Bank</dt><dd>${esc(c.bankName)}</dd><span></span>`:""}
       ${c.sortCode?`<dt>Sort code</dt><dd class="sel">${esc(c.sortCode)}</dd><button class="btn small ghost" data-copy="${esc(c.sortCode)}">Copy</button>`:""}
       ${c.accountNumber?`<dt>Account</dt><dd class="sel">${esc(c.accountNumber)}</dd><button class="btn small ghost" data-copy="${esc(c.accountNumber)}">Copy</button>`:""}
+      ${amount?`<dt>Amount</dt><dd class="sel">${amount}</dd><button class="btn small ghost" data-copy="${amount}">Copy</button>`:""}
       <dt>Reference</dt><dd class="sel">${esc(b.ref)}</dd><button class="btn small ghost" data-copy="${esc(b.ref)}">Copy</button>
     </dl>
+    ${c.accountNumber?`<div class="row"><button class="btn small" data-copy="${esc(allDetails)}">Copy all payment details</button><span class="muted" style="font-size:.85rem">Then open your banking app and paste.</span></div>`:""}
     ${!c.accountNumber && !c.payLink?`<p class="muted">The organiser hasn't added payment details yet. Check Venue &amp; contact or message them.</p>`:""}
     <div class="row">${c.payLink?`<a class="btn" href="${esc(c.payLink)}" target="_blank" rel="noopener">Pay online</a>`:""}<button class="btn primary small" data-paid="${b.id}">I've paid${guests.length?" for everyone":""}</button></div>` : "";
   let games = "";

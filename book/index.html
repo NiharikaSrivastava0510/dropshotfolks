@@ -101,7 +101,7 @@ a{color:var(--accent);font-weight:600}
 .st-waitlist{background:var(--sunk);color:var(--muted)}
 .st-cancelled{background:var(--bad-bg);color:var(--bad)}
 .lv{font-family:var(--mono);font-weight:500;font-size:.8rem;padding:2px 8px;border-radius:6px;color:var(--surface);white-space:nowrap}
-.lv-Dm{background:var(--d1)} .lv-Dp{background:var(--d2)} .lv-Cm{background:var(--c1)} .lv-Cp{background:var(--c2)}
+.lv-E{background:#8A6F4E} .lv-Dm{background:var(--d1)} .lv-Dp{background:var(--d2)} .lv-Cm{background:var(--c1)} .lv-Cp{background:var(--c2)}
 .sess{display:flex;gap:8px;flex-wrap:wrap}
 .sess button{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:var(--surface);display:grid;line-height:1.25}
 .sess button[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
@@ -188,6 +188,7 @@ fieldset{border:0;padding:0;margin:0}
 <script>
 /* ---------- Club rules ---------- */
 const LEVELS = [
+  {code:"E", key:"E", name:"Beginner", court:null, desc:"New to badminton or still learning the basics: serving, hitting the shuttle over the net and keeping score."},
   {code:"D-", key:"Dm", name:"Lower Intermediate", court:1, desc:"You can keep a steady rally going and are learning to place the shuttle. Serves are getting consistent."},
   {code:"D+", key:"Dp", name:"Intermediate", court:2, desc:"Reliable serve, rallies of 6+ shots, and you use drops and lifts on purpose."},
   {code:"C-", key:"Cm", name:"Mid Intermediate", court:3, desc:"You control pace and placement, rotate well in doubles and play competitive games regularly."},
@@ -210,7 +211,7 @@ function levelFrom(ans){
   const v = QUIZ.map((_,i)=>ans?.[i]);
   if(v.some(x=>x==null)) return null;
   const total = v.reduce((a,b)=>a+b,0), zeros = v.filter(x=>x===0).length;
-  if(total<=4 || zeros>=3) return "BEG";
+  if(total<=4 || zeros>=3) return "E";
   return total<=8?"D-":total<=13?"D+":total<=17?"C-":"C+";
 }
 const STATUS = {
@@ -411,7 +412,6 @@ function quizFields(prefix, ans){
 }
 function levelVerdict(lv, who="you"){
   if(!lv) return `<p class="muted">Answer all five questions to see ${who==="you"?"your":"their"} court.</p>`;
-  if(lv==="BEG") return `<div class="banner bad"><div class="grow"><b>Our sessions aren't open to beginners.</b> Every court is lower intermediate or above, so games stay fun for everyone. ${who==="you"?"Our coaching in Whitechapel is a great way to build up, then come back and join us.":"Your guest is welcome once they've built up a bit, for example through our coaching."}</div><a href="${COACHING}" target="_blank" rel="noopener">See coaching</a></div>`;
   const l=lvByCode(lv);
   return `<div class="banner ok"><div class="grow">${who==="you"?"You're":"They're"} ${lvChip(l.code)} <b>${esc(l.name)}</b>. ${who==="you"?"You'll":"They'll"} play on the court for this level at each session.</div></div>`;
 }
@@ -437,7 +437,7 @@ function registerPanel(){
   if(Store.mode==="db" && !S.uid) return signInPanel();
   const lv = levelFrom(S.reg.ans);
   return `<section class="panel">
-    <div><h2>Join Dropshot Folks</h2><p class="muted">Register once. New players answer five quick questions so we can put you on the right court. Our sessions are for lower intermediate players and above.${Store.mode==="db"?"":" Already registered? Enter your email and press Continue."}</p></div>
+    <div><h2>Join Dropshot Folks</h2><p class="muted">Register once. New players answer five quick questions so we can put you on the right court. Beginners are welcome on sessions with a beginners' court.${Store.mode==="db"?"":" Already registered? Enter your email and press Continue."}</p></div>
     <form id="regForm" class="quiz">
       <div class="grid2">
         <label class="f">Full name<input id="r-name" placeholder="First and last name" autocomplete="name"></label>
@@ -449,7 +449,7 @@ function registerPanel(){
       <h3>Your level</h3>
       ${quizFields("rq", S.reg.ans)}
       ${levelVerdict(lv)}
-      <div class="row"><button class="btn primary" type="submit" ${lv==="BEG"?"disabled":""}>${Store.mode==="db"?"Register":"Continue"}</button><span class="muted" style="font-size:.85rem">The organiser checks levels on the night and can move you.</span></div>
+      <div class="row"><button class="btn primary" type="submit" >${Store.mode==="db"?"Register":"Continue"}</button><span class="muted" style="font-size:.85rem">The organiser checks levels on the night and can move you.</span></div>
     </form>
   </section>`;
 }
@@ -484,7 +484,7 @@ function viewBook(){
         <label class="f">Guest's full name<input id="g-name" placeholder="First and last name"></label>
         ${quizFields("gq", S.gq)}
         ${levelVerdict(levelFrom(S.gq),"guest")}
-        <div><button class="btn" type="button" id="addGuest" ${["D-","D+","C-","C+"].includes(levelFrom(S.gq))?"":"disabled"}>Add guest</button></div>
+        <div><button class="btn" type="button" id="addGuest" ${levelFrom(S.gq)?"":"disabled"}>Add guest</button></div>
       </div>
     </details>
   </section>
@@ -651,11 +651,11 @@ function bookingCard(b,s){
 /* ----- level guide ----- */
 function viewLevel(){
   const res = levelFrom(S.quiz), p = meP();
-  return `<section class="panel"><div><h2>Level guide</h2><p class="muted">Each court is for one level. You book a session and we put you on your court. Our sessions aren't open to complete beginners.</p></div>
-    <div class="levels">${LEVELS.map(l=>`<div class="lvrow"><span class="lv lv-${l.key}">${l.code}</span><div><b>${l.name}</b> · Court ${l.court}<p class="muted">${l.desc}</p></div></div>`).join("")}</div></section>
+  return `<section class="panel"><div><h2>Level guide</h2><p class="muted">Each court is for one level. You book a session and we put you on the court for your level. Beginners (E) can book sessions that have a beginners' court.</p></div>
+    <div class="levels">${LEVELS.map(l=>`<div class="lvrow"><span class="lv lv-${l.key}">${l.code}</span><div><b>${l.name}</b>${l.court?` · Court ${l.court}`:" · court set per session"}<p class="muted">${l.desc}</p></div></div>`).join("")}</div></section>
   <section class="panel"><div><h2>Think you've moved up?</h2><p class="muted">Take the questions again. If the answer changes, ask the organiser to move you.</p></div>
     <form class="quiz" id="quiz">${quizFields("q", S.quiz)}</form>
-    ${res && res!=="BEG" ? `<div class="banner ok"><div class="grow">Suggested level: ${lvChip(res)} <b>${lvByCode(res).name}</b> on Court ${lvByCode(res).court}.</div>${p?(p.level!==res?`<button class="btn small" id="quizReq" data-lv="${res}">Ask organiser to change my level</button>`:`<span>That's your current level.</span>`):`<button class="btn small primary" data-go="book">Register</button>`}</div>` : levelVerdict(res)}
+    ${res ? `<div class="banner ok"><div class="grow">Suggested level: ${lvChip(res)} <b>${lvByCode(res).name}</b>.</div>${p?(p.level!==res?`<button class="btn small" id="quizReq" data-lv="${res}">Ask organiser to change my level</button>`:`<span>That's your current level.</span>`):`<button class="btn small primary" data-go="book">Register</button>`}</div>` : levelVerdict(res)}
     <p class="muted">Still unsure? <a href="#" data-go="venue">Message the organiser</a>.</p>
   </section>`;
 }
@@ -915,7 +915,7 @@ document.addEventListener("click", async e=>{
   if(t.id==="addGuest"){
     const name=$("#g-name").value.trim(), level=levelFrom(S.gq);
     if(!name){ toast("Add your guest's name"); return }
-    if(!["D-","D+","C-","C+"].includes(level)){ toast("Answer all five questions for your guest"); return }
+    if(!level){ toast("Answer all five questions for your guest"); return }
     S.guests.push({name, level, ans:{...S.gq}}); S.gq={}; $("#g-name").value=""; render(); toast(`${name} added`); return }
   if(ds.rmguest!=null){ S.guests.splice(Number(ds.rmguest),1); render(); return }
   if(ds.copy!=null){ copyText(ds.copy); return }
@@ -1030,7 +1030,6 @@ document.addEventListener("submit", async e=>{
     if(ex && Store.mode!=="db"){ S.me=id; ls.set("dsf:me",id); toast(`Welcome back, ${ex.name}`); render(); return }
     if(!name){ toast("Add your full name"); return }
     if(!level){ toast("Answer all five level questions"); return }
-    if(level==="BEG"){ toast("Our sessions aren't open to beginners yet"); return }
     if(await savePlayer({id,email,name,phone,level,quiz:{...S.reg.ans},verified:false,levelRequest:null,createdAt:nowIso()})){
       if(S.reg.photo) await savePhoto(id,S.reg.photo);
       S.me=id; if(Store.mode!=="db") ls.set("dsf:me",id); S.reg={ans:{},photo:null}; toast(`Welcome! You're ${level} ${lvByCode(level).name}.`); render() }

@@ -16,16 +16,17 @@ jobs:
       - uses: actions/checkout@v4
       - name: Download helper files
         run: |
-          set -euo pipefail
+          set -uo pipefail
           base=https://dropshotfolks.firebaseapp.com
-          mkdir -p __/auth __/firebase
-          curl -fsSL "$base/__/auth/handler"        -o __/auth/handler.html
-          curl -fsSL "$base/__/auth/handler.js"     -o __/auth/handler.js
-          curl -fsSL "$base/__/auth/experiments.js" -o __/auth/experiments.js
-          curl -fsSL "$base/__/auth/iframe"         -o __/auth/iframe.html
-          curl -fsSL "$base/__/auth/iframe.js"      -o __/auth/iframe.js
-          curl -fsSL "$base/__/firebase/init.json"  -o __/firebase/init.json
-          ls -la __/auth __/firebase
+          mkdir -p __/auth
+          fail=0
+          for pair in "handler:handler.html" "handler.js:handler.js" "experiments.js:experiments.js" "iframe:iframe.html" "iframe.js:iframe.js"; do
+            src=${pair%%:*}; dst=${pair##*:}
+            code=$(curl -sSL -o "__/auth/$dst" -w '%{http_code}' "$base/__/auth/$src")
+            echo "$src -> $code ($(wc -c < "__/auth/$dst") bytes)"
+            [ "$code" = 200 ] || fail=1
+          done
+          exit $fail
       - name: Commit if changed
         run: |
           git config user.name "github-actions[bot]"

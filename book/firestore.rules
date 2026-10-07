@@ -30,7 +30,7 @@ service cloud.firestore {
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.verified == false);
       allow update: if isAdmin() || (signedIn() && request.auth.uid == uid
-        && onlyChanges(['levelRequest', 'name', 'phone']));
+        && onlyChanges(['levelRequest', 'name', 'phone', 'remind']));
       allow delete: if isAdmin();
     }
 

@@ -189,7 +189,7 @@ fieldset{border:0;padding:0;margin:0}
 const LEVELS = [
   {code:"D-", key:"Dm", name:"Lower Intermediate", court:1, desc:"You can keep a steady rally going and are learning to place the shuttle. Serves are getting consistent."},
   {code:"D+", key:"Dp", name:"Intermediate", court:2, desc:"Reliable serve, rallies of 6+ shots, and you use drops and lifts on purpose."},
-  {code:"C-", key:"Cm", name:"High Intermediate", court:3, desc:"You control pace and placement, rotate well in doubles and play competitive games regularly."},
+  {code:"C-", key:"Cm", name:"Mid Intermediate", court:3, desc:"You control pace and placement, rotate well in doubles and play competitive games regularly."},
   {code:"C+", key:"Cp", name:"High Intermediate (upper)", court:4, desc:"Strong all-round game. You build points, cover the court and play league or tournament level."}
 ];
 const lvByCode = c => LEVELS.find(l=>l.code===c);
@@ -466,6 +466,7 @@ function viewBook(){
         <span class="muted">${esc(v.venue||"Venue to be confirmed")}${s.title?" · "+esc(s.title):""}</span>
         <span>${myB?`You're booked on Court ${myB.court} ${stChip(myB.status)}`:closed?`<span class="chip st-waitlist">${noCourt?`Not running for ${esc(lv.code)} players`:"Booking closed"}</span>`:left>0?`Court ${lv.court}: <b>${left} of ${cap(s,lv.court)}</b> places left`:`Court ${lv.court} is full. You'll go on the waiting list.`}</span></span></label>`}).join("")}</div>
   </section>
+  ${remindPanel(p)}
   <section class="panel">
     <div><h2>Bring a guest</h2><p class="muted">Guests answer the same five questions and are placed on the court for their level. They're added to every session you tick above.</p></div>
     ${S.guests.length?`<div class="picks">${S.guests.map((g,i)=>`<div class="pick booked">${avatar("guest"+i,g.name)}<span class="t"><b>${esc(g.name)}</b><span>Court ${lvByCode(g.level).court} ${lvChip(g.level)}</span></span><button class="btn small ghost danger" data-rmguest="${i}" style="margin-left:auto">Remove</button></div>`).join("")}</div>`:""}
@@ -483,6 +484,42 @@ function viewBook(){
     <button class="btn primary" id="bookSel">Book selected sessions${S.guests.length?` + ${S.guests.length} guest${S.guests.length>1?"s":""}`:""}</button></div>
   </section>`;
   return html;
+}
+
+/* ----- booking reminders (weekly calendar event + organiser list) ----- */
+const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const BOOK_URL = location.origin + location.pathname;
+const slotKey = s => `${new Date(s.date+"T12:00:00").getDay()}|${s.start}`;
+function slotLabel(s){ return `${DAYS[new Date(s.date+"T12:00:00").getDay()]}s · ${s.start}–${s.end}` }
+function slots(){ const m=new Map(); upcoming().forEach(s=>{ const k=slotKey(s); if(!m.has(k)) m.set(k,s) }); return [...m].map(([k,s])=>({k,s,label:slotLabel(s)})) }
+function remindDay(s){ const d=new Date(s.date+"T12:00:00"); d.setDate(d.getDate()-1); return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}` }
+function remindText(sl){ const v=venueOf(sl.s); return `${sl.label}${v.venue?" at "+v.venue:""}. Book your place: ${BOOK_URL}` }
+function remindGcal(sl){
+  const d=remindDay(sl.s);
+  return "https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent("Book your Dropshot Folks session")+
+    `&dates=${d}T100000/${d}T101500&ctz=Europe/London&recur=`+encodeURIComponent("RRULE:FREQ=WEEKLY")+"&details="+encodeURIComponent(remindText(sl));
+}
+function remindIcs(sl){
+  const d=remindDay(sl.s), esc2=t=>t.replace(/[,;]/g,m=>"\\"+m);
+  const ics=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Dropshot Folks//Reminder//EN","BEGIN:VEVENT",`UID:remind-${sl.k.replace(/\W/g,"")}-${S.me||"guest"}@dropshotfolks`,
+    `DTSTAMP:${new Date().toISOString().replace(/[-:]/g,"").slice(0,15)}Z`,`DTSTART;TZID=Europe/London:${d}T100000`,`DTEND;TZID=Europe/London:${d}T101500`,"RRULE:FREQ=WEEKLY",
+    "SUMMARY:Book your Dropshot Folks session",`DESCRIPTION:${esc2(remindText(sl))}`,`URL:${BOOK_URL}`,
+    "BEGIN:VALARM","TRIGGER:PT0M","ACTION:DISPLAY","DESCRIPTION:Book your Dropshot Folks session","END:VALARM","END:VEVENT","END:VCALENDAR"].join("\r\n");
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([ics],{type:"text/calendar"})); a.download=`dropshotfolks-reminder-${DAYS[Number(sl.k.split("|")[0])].toLowerCase()}.ics`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function remindPanel(p){
+  const sl=slots(); if(!sl.length) return "";
+  const on=p.remind||[];
+  return `<section class="panel">
+    <div><h2>Remind me to book</h2><p class="muted">Get a weekly reminder the day before, so you don't miss a session. Tick the sessions you want, then add the reminder to your calendar.</p></div>
+    <div class="picks">${sl.map(x=>{ const v=venueOf(x.s), isOn=on.includes(x.k); return `<div class="pick" style="cursor:default;flex-wrap:wrap">
+      <input type="checkbox" id="rem-${x.k.replace(/\W/g,"")}" data-remind="${esc(x.k)}" ${isOn?"checked":""} aria-label="Remind me about ${esc(x.label)}">
+      <span class="t" style="flex:1"><b>${esc(x.label)}</b><span class="muted">${esc(v.venue||"Venue to be confirmed")}</span>
+        ${isOn?`<span class="row" style="margin-top:6px"><a class="btn small" href="${remindGcal(x)}" target="_blank" rel="noopener">Add to Google Calendar</a><button class="btn small" type="button" data-remics="${esc(x.k)}">Apple / Outlook calendar</button></span>`:""}</span>
+    </div>` }).join("")}</div>
+    <p class="muted" style="font-size:.85rem">The organiser can also message players who asked for reminders.</p>
+  </section>`;
 }
 
 /* ----- live courts ----- */
@@ -551,7 +588,7 @@ function rotEditor(s,c,games,roster,r){
 function viewMine(){
   const p = meP();
   if(!p) return registerPanel();
-  const mine = myBookings().map(b=>({b,s:S.sessions.find(x=>x.id===b.sessionId)})).filter(x=>x.s)
+  const mine = myBookings().filter(b=>b.status!=="cancelled").map(b=>({b,s:S.sessions.find(x=>x.id===b.sessionId)})).filter(x=>x.s)
     .sort((a,b)=>sessStart(a.s)-sessStart(b.s) || (a.b.hostId?1:-1));
   const lv = lvByCode(p.level);
   let html = `<section class="panel">
@@ -563,8 +600,7 @@ function viewMine(){
       <div class="row" style="margin-top:8px"><select id="reqLevel" style="max-width:280px">${LEVELS.filter(l=>l.code!==p.level).map(l=>`<option value="${l.code}">${l.code} · ${l.name}</option>`).join("")}</select><button class="btn small" id="reqBtn">Send request</button></div></details>`}
   </section>`;
   const upc = mine.filter(x=>sessEnd(x.s)>=new Date()), past = mine.filter(x=>sessEnd(x.s)<new Date()).reverse();
-  if(!mine.length) return html + `<section class="panel"><h2>My bookings</h2><div class="empty">No bookings yet. Pick sessions in Book a session.</div></section>`;
-  html += `<section class="panel"><h2>Upcoming</h2>${upc.length?upc.map(({b,s})=>bookingCard(b,s)).join(""):`<div class="empty">Nothing booked. Pick sessions in Book a session.</div>`}</section>`;
+  html += `<section class="panel"><h2>My bookings</h2>${upc.length?upc.map(({b,s})=>bookingCard(b,s)).join(""):`<div class="empty">No bookings. <a href="#" data-go="book">Book a session</a></div>`}</section>`;
   if(past.length) html += `<section class="panel"><details id="pastBox"><summary><b>Past sessions (${past.length})</b></summary><div style="display:grid;gap:10px;margin-top:10px">${past.map(({b,s})=>bookingCard(b,s)).join("")}</div></details></section>`;
   return html;
 }
@@ -746,6 +782,12 @@ function adminSession(s){
       <button class="btn small" data-restart="${s.id}">Start rotation from now</button><span class="muted" style="font-size:.85rem">${r.live?`Game ${r.idx+1} of ${r.total} in progress`:`Rotation starts ${hhmm(r.startT)}`}</span></div>
     <div class="tbl"><table><thead><tr><th>Player</th><th>Ref</th><th>Status</th><th>Court</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
     ${S.bookings.some(b=>b.sessionId===s.id&&b.status==="cancelled")?`<details id="canc-${s.id}"><summary>Cancelled (${S.bookings.filter(b=>b.sessionId===s.id&&b.status==="cancelled").length})</summary><div style="display:grid;gap:6px;margin-top:8px">${S.bookings.filter(b=>b.sessionId===s.id&&b.status==="cancelled").map(b=>`<div class="row" style="justify-content:space-between"><span>${esc(b.name)} · Court ${b.court}</span><span class="row"><button class="btn small" data-restore="${b.id}">Restore</button><button class="btn small ghost danger" data-bdel="${b.id}">Delete</button></span></div>`).join("")}</div></details>`:""}
+    ${(()=>{ const k=slotKey(s), want=S.players.filter(p=>(p.remind||[]).includes(k) && p.email && !S.bookings.some(b=>b.sessionId===s.id && b.playerId===p.id && b.status!=="cancelled"));
+      if(!want.length) return "";
+      const emails=want.map(p=>p.email).join(","), subj=`Book your Dropshot Folks session: ${fmtLong(s.date)}`;
+      const body=`Hi! Places are open for ${fmtLong(s.date)}, ${s.start}–${s.end}${venueOf(s).venue?" at "+venueOf(s).venue:""}.\n\nBook here: ${BOOK_URL}\n\nSee you on court!`;
+      return `<div class="banner info"><div class="grow"><b>${want.length} player${want.length>1?"s want":" wants"} a reminder</b> for this session and ${want.length>1?"haven't":"hasn't"} booked yet: ${want.map(p=>esc(p.name)).join(", ")}</div>
+        <span class="row"><a class="btn small primary" href="mailto:?bcc=${encodeURIComponent(emails)}&subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}">Email them</a><button class="btn small" data-copy="${esc(emails)}">Copy emails</button></span></div>` })()}
     <details id="addp-${s.id}"><summary>Add a player to this session</summary>
       <div class="grid2" style="margin-top:8px">
         <label class="f">Name<input id="ap-name-${s.id}" placeholder="First and last name"></label>
@@ -874,6 +916,7 @@ document.addEventListener("click", async e=>{
     if(!list.length){ toast("No player emails for this session yet"); return }
     copyText(list.join(", "), $("#msg-"+s.id)); return }
   if(ds.toggle){ const s=S.sessions.find(x=>x.id===ds.toggle); const {id,...body}=s; save("sessions",id,{...body,open:s.open===false},"Updated"); return }
+  if(ds.remics){ const sl=slots().find(x=>x.k===ds.remics); if(sl) remindIcs(sl); return }
   if(ds.pedit!=null){ S.pedit=ds.pedit||null; render(); return }
   if(ds.psave){ const p=S.players.find(x=>x.id===ds.psave); const name=$("#pe-name").value.trim(), email=$("#pe-email").value.trim(), phone=$("#pe-phone").value.trim();
     if(!name){ toast("Add a name"); return } if(email && !validEmail(email)){ toast("Enter a valid email address"); return }
@@ -918,6 +961,9 @@ document.addEventListener("change", async e=>{
     return }
   if(t.dataset.setlv){ const p=S.players.find(x=>x.id===t.dataset.setlv); savePlayer({...p, level:t.value, verified:true}).then(ok=>ok&&toast("Level updated")); return }
   if(t.dataset.verify){ const p=S.players.find(x=>x.id===t.dataset.verify); savePlayer({...p, verified:t.checked}); return }
+  if(t.dataset.remind){ const p=meP(); if(!p) return; const k=t.dataset.remind, cur=p.remind||[];
+    const next=t.checked?[...new Set([...cur,k])]:cur.filter(x=>x!==k);
+    if(await savePlayer({...p, remind:next})) toast(t.checked?"Reminder on. Add it to your calendar below.":"Reminder off"); return }
   if(t.dataset.status){ const st=t.value; setBooking(t.dataset.status,{status:st},`Status set to ${STATUS[st]?.label||st} by the organiser.`,"Status updated"); return }
   if(t.dataset.regame){ S.rotEdit[t.dataset.regame]=Number(t.value); render(); return }
   if(t.dataset.court){ const n=Number(t.value); setBooking(t.dataset.court,{court:n},`Moved to Court ${n} by the organiser.`,`Moved to Court ${n}`); return }

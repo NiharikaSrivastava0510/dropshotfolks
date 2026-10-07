@@ -661,6 +661,18 @@ section{
 }
 @media (max-width:1080px){.reviews-grid{grid-template-columns:repeat(2,1fr)}}
 @media (max-width:600px){.reviews-grid{grid-template-columns:1fr}}
+/* reviews slideshow: one group (3 / 2 / 1 per row) at a time, cards pop in one by one */
+.reviews-grid.carousel{align-items:start}
+.reviews-grid.carousel .review-card{display:none}
+.reviews-grid.carousel .review-card.show{display:flex;animation:revPop .55s cubic-bezier(.2,.7,.2,1) both}
+@keyframes revPop{from{opacity:0;transform:translateY(18px) scale(.96)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.reviews-grid.carousel .review-card.show{animation:none}}
+.reviews-nav{display:flex;align-items:center;justify-content:center;gap:1rem;margin-top:1.6rem}
+.reviews-nav button.arrow{width:40px;height:40px;border-radius:50%;border:1px solid var(--rule);background:var(--cream);color:var(--maroon);font-size:1.3rem;line-height:1;cursor:pointer;transition:all .2s ease}
+.reviews-nav button.arrow:hover{background:var(--maroon);color:var(--cream);border-color:var(--maroon)}
+.reviews-dots{display:flex;gap:.5rem}
+.reviews-dots button{width:9px;height:9px;padding:0;border-radius:50%;border:0;background:var(--rule);cursor:pointer;transition:all .25s ease}
+.reviews-dots button[aria-current="true"]{background:var(--maroon);width:22px;border-radius:5px}
 
 /* ---------- Our Team ---------- */
 .team-grid{
@@ -2971,6 +2983,65 @@ window.addEventListener('load', () => {
 document.querySelectorAll('.t-card[data-ends]').forEach(c => {
   if (new Date() > new Date(c.dataset.ends + 'T23:59:59')) c.remove();
 });
+</script>
+<script>
+// Reviews slideshow: shows one group at a time (as many as fit in a row), cards pop in one by one
+(function(){
+  const grid = document.querySelector('#reviews .reviews-grid');
+  if (!grid) return;
+  const cards = [...grid.querySelectorAll('.review-card')];
+  if (cards.length < 2) return;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const nav = document.createElement('div');
+  nav.className = 'reviews-nav';
+  nav.innerHTML = '<button type="button" class="arrow" aria-label="Previous reviews">&#8249;</button><div class="reviews-dots" role="group" aria-label="Choose reviews"></div><button type="button" class="arrow" aria-label="Next reviews">&#8250;</button>';
+  grid.after(nav);
+  const [prevBtn, dots, nextBtn] = nav.children;
+  let page = 0, per = 3, timer = null, paused = false;
+
+  const perRow = () => getComputedStyle(grid).gridTemplateColumns.split(' ').length || 1;
+  const pages = () => Math.ceil(cards.length / per);
+
+  function show(p, animate){
+    page = (p + pages()) % pages();
+    cards.forEach(c => { c.classList.remove('show'); c.style.animationDelay = ''; });
+    cards.slice(page*per, page*per + per).forEach((c, i) => {
+      if (animate) { void c.offsetWidth; c.style.animationDelay = (i*180) + 'ms'; }
+      c.classList.add('show');
+    });
+    [...dots.children].forEach((d, i) => d.setAttribute('aria-current', String(i === page)));
+  }
+  // keep the section the height of its tallest group so the page doesn't jump
+  function fitHeight(){
+    grid.style.minHeight = '';
+    let tallest = 0;
+    for (let p = 0; p < pages(); p++){
+      cards.forEach((c, i) => c.classList.toggle('show', Math.floor(i/per) === p));
+      tallest = Math.max(tallest, grid.offsetHeight);
+    }
+    grid.style.minHeight = tallest + 'px';
+    show(page, false);
+  }
+  function layout(){
+    per = perRow();
+    dots.innerHTML = Array.from({length: pages()}, (_, i) => `<button type="button" aria-label="Reviews group ${i+1}"></button>`).join('');
+    if (page >= pages()) page = 0;
+    fitHeight();
+  }
+  function restart(){ clearInterval(timer); if (!reduce) timer = setInterval(() => { if (!paused && !document.hidden) show(page+1, true) }, 6000); }
+
+  grid.classList.add('carousel');
+  layout();
+  restart();
+  prevBtn.addEventListener('click', () => { show(page-1, true); restart(); });
+  nextBtn.addEventListener('click', () => { show(page+1, true); restart(); });
+  dots.addEventListener('click', e => { const i = [...dots.children].indexOf(e.target); if (i >= 0) { show(i, true); restart(); } });
+  grid.addEventListener('mouseenter', () => paused = true);
+  grid.addEventListener('mouseleave', () => paused = false);
+  let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(layout, 200); });
+  // hidden cards' images must still load so every group's height can be measured
+  cards.forEach(c => { const im = c.querySelector('img'); if (!im) return; im.loading = 'eager'; if (!im.complete) im.addEventListener('load', fitHeight); });
+})();
 </script>
 <script src="./src.js" defer></script>
 </body>

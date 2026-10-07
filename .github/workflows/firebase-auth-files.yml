@@ -1,0 +1,35 @@
+# Copies Firebase's sign-in helper pages onto this site, so Google sign-in
+# shows dropshotfolks.co.uk instead of dropshotfolks.firebaseapp.com.
+# Run it from the Actions tab (or it runs when this file changes); it commits any updates.
+name: Update Firebase sign-in helper files
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [.github/workflows/firebase-auth-files.yml]
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download helper files
+        run: |
+          set -euo pipefail
+          base=https://dropshotfolks.firebaseapp.com
+          mkdir -p __/auth __/firebase
+          curl -fsSL "$base/__/auth/handler"        -o __/auth/handler.html
+          curl -fsSL "$base/__/auth/handler.js"     -o __/auth/handler.js
+          curl -fsSL "$base/__/auth/experiments.js" -o __/auth/experiments.js
+          curl -fsSL "$base/__/auth/iframe"         -o __/auth/iframe.html
+          curl -fsSL "$base/__/auth/iframe.js"      -o __/auth/iframe.js
+          curl -fsSL "$base/__/firebase/init.json"  -o __/firebase/init.json
+          ls -la __/auth __/firebase
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add __
+          git diff --cached --quiet && echo "No changes" || git commit -m "Update Firebase sign-in helper files"
+          git push

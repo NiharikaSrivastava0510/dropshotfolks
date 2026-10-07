@@ -63,8 +63,8 @@ section,.band{padding:clamp(72px,10vw,128px) 0;position:relative}
 .nav{position:fixed;inset:0 0 auto 0;z-index:100;transition:background .3s ease,box-shadow .3s ease,padding .3s ease;padding:18px 0}
 .nav.scrolled{background:rgba(42,8,13,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 10px 30px -20px rgba(0,0,0,.6);padding:10px 0}
 .nav .wrap{display:flex;align-items:center;gap:1.5rem}
-.brand{display:flex;align-items:center;gap:.7rem;text-decoration:none;color:var(--cream);font-family:'Fraunces',serif;font-size:1.35rem;letter-spacing:-.01em;white-space:nowrap}
-.brand img{width:40px;height:40px;border-radius:10px;object-fit:cover}
+.brand{display:flex;align-items:center;gap:.7rem;text-decoration:none;color:var(--cream);font-family:'Fraunces',serif;font-size:1.35rem;letter-spacing:-.01em;white-space:nowrap;flex-shrink:0}
+.brand img{width:56px;height:42px;border-radius:9px;object-fit:cover;padding:3px;background:#efe2c6;box-shadow:0 2px 10px rgba(0,0,0,.18)}
 .brand em{color:var(--beige-deep)}
 #navMenu{display:flex;list-style:none;gap:1.4rem;margin-left:auto}
 #navMenu a{color:rgba(250,243,227,.85);text-decoration:none;font-size:.92rem;font-weight:500;position:relative;padding:.3rem 0;white-space:nowrap}
@@ -74,7 +74,7 @@ section,.band{padding:clamp(72px,10vw,128px) 0;position:relative}
 .nav-cta{margin-left:.5rem;padding:.65rem 1.2rem;font-size:.9rem;white-space:nowrap}
 .nav-toggle{display:none;margin-left:auto;background:transparent;border:1.5px solid rgba(250,243,227,.4);color:var(--cream);width:44px;height:44px;border-radius:12px;cursor:pointer}
 .nav-toggle svg{width:22px;height:22px;margin:auto}
-@media (max-width:1240px){
+@media (max-width:1380px){
   #navMenu{display:none;position:absolute;top:100%;left:var(--gutter);right:var(--gutter);flex-direction:column;gap:0;background:var(--maroon-ink);border:1px solid rgba(216,196,160,.2);border-radius:16px;padding:.6rem;box-shadow:var(--shadow);margin-top:8px}
   #navMenu.open{display:flex}
   #navMenu a{display:block;padding:.85rem 1rem;border-radius:10px;font-size:1rem}
@@ -83,7 +83,7 @@ section,.band{padding:clamp(72px,10vw,128px) 0;position:relative}
   .nav-toggle{display:grid;place-items:center}
   .nav-cta{margin-left:0}
 }
-@media (max-width:520px){.nav-cta{display:none}.brand{font-size:1.15rem}.brand img{width:34px;height:34px}}
+@media (max-width:520px){.nav-cta{display:none}.brand{font-size:1.15rem}.brand img{width:46px;height:35px}}
 
 /* ---------- Hero ---------- */
 .hero{min-height:100svh;display:flex;align-items:flex-end;position:relative;color:var(--cream);padding:140px 0 56px;overflow:hidden;isolation:isolate}
@@ -91,6 +91,10 @@ section,.band{padding:clamp(72px,10vw,128px) 0;position:relative}
 @keyframes heroZoom{to{transform:scale(1)}}
 .hero::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,rgba(42,8,13,.95) 0%,rgba(61,13,20,.82) 38%,rgba(61,13,20,.35) 75%,rgba(61,13,20,.5) 100%),linear-gradient(0deg,rgba(42,8,13,.9) 0%,transparent 45%)}
 .hero .wrap{width:100%;display:grid;grid-template-columns:1.35fr .9fr;gap:3rem;align-items:end}
+.hero-logo{display:flex;align-items:center;gap:clamp(.8rem,2vw,1.2rem);margin-bottom:1.4rem}
+.hero-logo img{height:clamp(64px,9vw,96px);width:auto;border-radius:14px;padding:6px;background:#efe2c6;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.hero-logo span{font-family:'Fraunces',serif;font-weight:700;text-transform:uppercase;letter-spacing:-.02em;line-height:1;font-size:clamp(1.6rem,4vw,2.8rem);color:#d8c4a0}
+.hero-logo em{font-style:italic;font-weight:400}
 .tagline{font-family:'Fraunces',serif;font-style:italic;font-size:1.25rem;color:var(--beige-deep);margin-bottom:1rem}
 .hero .kicker{color:var(--beige-deep)}
 .hero h1{font-size:clamp(3rem,8.4vw,7.2rem);line-height:.95;letter-spacing:-.035em}
@@ -715,7 +719,7 @@ footer ul a:hover{color:var(--cream)}
 <!-- ============================================== NAV -->
 <nav class="nav" id="siteNav" aria-label="Main">
   <div class="wrap">
-    <a href="#top" class="brand"><img src="images/logo.png" alt="">Dropshot <em>Folks</em></a>
+    <a href="#top" class="brand"><img src="images/logo-mark.png" alt="">Dropshot <em>Folks</em></a>
     <button type="button" class="nav-toggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false" aria-controls="navMenu">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
     </button>
@@ -740,6 +744,7 @@ footer ul a:hover{color:var(--cream)}
   <div class="hero-bg" aria-hidden="true"></div>
   <div class="wrap">
     <div>
+      <div class="hero-logo"><img src="images/logo-mark.png" alt="Dropshot Folks logo"><span>Dropshot <em>Folks</em></span></div>
       <p class="tagline">Play. Meet. Repeat.</p>
       <div class="kicker">A badminton community · London</div>
       <h1>For the love of the <em>dropshot</em> and the <span class="stroke">folks</span> who play it.</h1>
@@ -1458,7 +1463,7 @@ footer ul a:hover{color:var(--cream)}
   <div class="wrap">
     <div class="footer-inner">
       <div>
-        <a href="#top" class="brand"><img src="images/logo.png" alt="">Dropshot <em>Folks</em></a>
+        <a href="#top" class="brand"><img src="images/logo-mark.png" alt="">Dropshot <em>Folks</em></a>
         <p class="brand-line">A badminton community for the folks who'd rather rally.</p>
       </div>
       <div>

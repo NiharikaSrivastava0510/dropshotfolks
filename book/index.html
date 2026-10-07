@@ -193,6 +193,9 @@ const LEVELS = [
   {code:"C-", key:"Cm", name:"Mid Intermediate", court:3, desc:"You control pace and placement, rotate well in doubles and play competitive games regularly."},
   {code:"C+", key:"Cp", name:"High Intermediate (upper)", court:4, desc:"Strong all-round game. You build points, cover the court and play league or tournament level."}
 ];
+const LEVEL_DEFAULTS = LEVELS.map(l=>({...l}));
+// organiser can rename levels and edit descriptions (stored in config.levels)
+function applyLevels(){ LEVELS.forEach((l,i)=>{ const d=LEVEL_DEFAULTS[i], o=S.cfg.levels?.[l.key]||{}; l.name=o.name||d.name; l.desc=o.desc||d.desc }) }
 const lvByCode = c => LEVELS.find(l=>l.code===c);
 const lvByCourt = n => LEVELS.find(l=>l.court===n);
 const CLR = {1:"var(--d1)",2:"var(--d2)",3:"var(--c1)",4:"var(--c2)"};
@@ -727,7 +730,23 @@ function orgParts(){
 }
 const notOrg = `<section class="panel"><div class="empty">Only the organiser can see this.</div></section>`;
 const orgSessions = () => S.isAdmin ? orgParts().sessions : notOrg;
-const orgPlayers = () => S.isAdmin ? orgParts().requests + orgParts().players : notOrg;
+const orgPlayers = () => S.isAdmin ? orgParts().requests + orgParts().players + levelsPanel() : notOrg;
+function levelsPanel(){
+  return `<section class="panel"><h2>Levels</h2><p class="muted">Rename levels or change their descriptions. Players see these in the Level guide and on the courts. Each level keeps its court.</p>
+    <form id="lvForm" style="display:grid;gap:14px">
+      ${LEVELS.map(l=>`<div class="bk"><div class="row"><span class="lv lv-${l.key}">${l.code}</span><b>Court ${l.court}</b></div>
+        <label class="f">Name<input id="lvn-${l.key}" value="${esc(l.name)}"></label>
+        <label class="f">Description<textarea id="lvd-${l.key}" rows="2">${esc(l.desc)}</textarea></label></div>`).join("")}
+      <div class="row"><button class="btn primary">Save levels</button><button class="btn ghost" type="button" id="lvReset">Back to defaults</button></div>
+    </form></section>`;
+}
+// after a level change, move the player's upcoming bookings to their new court
+async function moveToLevelCourt(pid, level){
+  const court=lvByCode(level)?.court; if(!court) return 0;
+  const todo=S.bookings.filter(b=>b.playerId===pid && b.court!==court && b.status!=="cancelled" && (()=>{const s=S.sessions.find(x=>x.id===b.sessionId); return s && sessEnd(s)>=new Date()})());
+  for(const b of todo) await setBooking(b.id,{court, level},`Moved to Court ${court} after a level change.`,null);
+  return todo.length;
+}
 const orgClub = () => S.isAdmin ? orgParts().club : notOrg;
 function orgOverview(){
   if(!S.isAdmin) return notOrg;
@@ -913,7 +932,8 @@ document.addEventListener("click", async e=>{
   if(ds.absent){ const b=S.bookings.find(x=>x.id===ds.absent); setBooking(ds.absent,{absent:!b.absent},null, b.absent?"Back in the rotation":"Taken out of the rotation"); return }
   if(ds.acancel){ arm(t,"Confirm cancel",()=>setBooking(ds.acancel,{status:"cancelled"},"The organiser cancelled this booking.")); return }
   if(ds.restart){ const s=S.sessions.find(x=>x.id===ds.restart); const {id,...body}=s; save("sessions",id,{...body,rotationStart:nowIso()},"Rotation restarted from game 1"); return }
-  if(ds.approve){ const p=S.players.find(x=>x.id===ds.approve); await savePlayer({...p, level:p.levelRequest, levelRequest:null, verified:true}); toast("Level updated. Move their upcoming bookings if needed."); return }
+  if(ds.approve){ const p=S.players.find(x=>x.id===ds.approve), lv=p.levelRequest;
+    if(await savePlayer({...p, level:lv, levelRequest:null, verified:true})){ const n=await moveToLevelCourt(p.id, lv); toast(n?`Level updated. ${n} upcoming booking${n>1?"s":""} moved to Court ${lvByCode(lv).court}.`:"Level updated") } return }
   if(ds.decline){ const p=S.players.find(x=>x.id===ds.decline); await savePlayer({...p, levelRequest:null}); toast("Request declined"); return }
   if(ds.msg){ const s=S.sessions.find(x=>x.id===ds.msg); copyText(reminderText(s), $("#msg-"+s.id)); return }
   if(ds.emails){ const s=S.sessions.find(x=>x.id===ds.emails);
@@ -922,6 +942,8 @@ document.addEventListener("click", async e=>{
     copyText(list.join(", "), $("#msg-"+s.id)); return }
   if(ds.toggle){ const s=S.sessions.find(x=>x.id===ds.toggle); const {id,...body}=s; save("sessions",id,{...body,open:s.open===false},"Updated"); return }
   if(ds.remics){ const sl=slots().find(x=>x.k===ds.remics); if(sl) remindIcs(sl); return }
+  if(t.id==="lvReset"){ arm(t,"Tap again to reset",async()=>{ const {levels,...rest}=S.cfg;
+    if(await save("config","main",rest,"Levels back to defaults")) LEVEL_DEFAULTS.forEach(d=>{ const n=$("#lvn-"+d.key), x=$("#lvd-"+d.key); if(n) n.value=d.name; if(x) x.value=d.desc }) }); return }
   if(ds.pedit!=null){ S.pedit=ds.pedit||null; render(); return }
   if(ds.psave){ const p=S.players.find(x=>x.id===ds.psave); const name=$("#pe-name").value.trim(), email=$("#pe-email").value.trim(), phone=$("#pe-phone").value.trim();
     if(!name){ toast("Add a name"); return } if(email && !validEmail(email)){ toast("Enter a valid email address"); return }
@@ -964,7 +986,8 @@ document.addEventListener("change", async e=>{
       else if(await savePhoto(S.me,img)) toast("Photo updated");
     }catch{ toast("That file isn't a photo we can use. Try a JPG or PNG.") }
     return }
-  if(t.dataset.setlv){ const p=S.players.find(x=>x.id===t.dataset.setlv); savePlayer({...p, level:t.value, verified:true}).then(ok=>ok&&toast("Level updated")); return }
+  if(t.dataset.setlv){ const p=S.players.find(x=>x.id===t.dataset.setlv), lv=t.value;
+    if(await savePlayer({...p, level:lv, verified:true})){ const n=await moveToLevelCourt(p.id, lv); toast(n?`Level updated. ${n} upcoming booking${n>1?"s":""} moved to Court ${lvByCode(lv).court}.`:"Level updated") } return }
   if(t.dataset.verify){ const p=S.players.find(x=>x.id===t.dataset.verify); savePlayer({...p, verified:t.checked}); return }
   if(t.dataset.pick){ if(t.checked) S.picks.add(t.dataset.pick); else S.picks.delete(t.dataset.pick); render(); return }
   if(t.dataset.remind){ const p=meP(); if(!p) return; const k=t.dataset.remind, cur=p.remind||[];
@@ -1008,6 +1031,10 @@ document.addEventListener("submit", async e=>{
     }
     toast(weeks>1?`${weeks} sessions added`:"Session added");
   }
+  if(e.target.id==="lvForm"){
+    const levels={}; LEVELS.forEach(l=>{ const name=$("#lvn-"+l.key).value.trim(), desc=$("#lvd-"+l.key).value.trim(); levels[l.key]={name, desc} });
+    if(Object.values(levels).some(x=>!x.name)){ toast("Every level needs a name"); return }
+    save("config","main",{...S.cfg, levels},"Levels saved"); return }
   if(e.target.id==="cfgForm"){
     const cfg={...S.cfg}; Object.keys(DEFAULT_CFG).forEach(k=>{const el=$("#c-"+k); if(el) cfg[k]=el.value.trim()});
     save("config","main",cfg,"Club details saved");
@@ -1054,7 +1081,7 @@ render();
     else { S.players=[]; once("players") }
   } else Store.listen("players", d=>{S.players=d; once("players")});
   Store.listen("photos", d=>{S.photos=Object.fromEntries(d.map(x=>[x.id,x.img])); once("photos")});
-  Store.listen("config", d=>{const m=d.find(x=>x.id==="main"); S.cfg={...DEFAULT_CFG,...(m||{})}; delete S.cfg.id; once("config")});
+  Store.listen("config", d=>{const m=d.find(x=>x.id==="main"); S.cfg={...DEFAULT_CFG,...(m||{})}; delete S.cfg.id; applyLevels(); once("config")});
 })();
 </script>
 

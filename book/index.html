@@ -413,8 +413,9 @@ function signInPanel(){
   </section>`;
 }
 function setupPanel(){
-  return `<section class="panel"><h2>Online booking is coming soon</h2>
-    <p class="muted">Until then, message us on WhatsApp to book your place.</p>
+  const configured = !!window.FIREBASE_CONFIG?.apiKey;
+  return `<section class="panel"><h2>${configured?"Booking couldn't load":"Online booking is coming soon"}</h2>
+    <p class="muted">${configured?"Check your internet connection and refresh the page. If you use an ad blocker, try turning it off for this site. You can also message us on WhatsApp to book.":"Until then, message us on WhatsApp to book your place."}</p>
     <div><a class="btn primary" href="https://chat.whatsapp.com/KLVWEt809gZ3aqLaBhuNL2?mode=gi_t" target="_blank" rel="noopener">Message us on WhatsApp</a></div></section>`;
 }
 function registerPanel(){

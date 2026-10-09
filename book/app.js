@@ -820,6 +820,19 @@ async function moveToLevelCourt(pid, level){
   }
   return n;
 }
+// Standard setup: one level per court (D- 1, D+ 2, C- 3, C+ 4). Moves booked players onto their level's court.
+async function standardCourts(sid){
+  const s0=S.sessions.find(x=>x.id===sid); if(!s0) return;
+  const {id,courts,...body}=s0, s1={...body, id};
+  if(!await save("sessions",id,body)) return;
+  let moved=0; const stuck=[];
+  for(const b of S.bookings.filter(b=>b.sessionId===sid && b.status!=="cancelled")){
+    if(courtLevels(s1,b.court).includes(b.level)) continue;
+    const c=courtsOf(s1).find(n=>courtLevels(s1,n).includes(b.level));
+    if(c){ await setBooking(b.id,{court:c},`Moved to Court ${c}: standard courts for this session.`,null); moved++ } else stuck.push(b.name);
+  }
+  toast(`Standard courts set${moved?`, ${moved} moved`:""}${stuck.length?`. No court for: ${stuck.join(", ")}`:""}`);
+}
 const orgClub = () => S.isAdmin ? orgParts().club : notOrg;
 function orgOverview(){
   if(!S.isAdmin) return notOrg;
@@ -908,7 +921,7 @@ function adminSession(s){
           <label class="f">Places<input id="es-cap${n}-${s.id}" type="number" min="0" max="30" value="${cap(s,n)}"></label></div>`).join("")}
         <p class="muted" style="grid-column:1/-1;font-size:.85rem">Set places to 0 if a court isn't running. Players go to the first running court that includes their level.</p>
         <label class="row" style="grid-column:1/-1;gap:6px"><input type="checkbox" style="width:auto" id="es-all-${s.id}"> Use this court setup for every upcoming ${esc(slotLabel(s))} session</label>
-        <div class="row" style="grid-column:1/-1"><button class="btn small primary" data-savesess="${esc(s.id)}">Save session</button></div>
+        <div class="row" style="grid-column:1/-1"><button class="btn small primary" data-savesess="${esc(s.id)}">Save session</button><button class="btn small" data-stdcourts="${esc(s.id)}">Use standard courts</button><span class="muted" style="font-size:.82rem">D- Court 1 · D+ Court 2 · C- Court 3 · C+ Court 4, and moves booked players to match.</span></div>
       </div></details>
     <textarea id="msg-${s.id}" rows="6" hidden readonly></textarea></div>`;
 }
@@ -1080,6 +1093,7 @@ document.addEventListener("click", async e=>{
     if(!canRun(s)){ toast("Open session view to check people in"); return }
     const v=ds.v, patch = v==="in" ? {checkedIn:true, absent:false} : v==="out" ? {checkedIn:false, absent:true} : {checkedIn:false, absent:false};
     setBooking(b.id, patch, v==="in"?"Checked in.":v==="out"?"Marked not here.":"Check-in cleared.", v==="in"?`${b.name} is here`:v==="out"?`${b.name} marked not here`:"Cleared"); return }
+  if(ds.stdcourts){ const sid=ds.stdcourts; arm(t,"Tap again to reset courts",()=>standardCourts(sid)); return }
   if(ds.score){ const s=S.sessions.find(x=>x.id===ds.score), gi=Number(ds.gi), box=t.closest(".scorein"); if(!s||!box) return;
     const [ia,ib]=box.querySelectorAll("input"), sa=Number(ia.value), sb=Number(ib.value);
     if(ia.value===""||ib.value===""||!Number.isInteger(sa)||!Number.isInteger(sb)||sa<0||sb<0||sa>30||sb>30){ toast("Enter both scores (0–30)"); return }

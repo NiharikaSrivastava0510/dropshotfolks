@@ -1224,6 +1224,14 @@ function tickCountdowns(){
     el.textContent = d>0 ? `${d}d ${h}h ${m}m` : h>0 ? `${h}h ${m}m` : `${m}:${String(s).padStart(2,"0")}`;
   });
 }
+// stay up to date: reload when a newer version is published (not while typing)
+const APP_VERSION = (document.currentScript?.src.match(/[?&]v=(\d+)/)||[])[1] || "";
+async function checkVersion(){
+  try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); if(!r.ok) return; const {v}=await r.json();
+    if(!v || !APP_VERSION || v===APP_VERSION) return;
+    if(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName||"") || S.kiosk) toast("A new version is ready. Reload the page when you can."); else location.reload() }catch{}
+}
+setTimeout(checkVersion, 4000); setInterval(checkVersion, 120000);
 setInterval(()=>{
   tickCountdowns();
   if(S.loaded && liveKey()!==S.liveKey) render();

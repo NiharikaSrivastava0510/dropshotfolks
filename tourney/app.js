@@ -218,7 +218,8 @@ function matchRow(t, m, opts={}){
   return `<div class="m ${m.status==="live"?"live":""}" ${opts.edit?`data-medit="${esc(m.id)}" role="button" tabindex="0" style="cursor:pointer"`:""}>
     <span class="tn ${w==="a"?"win":""} ${opts.me&&a===opts.me?"me":""}">${sideName(m,"a")}</span>
     <span class="mid">${mid}${opts.cat?`<span>${esc(catName(t,m.cat))}</span>`:""}</span>
-    <span class="tn r ${w==="b"?"win":""} ${opts.me&&b===opts.me?"me":""}">${sideName(m,"b")}</span></div>`;
+    <span class="tn r ${w==="b"?"win":""} ${opts.me&&b===opts.me?"me":""}">${sideName(m,"b")}</span>
+    ${opts.plan && S.isAdmin && m.status!=="done" && !m.bye ? `<div class="plan"><label>Court <select data-plcourt="${esc(m.id)}" aria-label="Court"><option value="">–</option>${Array.from({length:10},(_,i)=>`<option value="${i+1}" ${Number(m.pcourt)===i+1?"selected":""}>${i+1}</option>`).join("")}</select></label><label>Time <input type="time" data-pltime="${esc(m.id)}" value="${esc(m.ptime||"")}" aria-label="Time"></label></div>` : ""}</div>`;
 }
 function standTable(t, cat, G){
   const adv=Number(t.advance)||2, rows=standings(t,cat,G);
@@ -302,9 +303,9 @@ function viewFix(){
   if(!groups && !ms.length) return head+`<section class="panel"><div class="empty">Fixtures appear here once the organiser makes the groups.</div></section>`;
   const ko=bracket(t,S.cat);
   const koList=ms.filter(m=>m.stage==="ko" && !m.bye).sort((a,b)=>a.round-b.round||a.slot-b.slot);
-  return head + (ko?`<section class="panel"><h2>Knockouts</h2>${ko}<div class="mlist">${koList.map(m=>matchRow(t,m,{edit})).join("")}</div></section>`:"") +
+  return head + (ko?`<section class="panel"><h2>Knockouts</h2>${ko}<div class="mlist">${koList.map(m=>matchRow(t,m,{edit, plan:true})).join("")}</div></section>`:"") +
     (groups?`<div class="groups">${Object.keys(groups).sort().map(G=>`<div class="grp"><h3>Group ${G}<span class="muted" style="font-size:.8rem;font-family:var(--body)">top ${Number(t.advance)||2} go through</span></h3>${standTable(t,S.cat,G)}
-      <div class="mlist">${ms.filter(m=>m.stage==="group"&&m.group===G).map(m=>matchRow(t,m,{edit})).join("")}</div></div>`).join("")}</div>`:"");
+      <div class="mlist">${ms.filter(m=>m.stage==="group"&&m.group===G).map(m=>matchRow(t,m,{edit, plan:true})).join("")}</div></div>`).join("")}</div>`:"");
 }
 function viewLive(){
   const t=T(); if(!t) return noTourney();
@@ -520,6 +521,7 @@ async function point(m, side, delta){
 }
 
 document.addEventListener("click", async e=>{
+  if(e.target.closest("select,input,.plan")) return;   // court/time pickers inside a match card
   const t0=e.target.closest("button,a,[data-medit]"); if(!t0) return;
   const ds=t0.dataset, t=T();
   if(t0.id==="signOut"){ await auth.signOut(); location.reload(); return }
@@ -596,6 +598,9 @@ function shrinkImage(file, max=1400){
     let q=.85, out=c.toDataURL("image/jpeg",q); while(out.length>700000 && q>.4){ q-=.1; out=c.toDataURL("image/jpeg",q) } res(out) }; img.onerror=rej; img.src=URL.createObjectURL(file) });
 }
 document.addEventListener("change", async e=>{
+  const pc=e.target.dataset?.plcourt, pt=e.target.dataset?.pltime;
+  if((pc||pt) && S.isAdmin){ const id=pc||pt, data=pc?{pcourt:Number(e.target.value)||null}:{ptime:e.target.value||null};
+    await db.collection("tmatches").doc(id).update(data).then(()=>toast(pc?`Court ${e.target.value||"cleared"}`:`Time ${e.target.value||"cleared"}`),()=>toast("Couldn't save")); return }
   if(e.target.id==="myTeam"){ S.myTeam=e.target.value||null; ls.set("dsf:myteam",S.myTeam); render(); return }
   if(e.target.id!=="to-poster" || !e.target.files?.[0]) return;
   try{ S.posterDraft=await shrinkImage(e.target.files[0]); render(); toast("Poster ready. Press Save to publish it.") }catch{ toast("Couldn't read that image") }
@@ -622,6 +627,16 @@ function burst(){
   el.innerHTML=Array.from({length:26},(_,k)=>`<span style="left:${Math.random()*100}%;animation-delay:${(Math.random()*.5).toFixed(2)}s">${["🏸","🎉","🏆","✨"][k%4]}</span>`).join("");
   document.body.append(el); setTimeout(()=>el.remove(),4000);
 }
+
+/* ---------- stay up to date: reload when a newer version is published ---------- */
+const APP_VERSION = (document.currentScript?.src.match(/[?&]v=(\d+)/)||[])[1] || "";
+async function checkVersion(){
+  try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); if(!r.ok) return; const {v}=await r.json();
+    if(!v || !APP_VERSION || v===APP_VERSION) return;
+    const busy = S.tab==="ref" || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName||"");
+    if(busy) toast("A new version is ready. Reload the page when you can."); else location.reload() }catch{}
+}
+setTimeout(checkVersion, 4000); setInterval(checkVersion, 120000);
 
 /* ---------- start ---------- */
 (async function start(){

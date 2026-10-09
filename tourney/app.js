@@ -354,6 +354,7 @@ function viewRef(){
       ${d.s?`<div><span class="lbl">Who serves? (${esc(tName(tid(d.s)))})</span><div class="cats">${pick("sp",1,pName(tid(d.s),1),d.sp===1)}${pick("sp",2,pName(tid(d.s),2),d.sp===2)}</div></div>
         <div><span class="lbl">Who receives? (${esc(tName(tid(otherSide(d.s))))})</span><div class="cats">${pick("rp",1,pName(tid(otherSide(d.s)),1),d.rp===1)}${pick("rp",2,pName(tid(otherSide(d.s)),2),d.rp===2)}</div></div>`:""}
       <div class="row"><button class="btn primary" data-svcgo="${esc(m.id)}" ${d.s&&d.sp&&d.rp?"":"disabled"}>Start game ${gi+1} ▶</button><button class="btn small ghost" data-svcskip="${esc(m.id)}">Skip (don't track serve)</button></div>
+      ${d.s&&d.sp&&d.rp?"":`<p class="muted">Tap ${[d.s?"":"who's serving first",d.s&&!d.sp?"who serves":"",d.s&&!d.rp?"who receives":""].filter(Boolean).join(", then ")} to unlock Start.</p>`}
       <div class="refctl"><button class="btn small ghost" data-stop="${esc(m.id)}">Stop match (back to queue)</button></div></section>`;
   }
   const sv=svcState(m,gi), tid=x=>x==="a"?a:b;
@@ -508,7 +509,7 @@ async function tryRefUnlock(code){
 // Firestore can't hold arrays of arrays, so each game is stored as {a, b}
 const toDb = g => (g||[]).map(x=>({a:x[0]||0, b:x[1]||0}));
 const fromDb = g => (g||[]).map(x=>Array.isArray(x)?x:[x?.a||0, x?.b||0]);
-const upd = (id, data) => db.collection("tmatches").doc(id).update({...data, ...(data.games?{games:toDb(data.games)}:{}), updatedAt:nowIso()}).catch(e=>toast(e?.code==="permission-denied"?"Not allowed. Is referee mode still on?":"Couldn't save. Check your connection."));
+const upd = (id, data) => db.collection("tmatches").doc(id).update({...data, ...(data.games?{games:toDb(data.games)}:{}), updatedAt:nowIso()}).catch(e=>toast(e?.code==="permission-denied"?(data.svc?"Couldn't start: the latest Firebase rules aren't published yet. Ask the organiser to publish them.":"Not allowed. Is referee mode still on?"):"Couldn't save. Check your connection."));
 async function point(m, side, delta){
   const t=T(), r=rules(t); let games=(m.games?.length?m.games:[[0,0]]).map(g=>[...g]);
   const seq=(m.seq||[]).map(String); while(seq.length<games.length) seq.push("");

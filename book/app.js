@@ -807,7 +807,20 @@ function orgParts(){
   return {requests, sessions, players, club};
 }
 const notOrg = `<section class="panel"><div class="empty">Only the organiser can see this.</div></section>`;
-const orgSessions = () => S.isAdmin ? orgParts().sessions : notOrg;
+// Sessions running all four courts whose setup doesn't match the standard one-level-per-court layout
+function setupWarnings(){
+  const std={1:"D-",2:"D+",3:"C-",4:"C+"};
+  return upcoming().filter(s=>courtsOf(s).length===4).map(s=>{
+    const off=[1,2,3,4].filter(c=>courtLevels(s,c).join()!==std[c]);
+    const wrong=S.bookings.filter(b=>b.sessionId===s.id && ACTIVE.includes(b.status) && std[b.court]!==b.level && Object.values(std).includes(b.level));
+    return off.length ? {s, off, wrong} : null }).filter(Boolean);
+}
+function setupBanner(){
+  return setupWarnings().map(({s,off,wrong})=>`<div class="banner warn"><div class="grow"><b>${fmtLong(s.date)}: court setup isn't standard.</b>
+    ${off.map(c=>`Court ${c} takes ${courtLevels(s,c).join(" + ")||"no levels"}`).join(" · ")}.${wrong.length?` ${wrong.length} player${wrong.length>1?"s are":" is"} on the wrong court (${wrong.map(b=>`${esc(b.name)} ${esc(b.level)} on Court ${esc(b.court)}`).join(", ")}).`:""}</div>
+    <button class="btn small primary" data-stdcourts="${esc(s.id)}">Fix now</button></div>`).join("");
+}
+const orgSessions = () => S.isAdmin ? setupBanner() + orgParts().sessions : notOrg;
 const orgPlayers = () => S.isAdmin ? orgParts().requests + orgParts().players : notOrg;
 // after a level change, move the player's upcoming bookings to their new court
 async function moveToLevelCourt(pid, level){
@@ -837,11 +850,11 @@ const orgClub = () => S.isAdmin ? orgParts().club : notOrg;
 function orgOverview(){
   if(!S.isAdmin) return notOrg;
   if(!S.loaded) return `<section class="panel"><div class="empty">Loading…</div></section>`;
-  const ups = upcoming(), s = ups.find(x=>rotInfo(x).live) || ups[0];
+  const ups = upcoming(), s = ups.find(x=>rotInfo(x).live) || ups[0], warn = setupBanner();
   const toCheck = S.bookings.filter(b=>b.status==="paid" && ups.some(x=>x.id===b.sessionId));
   const reqs = S.players.filter(p=>p.levelRequest);
   const missing = ["price","accountNumber","orgPhone"].filter(k=>!S.cfg[k]);
-  let html = "";
+  let html = warn;
   if(missing.length) html += `<div class="banner warn"><div class="grow"><b>Finish your club details.</b> Players can't see ${missing.map(k=>({price:"the session fee",accountNumber:"your bank details",orgPhone:"your phone number"})[k]).join(", ")} yet.</div><button class="btn small" data-tab-go="o-club">Add details</button></div>`;
   if(!s) return html + `<section class="panel"><h2>Overview</h2><div class="empty">No upcoming sessions. Add some in Sessions &amp; bookings.</div><div><button class="btn primary" data-tab-go="o-sessions">Add sessions</button></div></section>`;
   const inS = S.bookings.filter(b=>b.sessionId===s.id), r = rotInfo(s), v = venueOf(s);

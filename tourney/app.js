@@ -14,7 +14,7 @@ function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; cle
 
 /* ---------- state ---------- */
 const S = {
-  tab: location.hash==="#screen" ? "screen" : ls.get("dsf:ttab","reg"),
+  tab: /^#(screen|court=\d+)$/.test(location.hash) ? "screen" : ls.get("dsf:ttab","reg"),
   tourneys:[], teams:[], matches:[], contacts:{}, secret:null, unlock:null,
   uid:null, isAdmin:false, loaded:false, tid: ls.get("dsf:tid",null),
   cat: null, toss: {}, myTeam: ls.get("dsf:myteam",null), refCourt: ls.get("dsf:refcourt",1), edit:null, scrIdx:0
@@ -236,12 +236,13 @@ function bracket(t, cat){
 }
 function courtCard(t, c){
   const m=liveOn(t,c), r=rules(t);
-  if(!m) return `<div class="ct idle"><div class="cn"><span>Court ${c}</span><span>free</span></div><div class="muted">Waiting for the next match</div></div>`;
+  const fb=`<a class="focusbtn" href="#court=${c}" target="_blank" rel="noopener" title="Open Court ${c} full screen in a new tab">⛶ Focus</a>`;
+  if(!m) return `<div class="ct idle"><div class="cn"><span>Court ${c}</span><span>free ${fb}</span></div><div class="muted">Waiting for the next match</div></div>`;
   const g=(m.games||[]).slice(-1)[0]||[0,0], w=gamesWon(m,r), need=Math.floor(r.bestOf/2)+1, sv=svcState(m,Math.max(0,(m.games||[]).length-1));
   const side=(s,i)=>{ const id=sideTeam(m,s), tm=teamById(id), srv=sv&&sv.serving===s;
     const pl=k=>esc(tm?(k===1?tm.p1:tm.p2):""), names=tm?(srv?(sv.server===1?`🏸 ${pl(1)} & ${pl(2)}`:`${pl(1)} & 🏸 ${pl(2)}`):`${pl(1)} & ${pl(2)}`):"";
     return `<div class="row2"><div class="nm">${srv?"🏸 ":""}${esc(tName(id))}<small>${names}</small>${r.bestOf>1?`<span class="gw">${Array.from({length:need},(_,k)=>`<i class="${k<w[s]?"on":""}"></i>`).join("")}</span>`:""}</div><div class="pt">${g[i]}</div></div>` };
-  return `<div class="ct"><div class="cn"><span>Court ${c} · ${esc(catName(t,m.cat))}</span><span>${esc(m.stage==="ko"?(m.roundName||"Knockout"):`Group ${m.group}`)}</span></div>${side("a",0)}${side("b",1)}</div>`;
+  return `<div class="ct"><div class="cn"><span>Court ${c} · ${esc(catName(t,m.cat))}</span><span>${esc(m.stage==="ko"?(m.roundName||"Knockout"):`Group ${m.group}`)} ${fb}</span></div>${side("a",0)}${side("b",1)}</div>`;
 }
 
 /* ---------- views ---------- */
@@ -416,6 +417,24 @@ function editPanel(){
     <div class="row"><button class="btn primary" data-esave="${esc(m.id)}">Save result</button>${m.status!=="scheduled"?`<button class="btn small ghost danger" data-ereset="${esc(m.id)}">Reset to not played</button>`:""}<button class="btn small ghost" data-eclose="1">Close</button></div></section>`;
 }
 
+/* one court, big: for a laptop or TV beside each court (#court=N) */
+function viewFocus(c){
+  const t=T(); if(!t) return `<div class="scr"><div class="scr-h"><h1>No tournament yet</h1></div></div>`;
+  const m=liveOn(t,c), r=rules(t);
+  const nextHere = upNext(t,40).find(x=>x.pcourt===c) || upNext(t,1)[0];
+  const head=`<div class="scr-h"><img src="../images/logo-mark.png" alt=""><h1>${esc(t.name||"Tournament")}</h1><span class="fc-court">Court ${c}</span><span class="clock" id="clock"></span></div>`;
+  const foot=`<div class="scr-f">${nextHere?`<b>Next on Court ${c}:</b> ${nextHere.ptime?`<b>${esc(nextHere.ptime)}</b> `:""}${esc(tName(sideTeam(nextHere,"a")))} vs ${esc(tName(sideTeam(nextHere,"b")))} <span>(${esc(catName(t,nextHere.cat))})</span>`:"<b>dropshotfolks.co.uk/tourney</b> · live scores on your phone"}</div>`;
+  if(!m) return `<div class="scr fc">${head}<div class="fc-idle"><div>🏸</div><p>Court ${c} is free</p>${nextHere?`<small>Up next: ${esc(tName(sideTeam(nextHere,"a")))} vs ${esc(tName(sideTeam(nextHere,"b")))}</small>`:""}</div>${foot}</div>`;
+  const gi=Math.max(0,(m.games||[]).length-1), g=(m.games||[])[gi]||[0,0], w=gamesWon(m,r), sv=svcState(m,gi), need=r.bestOf===2?2:Math.floor(r.bestOf/2)+1;
+  const row=(s,i)=>{ const id=sideTeam(m,s), tm=teamById(id), srv=sv&&sv.serving===s;
+    const pl=k=>esc(tm?(k===1?tm.p1:tm.p2):""), who=tm?`${srv&&sv.server===1?"🏸 ":""}${pl(1)} & ${srv&&sv.server===2?"🏸 ":""}${pl(2)}`:"";
+    return `<div class="fc-row ${srv?"srv":""} ${s}"><div class="fc-nm"><b>${esc(tName(id))}</b><span>${who}</span>${r.bestOf>1?`<span class="gw">${Array.from({length:need},(_,k)=>`<i class="${k<w[s]?"on":""}"></i>`).join("")}</span>`:""}</div><div class="fc-pt">${g[i]}</div></div>` };
+  const svLine = sv ? `🏸 ${esc(pName(sideTeam(m,sv.serving),sv.server))} serves from the ${sv.court==="R"?"right":"left"} → ${esc(pName(sideTeam(m,otherSide(sv.serving)),sv.receiver))}` : "";
+  return `<div class="scr fc">${head}
+    <div class="fc-main"><div class="fc-meta">${esc(catName(t,m.cat))} · ${esc(m.stage==="ko"?(m.roundName||"Knockout"):`Group ${m.group}`)} · Game ${gi+1}${(m.games||[]).length>1?` · earlier: ${esc((m.games||[]).slice(0,-1).map(x=>`${x[0]}–${x[1]}`).join(", "))}`:""}</div>
+      ${row("a",0)}${row("b",1)}${svLine?`<div class="fc-svc">${svLine}</div>`:""}</div>${foot}</div>`;
+}
+
 /* big screen */
 function viewScreen(){
   const t=T(); if(!t) return `<div class="scr"><div class="scr-h"><h1>No tournament yet</h1></div></div>`;
@@ -437,7 +456,7 @@ function render(){
   const keep={}; document.querySelectorAll("#main input[id],#main select[id],#main textarea[id]").forEach(el=>{ if(el.type!=="file") keep[el.id]=el.type==="checkbox"?{c:el.checked}:{v:el.value} });
   const openD=new Set([...document.querySelectorAll("#main details[id][open]")].map(d=>d.id));
   document.body.classList.toggle("screen", S.tab==="screen");
-  if(S.tab==="screen"){ $("#main").innerHTML=viewScreen(); tickClock(); return }
+  if(S.tab==="screen"){ const fc=/^#court=(\d+)$/.exec(location.hash); $("#main").innerHTML = fc ? viewFocus(Number(fc[1])) : viewScreen(); tickClock(); return }
   const tabs=TABS(); if(!tabs.some(([k])=>k===S.tab)) S.tab="reg";
   const t=T(), anyLive=t && matchesOf(t).some(m=>m.status==="live");
   $("#tabs").innerHTML=tabs.map(([k,l])=>`<button role="tab" data-tab="${k}" aria-selected="${k===S.tab}">${k==="live"&&anyLive?'<span class="dot pulse"></span>':""}${esc(l)}</button>`).join("");
@@ -451,7 +470,7 @@ function render(){
 function tickClock(){ const c=$("#clock"); if(c) c.textContent=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}) }
 setInterval(()=>{ if(S.tab==="screen"){ tickClock() } },15000);
 setInterval(()=>{ if(S.tab==="screen"){ S.scrIdx++; render() } },12000);
-addEventListener("hashchange",()=>{ S.tab = location.hash==="#screen" ? "screen" : (S.tab==="screen"?"live":S.tab); render() });
+addEventListener("hashchange",()=>{ S.tab = /^#(screen|court=\d+)$/.test(location.hash) ? "screen" : (S.tab==="screen"?"live":S.tab); render() });
 document.addEventListener("keydown",e=>{ if(S.tab!=="screen") return;
   if(e.key==="f"||e.key==="F") document.documentElement.requestFullscreen?.().catch(()=>{});
   if(e.key==="Escape" && !document.fullscreenElement) location.hash="" });
@@ -492,7 +511,7 @@ document.addEventListener("click", async e=>{
   const t0=e.target.closest("button,a,[data-medit]"); if(!t0) return;
   const ds=t0.dataset, t=T();
   if(t0.id==="signOut"){ await auth.signOut(); location.reload(); return }
-  if(ds.tab){ S.tab=ds.tab; S.edit=null; ls.set("dsf:ttab",S.tab); if(location.hash==="#screen") history.replaceState(null,"",location.pathname); render(); scrollTo({top:0}); return }
+  if(ds.tab){ S.tab=ds.tab; S.edit=null; ls.set("dsf:ttab",S.tab); if(location.hash) history.replaceState(null,"",location.pathname); render(); scrollTo({top:0}); return }
   if(ds.screen){ e.preventDefault(); location.hash="#screen"; return }
   if(ds.tid){ S.tid=ds.tid; ls.set("dsf:tid",S.tid); render(); return }
   if(ds.cat){ S.cat=ds.cat; render(); return }

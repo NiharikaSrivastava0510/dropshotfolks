@@ -132,6 +132,66 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ---------- Tournaments (dropshotfolks.co.uk/tourney) ----------
+    function tourney(tid) { return get(/databases/$(database)/documents/tourneys/$(tid)).data; }
+    // A referee device that entered the tournament's referee code (stored in tunlocks/{uid}).
+    function refOk(tid) {
+      let u = /databases/$(database)/documents/tunlocks/$(request.auth.uid);
+      return signedIn() && exists(u) && get(u).data.tid == tid
+        && get(u).data.code == get(/databases/$(database)/documents/tsecrets/$(tid)).data.code;
+    }
+    function validTeam(d) {
+      return d.keys().hasOnly(['tid', 'cat', 'name', 'p1', 'p2', 'createdBy', 'createdAt', 'status'])
+        && d.tid is string && d.cat is string
+        && shortText(d.name, 40) && d.name.size() > 0
+        && shortText(d.p1, 60) && d.p1.size() > 0 && shortText(d.p2, 60) && d.p2.size() > 0
+        && shortText(d.createdAt, 40);
+    }
+    match /tourneys/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    // Registered teams are public (names only); contact details live in tcontacts.
+    match /tteams/{id} {
+      allow read: if true;
+      allow create: if isAdmin() || (signedIn() && validTeam(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid && request.resource.data.status == 'pending'
+        && tourney(request.resource.data.tid).regOpen == true
+        && request.resource.data.cat in tourney(request.resource.data.tid).catIds);
+      allow update: if isAdmin();
+      allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
+    }
+    match /tcontacts/{teamId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.keys().hasOnly(['email', 'phone', 'createdBy'])
+        && request.resource.data.createdBy == request.auth.uid
+        && shortText(request.resource.data.email, 120) && shortText(request.resource.data.phone, 30)
+        && get(/databases/$(database)/documents/tteams/$(teamId)).data.createdBy == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
+    }
+    // Matches: the organiser makes them; referees with the code can only score.
+    match /tmatches/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+      allow update: if refOk(resource.data.tid)
+        && onlyChanges(['games', 'status', 'winner', 'court', 'updatedAt'])
+        && request.resource.data.status in ['scheduled', 'live', 'done']
+        && request.resource.data.get('winner', null) in [null, 'a', 'b']
+        && request.resource.data.get('games', []) is list && request.resource.data.get('games', []).size() <= 5
+        && request.resource.data.get('court', 0) is int;
+    }
+    match /tsecrets/{tid} {
+      allow read, write: if isAdmin();
+    }
+    match /tunlocks/{uid} {
+      allow read, delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['tid', 'code', 'at'])
+        && request.resource.data.tid is string && request.resource.data.code is string
+        && request.resource.data.code == get(/databases/$(database)/documents/tsecrets/$(request.resource.data.tid)).data.code;
+    }
+
     // Small profile photos shown on the live courts.
     match /photos/{uid} {
       allow read: if true;

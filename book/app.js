@@ -117,12 +117,12 @@ async function save(coll,id,data,okMsg){
 
 /* ---------- state ---------- */
 const TABS = {
-  player:[["book","Book a session"],["live","Live courts"],["mine","My bookings"],["level","Level guide"],["venue","Venue & contact"]],
+  player:[["book","Book a session"],["live","Live courts"],["mine","My bookings"],["court","Session view"],["level","Level guide"],["venue","Venue & contact"]],
   organiser:[["o-overview","Overview"],["o-sessions","Sessions & bookings"],["live","Live courts"],["o-players","Players"],["o-club","Club details"]]
 };
 const S = {
   view: ls.get("dsf:view","player"),
-  tab: ls.get("dsf:tab","book"),
+  tab: ls.get("dsf:kiosk",null) ? "court" : ls.get("dsf:tab","book"),
   cfg: {...DEFAULT_CFG},
   sessions: [], bookings: [], players: [], photos: {},
   me: null, uid: null, isAdmin:false, loaded:false,
@@ -131,7 +131,9 @@ const S = {
   gq: {}, guests: [],               // guest questions and guests waiting to be booked
   liveSess: null, result: null, liveKey: "",
   picks: new Set(),                 // sessions ticked but not booked yet
-  rotEdit: {}, pedit: null          // organiser: game being edited per court, player being edited
+  rotEdit: {}, pedit: null,         // organiser: game being edited per court, player being edited
+  kiosk: ls.get("dsf:kiosk", null), // session this device has open in session view
+  unlock: null, secrets: {}         // this device's unlock; organiser: session codes
 };
 const meP = () => S.players.find(p=>p.id===S.me) || null;
 const upcoming = () => S.sessions.filter(s=>sessEnd(s) >= new Date()).sort((a,b)=>sessStart(a)-sessStart(b));
@@ -184,8 +186,8 @@ function courtPlan(s,c){
 // 200 points: £2 off your next 2 sessions. 500 points: £4 off your next 3 sessions.
 const POINTS_COURT = 4;
 const TIERS = [{at:200, off:2, n:2}, {at:500, off:4, n:3}];
-function scoreOf(s,c,gi){ const x=s?.scores?.[c]?.[gi];
-  return x && Array.isArray(x.a) && Array.isArray(x.b) && Number.isInteger(x.sa) && Number.isInteger(x.sb) ? x : null }
+function scoreOf(s,c,gi){ const x=s?.scores?.[c]?.[gi], ok=n=>Number.isInteger(n) && n>=0 && n<=30;
+  return x && Array.isArray(x.a) && Array.isArray(x.b) && x.a.length===2 && x.b.length===2 && ok(x.sa) && ok(x.sb) ? x : null }
 let ptsCache = null;
 function pointsState(){
   if(ptsCache && ptsCache.sess===S.sessions && ptsCache.bk===S.bookings) return ptsCache.v;
@@ -196,6 +198,7 @@ function pointsState(){
       const x=scoreOf(s,POINTS_COURT,gi); if(!x || x.sa===x.sb) return;
       const m=Math.abs(x.sa-x.sb);
       (x.sa>x.sb?x.a:x.b).forEach(id=>{ if(String(id).startsWith("guest-")) return;
+        if(!S.bookings.some(b=>b.sessionId===s.id && b.playerId===id && b.status!=="cancelled")) return;
         const before=pts[id]||0; pts[id]=before+m;
         TIERS.forEach((t,ti)=>{ if(before<t.at && pts[id]>=t.at) (cross[id] ||= [])[ti]=sessStart(s).getTime() }) });
     });
@@ -209,6 +212,7 @@ function pointsState(){
   });
   const v={pts,cross,off}; ptsCache={sess:S.sessions, bk:S.bookings, v}; return v;
 }
+const canRun = s => (S.isAdmin && S.view==="organiser") || (!!s && S.kiosk===s.id && (Store.mode!=="db" || S.unlock?.sessionId===s.id));
 const offChip = b => { const o=pointsState().off[b.id]; return o?` <span class="chip off">Points reward · £${o} off</span>`:"" };
 function scoreForm(s,gi,sc,idp){
   return `<div class="scorein"><span class="lbl">Score</span><input type="number" min="0" max="30" inputmode="numeric" id="${idp}a-${esc(s.id)}-${gi}" value="${sc?sc.sa:""}" aria-label="Team A score"><span>–</span><input type="number" min="0" max="30" inputmode="numeric" id="${idp}b-${esc(s.id)}-${gi}" value="${sc?sc.sb:""}" aria-label="Team B score">
@@ -220,7 +224,7 @@ function gameBox(s,c,i,x,names,r){
   const won = sc ? (sc.sa>sc.sb?0:1) : -1, now = r.live && i===r.idx;
   const side = (t,k) => `<div class="team ${won===k?"won":""}">${t.map(id=>`<div class="nm ${id===S.me?"me":""}">${avatar(id,nm(id),"sm")}<span>${esc(nm(id))}</span></div>`).join("")}</div>`;
   const mid = sc ? `<div class="sc">${sc.sa}–${sc.sb}<small>+${Math.abs(sc.sa-sc.sb)} pts</small></div>` : `<div class="vs">vs</div>`;
-  const org = c===POINTS_COURT && S.isAdmin && S.view==="organiser";
+  const org = c===POINTS_COURT && canRun(s);
   return `<div class="game ${now?"now":""} ${sc?"done":""}">
     <div class="gh"><span class="lbl">Game ${i+1} · ${hhmm(r.at(i))}</span>${sc?'<span class="chip st-confirmed">Finished</span>':now?'<span class="chip st-awaiting">On court</span>':""}${x.edited&&!sc?'<span class="chip st-paid">edited</span>':""}</div>
     <div class="teams">${side(teams[0],0)}${mid}${side(teams[1],1)}</div>
@@ -247,6 +251,42 @@ function pointsPanel(p){
   </section>`;
 }
 
+/* ---------- check-in and session view ---------- */
+function checkinList(s){
+  const list=S.bookings.filter(b=>b.sessionId===s.id && ACTIVE.includes(b.status)).sort((a,b)=>a.court-b.court || String(a.name).localeCompare(b.name));
+  if(!list.length) return `<div class="empty">No one booked yet.</div>`;
+  const here=list.filter(b=>b.checkedIn).length, away=list.filter(b=>b.absent).length, org=S.isAdmin && S.view==="organiser";
+  return `<p><b>${here} of ${list.length} here</b>${away?` · ${away} not here`:""}</p>
+  <div class="ci">${list.map(b=>`<div class="ci-row ${b.checkedIn?"in":""} ${b.absent?"out":""}">
+    <span class="pl">${avatar(b.playerId,b.name,"sm")}<span>${esc(b.name)}</span></span>
+    <span class="muted" style="font-size:.82rem">Court ${esc(b.court)}${org?" "+stChip(b.status):""}</span>
+    <span class="row" style="gap:6px;margin-left:auto"><button class="btn small ${b.checkedIn?"primary":""}" data-checkin="${esc(b.id)}" data-v="${b.checkedIn?"reset":"in"}" aria-pressed="${!!b.checkedIn}">${b.checkedIn?"✓ Here":"Here"}</button><button class="btn small ${b.absent?"out-on":"ghost"}" data-checkin="${esc(b.id)}" data-v="${b.absent?"reset":"out"}" aria-pressed="${!!b.absent}">Not here</button></span>
+  </div>`).join("")}</div>`;
+}
+const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const newCode = () => Array.from(crypto.getRandomValues(new Uint32Array(6)), n=>CODE_CHARS[n % CODE_CHARS.length]).join("");
+async function tryUnlock(code){
+  const cands = [...upcoming(), ...S.sessions.filter(s=>Date.now()-sessEnd(s) < 12*3600e3 && Date.now() >= sessEnd(s))].filter((s,i,a)=>a.indexOf(s)===i).slice(0,10);
+  for(const s of cands){
+    if(Store.mode!=="db"){ if(S.secrets[s.id]===code){ S.kiosk=s.id; ls.set("dsf:kiosk",s.id); render(); return true } continue }
+    try{ await Store.db.collection("unlocks").doc(S.uid).set({sessionId:s.id, code, at:nowIso()});
+      S.kiosk=s.id; S.unlock={sessionId:s.id, code}; ls.set("dsf:kiosk",s.id); render(); toast("Session view is open on this device"); return true }
+    catch(e){ if(e?.code!=="permission-denied") { toast("Couldn't check the code. Check your connection."); return false } }
+  }
+  toast("That code doesn't match an upcoming session"); return false;
+}
+function viewCourt(){
+  if(!S.loaded) return `<section class="panel"><div class="empty">Loading…</div></section>`;
+  const s = S.kiosk && S.sessions.find(x=>x.id===S.kiosk);
+  if(!s || !canRun(s)) return `<section class="panel"><div><h2>Session view</h2><p class="muted">For the court-side phone or tablet. Enter the code the organiser gives you. Once it's open on this device, anyone using it can enter Court ${POINTS_COURT} scores, see the rotation and mark who's here for that session.</p></div>
+    <div class="row" style="max-width:440px;flex-wrap:nowrap"><input id="k-code" placeholder="Session code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" style="text-transform:uppercase;letter-spacing:.2em;font-family:var(--mono)"><button class="btn primary" data-kopen="1">Open</button></div></section>`;
+  const r=rotInfo(s), v=venueOf(s);
+  return `<section class="panel"><div class="row" style="justify-content:space-between;align-items:flex-start"><div><span class="lbl">Session view · open on this device</span><h2>${fmtLong(s.date)} · ${esc(s.start)}–${esc(s.end)}</h2><p class="muted">${esc(v.venue||"")}${r.live?` · game ${r.idx+1} of ${r.total} on now`:r.done?" · finished":` · first game ${hhmm(r.startT)}`}</p></div><button class="btn small ghost" data-kexit="1">Close session view</button></div>
+    <p class="muted" style="font-size:.88rem">Anyone using this device can enter Court ${POINTS_COURT} scores and mark who's here. Nothing else can be changed from here.</p></section>
+  <section class="panel"><details id="ci-k-${s.id}" open><summary><b>Check-in</b></summary><div style="display:grid;gap:10px;margin-top:10px">${checkinList(s)}</div></details></section>
+  <div class="court-grid">${courtsOf(s).map(c=>courtLive(s,c)).join("")}</div>`;
+}
+
 /* ---------- rendering ---------- */
 function render(){
   // keep what people are typing when live data redraws the page
@@ -264,7 +304,7 @@ function render(){
   const p = meP();
   $("#who").innerHTML = (view==="organiser" ? `<span class="org-flag">Organiser</span>` : p ? `${avatar(p.id,p.name,"sm")}<span>${esc(p.name)}</span> ${lvChip(p.level)}` : "")
     + (Store.mode==="db" && S.uid ? ` <button class="btn small" id="signOut" type="button">Sign out</button>` : "");
-  const views = {book:viewBook, live:viewLive, mine:viewMine, level:viewLevel, venue:viewVenue,
+  const views = {court:viewCourt, book:viewBook, live:viewLive, mine:viewMine, level:viewLevel, venue:viewVenue,
     "o-overview":orgOverview, "o-sessions":orgSessions, "o-players":orgPlayers, "o-club":orgClub};
   const head = view==="organiser" ? modeBanner() : reminderBanner() + modeBanner();
   $("#main").innerHTML = (Store.mode!=="db" && !LOCAL) ? setupPanel() : head + (views[tab]||viewBook)();
@@ -445,7 +485,7 @@ function courtLive(s,c){
     <div class="lbl">${r.live?`Game ${cur+1} · on court now`:`Game 1 · ${hhmm(r.at(0))}`}</div>
     ${(()=>{ const sc = c===POINTS_COURT ? scoreOf(s,c,cur) : null, tm = sc ? [sc.a,sc.b] : g.teams;
       return `<div class="match"><div class="side">${teamHtml(tm[0],names)}</div>${sc?`<div class="vs" style="font-style:normal;font-weight:700;color:var(--accent)">${sc.sa}–${sc.sb}</div>`:`<div class="vs">vs</div>`}<div class="side">${teamHtml(tm[1],names)}</div></div>`
-        + (c===POINTS_COURT && S.isAdmin && S.view==="organiser" ? scoreForm(s,cur,sc,"m") : ""); })()}
+        + (c===POINTS_COURT && canRun(s) ? scoreForm(s,cur,sc,"m") : ""); })()}
     ${g.sit.length?`<div class="row"><span class="lbl">Resting</span><span class="stack">${g.sit.map(id=>avatar(id,names[id],"sm")).join("")}</span><span class="muted" style="font-size:.85rem">${g.sit.map(id=>esc(names[id])).join(", ")}</span></div>`:""}
     ${nx?`<div class="row"><span class="lbl">Next up · ${hhmm(r.at(cur+1))}</span><span style="font-size:.88rem">${nx.teams.map(t=>t.map(id=>esc(names[id])).join(" & ")).join(" <i class='muted'>vs</i> ")}</span></div>`:""}
     <details id="rot-${s.id}-${c}"><summary>Full rotation (${games.length} games)</summary><div class="games">
@@ -456,8 +496,8 @@ function courtLive(s,c){
     ${roster.length?`<div class="stack">${roster.map(b=>avatar(b.playerId,b.name)).join("")}</div>`:""}
     ${body}
     ${c===POINTS_COURT ? leaderboard() : ""}
-    ${S.isAdmin && S.view==="organiser" ? (()=>{ const away=S.bookings.filter(b=>b.sessionId===s.id&&b.court===c&&ACTIVE.includes(b.status)&&b.absent);
-      return rotEditor(s,c,games,roster,r) + `<details id="ctl-${s.id}-${c}"><summary>Who's here (${roster.length})</summary><div style="display:grid;gap:6px;margin-top:8px">
+    ${canRun(s) ? (()=>{ const away=S.bookings.filter(b=>b.sessionId===s.id&&b.court===c&&ACTIVE.includes(b.status)&&b.absent);
+      return (S.isAdmin && S.view==="organiser" ? rotEditor(s,c,games,roster,r) : "") + `<details id="ctl-${s.id}-${c}"><summary>Who's here (${roster.length})</summary><div style="display:grid;gap:6px;margin-top:8px">
         ${[...roster,...away].map(b=>`<div class="row" style="justify-content:space-between"><span class="pl">${avatar(b.playerId,b.name,"sm")}<span>${esc(b.name)}</span></span><button class="btn small ghost" data-absent="${esc(b.id)}">${b.absent?"Back in rotation":"Not here"}</button></div>`).join("")}
       </div></details>` })() : ""}
   </div>`;
@@ -693,6 +733,8 @@ function adminSession(s){
     <p class="muted">${esc(v.venue||"No venue set")}${v.address?" · "+esc(v.address):""}</p>
     <div class="row"><label class="f" style="grid-auto-flow:column;align-items:center">Minutes per game <select data-gamemins="${s.id}" style="width:auto">${[10,12,15,20].map(m=>`<option ${m===r.mins?"selected":""}>${m}</option>`).join("")}</select></label>
       <button class="btn small" data-restart="${s.id}">Start rotation from now</button><span class="muted" style="font-size:.85rem">${r.live?`Game ${r.idx+1} of ${r.total} in progress`:`Rotation starts ${hhmm(r.startT)}`}</span></div>
+    <div class="row code-row"><span class="lbl">Session view code</span>${S.secrets[s.id]?`<b class="code">${esc(S.secrets[s.id])}</b><button class="btn small" data-copy="${esc(S.secrets[s.id])}">Copy</button><button class="btn small ghost" data-newcode="${esc(s.id)}">New code</button>`:`<button class="btn small primary" data-newcode="${esc(s.id)}">Create code</button>`}<span class="muted" style="font-size:.82rem">Give it to whoever runs the court-side device. A new code locks out devices using the old one.</span></div>
+    <details id="ci-${s.id}"><summary><b>Check-in list</b> (${S.bookings.filter(b=>b.sessionId===s.id&&ACTIVE.includes(b.status)&&b.checkedIn).length} of ${S.bookings.filter(b=>b.sessionId===s.id&&ACTIVE.includes(b.status)).length} here)</summary><div style="display:grid;gap:10px;margin-top:10px">${checkinList(s)}</div></details>
     <div class="tbl"><table><thead><tr><th>Player</th><th>Ref</th><th>Status</th><th>Court</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
     ${S.bookings.some(b=>b.sessionId===s.id&&b.status==="cancelled")?`<details id="canc-${s.id}"><summary>Cancelled (${S.bookings.filter(b=>b.sessionId===s.id&&b.status==="cancelled").length})</summary><div style="display:grid;gap:6px;margin-top:8px">${S.bookings.filter(b=>b.sessionId===s.id&&b.status==="cancelled").map(b=>`<div class="row" style="justify-content:space-between"><span>${esc(b.name)} · Court ${esc(b.court)}</span><span class="row"><button class="btn small" data-restore="${esc(b.id)}">Restore</button><button class="btn small ghost danger" data-bdel="${esc(b.id)}">Delete</button></span></div>`).join("")}</div></details>`:""}
     ${(()=>{ const k=slotKey(s), want=S.players.filter(p=>(p.remind||[]).includes(k) && p.email && !S.bookings.some(b=>b.sessionId===s.id && b.playerId===p.id && b.status!=="cancelled"));
@@ -869,6 +911,25 @@ document.addEventListener("click", async e=>{
       toast(`Court setup copied to ${same.length} more session${same.length===1?"":"s"}`);
     }
     return }
+  if(ds.kopen){ const code=($("#k-code")?.value||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,"");
+    if(code.length<4){ toast("Enter the session code"); return }
+    if(Store.mode==="db" && !S.uid){ ls.set("dsf:kcode",code);
+      try{ await firebase.auth().signInAnonymously() }   // the page reloads signed in, then the code is checked
+      catch(e){ ls.set("dsf:kcode",null); toast(e?.code==="auth/operation-not-allowed"?"Session view isn't switched on yet. Ask the organiser.":"Couldn't open session view. Check your connection.") }
+      return }
+    tryUnlock(code); return }
+  if(ds.kexit){ const sid=S.kiosk; S.kiosk=null; S.unlock=null; ls.set("dsf:kiosk",null);
+    if(Store.mode==="db" && S.uid){ try{ await Store.db.collection("unlocks").doc(S.uid).delete() }catch{}
+      if(firebase.auth().currentUser?.isAnonymous){ await firebase.auth().signOut(); return } }
+    render(); toast("Session view closed"); return }
+  if(ds.newcode){ const sid=ds.newcode, code=newCode();
+    if(Store.mode==="db"){ try{ await Store.db.collection("secrets").doc(sid).set({code}); toast(`Code ${code} ready`) }catch{ toast("Couldn't save the code") } }
+    else { S.secrets[sid]=code; render() }
+    return }
+  if(ds.checkin){ const b=S.bookings.find(x=>x.id===ds.checkin); if(!b) return; const s=S.sessions.find(x=>x.id===b.sessionId);
+    if(!canRun(s)){ toast("Open session view to check people in"); return }
+    const v=ds.v, patch = v==="in" ? {checkedIn:true, absent:false} : v==="out" ? {checkedIn:false, absent:true} : {checkedIn:false, absent:false};
+    setBooking(b.id, patch, v==="in"?"Checked in.":v==="out"?"Marked not here.":"Check-in cleared.", v==="in"?`${b.name} is here`:v==="out"?`${b.name} marked not here`:"Cleared"); return }
   if(ds.score){ const s=S.sessions.find(x=>x.id===ds.score), gi=Number(ds.gi), box=t.closest(".scorein"); if(!s||!box) return;
     const [ia,ib]=box.querySelectorAll("input"), sa=Number(ia.value), sb=Number(ib.value);
     if(ia.value===""||ib.value===""||!Number.isInteger(sa)||!Number.isInteger(sb)||sa<0||sb<0||sa>30||sb>30){ toast("Enter both scores (0–30)"); return }
@@ -986,7 +1047,9 @@ render();
     S.me = ls.get("dsf:me", null);
   }
   const first={sessions:1,bookings:1,players:1,config:1,photos:1};
-  const once=k=>{ if(first[k]){ delete first[k]; if(!Object.keys(first).length) S.loaded=true } render() };
+  const once=k=>{ if(first[k]){ delete first[k]; if(!Object.keys(first).length){ S.loaded=true;
+      // a session code typed before signing in on this device
+      const kc=ls.get("dsf:kcode",null); if(kc && S.uid){ ls.set("dsf:kcode",null); S.tab="court"; tryUnlock(kc) } } } render() };
   Store.listen("sessions", d=>{S.sessions=d; once("sessions")});
   Store.listen("bookings", d=>{S.bookings=d; once("bookings")});
   if(Store.mode==="db" && !S.isAdmin){
@@ -994,6 +1057,8 @@ render();
     if(S.uid) Store.db.collection("players").doc(S.uid).onSnapshot(d=>{S.players=d.exists?[{id:d.id,...d.data()}]:[]; once("players")}, ()=>{S.players=[]; once("players")});
     else { S.players=[]; once("players") }
   } else Store.listen("players", d=>{S.players=d; once("players")});
+  if(Store.mode==="db" && S.uid) Store.db.collection("unlocks").doc(S.uid).onSnapshot(d=>{ S.unlock=d.exists?d.data():null; render() }, ()=>{});
+  if(Store.mode==="db" && S.isAdmin) Store.listen("secrets", d=>{ S.secrets=Object.fromEntries(d.map(x=>[x.id,x.code])); render() });
   Store.listen("photos", d=>{S.photos=Object.fromEntries(d.map(x=>[x.id,x.img])); once("photos")});
   Store.listen("config", d=>{const m=d.find(x=>x.id==="main"); S.cfg={...DEFAULT_CFG,...(m||{})}; delete S.cfg.id; once("config")});
 })();

@@ -55,6 +55,15 @@ service cloud.firestore {
                && d.playerId.matches('guest-' + request.auth.uid + '-[0-9]{1,2}')));
     }
 
+    // Session view: a device that entered the session's code (stored in unlocks/{uid}) may
+    // enter Court 4 scores and mark who's here for that session only. Changing the code
+    // in the organiser view locks every device out again.
+    function unlockOk(sid) {
+      let u = /databases/$(database)/documents/unlocks/$(request.auth.uid);
+      return signedIn() && exists(u) && get(u).data.sessionId == sid
+        && get(u).data.code == get(/databases/$(database)/documents/secrets/$(sid)).data.code;
+    }
+
     // Club details and sessions: everyone reads, only the organiser writes.
     match /config/{id} {
       allow read: if true;
@@ -63,6 +72,19 @@ service cloud.firestore {
     match /sessions/{id} {
       allow read: if true;
       allow write: if isAdmin();
+      allow update: if unlockOk(id) && onlyChanges(['scores'])
+        && request.resource.data.scores is map && request.resource.data.scores.keys().hasOnly(['4']);
+    }
+    // Session codes: only the organiser can see or change them.
+    match /secrets/{sid} {
+      allow read, write: if isAdmin();
+    }
+    match /unlocks/{uid} {
+      allow read, delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['sessionId', 'code', 'at'])
+        && request.resource.data.sessionId is string && request.resource.data.code is string
+        && request.resource.data.code == get(/databases/$(database)/documents/secrets/$(request.resource.data.sessionId)).data.code;
     }
 
     // Player records hold contact details: only the player and the organiser see them.
@@ -100,6 +122,12 @@ service cloud.firestore {
              && request.resource.data.get('hostId', null) == resource.data.get('hostId', null)
              && validBooking(id, request.resource.data)
              && levelFitsCourt(request.resource.data))));
+      // session view devices: check-in only
+      allow update: if unlockOk(resource.data.sessionId)
+        && onlyChanges(['absent', 'checkedIn', 'log'])
+        && request.resource.data.get('absent', false) is bool
+        && request.resource.data.get('checkedIn', false) is bool
+        && request.resource.data.get('log', []) is list && request.resource.data.get('log', []).size() <= 60;
       allow delete: if isAdmin();
     }
 

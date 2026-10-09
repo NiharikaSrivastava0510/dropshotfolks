@@ -2,15 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://js.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com; frame-src https://hcaptcha.com https://*.hcaptcha.com; connect-src 'self' https://api.web3forms.com https://hcaptcha.com https://*.hcaptcha.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://hcaptcha.com https://*.hcaptcha.com; font-src 'self' https://fonts.gstatic.com; media-src 'self' https:; object-src 'none'; base-uri 'self'; form-action https://api.web3forms.com">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://js.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com; frame-src https://hcaptcha.com https://*.hcaptcha.com; connect-src 'self' https://firestore.googleapis.com https://api.web3forms.com https://hcaptcha.com https://*.hcaptcha.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://hcaptcha.com https://*.hcaptcha.com; font-src 'self' https://fonts.gstatic.com; media-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self' https://api.web3forms.com; child-src https://hcaptcha.com https://*.hcaptcha.com; upgrade-insecure-requests">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Dropshot Folks — A Badminton Community</title>
 <meta name="description" content="Dropshot Folks — a badminton community for the folks who love the game. Sessions, photos, socials, slots." />
 
 <!-- Security headers (set via meta since GitHub Pages doesn't allow custom HTTP headers). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://js.hcaptcha.com https://*.hcaptcha.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.hcaptcha.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://api.web3forms.com https://*.hcaptcha.com https://hcaptcha.com; form-action 'self' https://api.web3forms.com; frame-src https://*.hcaptcha.com https://hcaptcha.com; child-src https://*.hcaptcha.com https://hcaptcha.com; object-src 'none'; base-uri 'self'; upgrade-insecure-requests">
-<meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#3d0d14">
 <link rel="icon" href="images/logo.png">
@@ -714,11 +712,28 @@ footer ul a:hover{color:var(--cream)}
 .price.feature .coach-cta,.price.feature:hover .coach-cta{color:var(--beige-deep)}
 .vol-form{border-radius:24px}
 @media (max-width:640px){.coach-modal{padding:.5rem}.coach-modal-dialog{margin:0 auto}.field-row{grid-template-columns:1fr}}
+/* ---------- cool bits ---------- */
+.sprog{position:fixed;top:0;left:0;height:3px;width:0;z-index:300;background:linear-gradient(90deg,var(--beige-deep),#F2C14E);box-shadow:0 0 12px rgba(242,193,78,.6);pointer-events:none}
+.sprog::after{content:"🏸";position:absolute;right:-12px;top:-10px;font-size:15px;transform:rotate(35deg)}
+.hero-shuttle{position:absolute;z-index:0;left:-8%;top:62%;font-size:clamp(1.6rem,3vw,2.4rem);pointer-events:none;filter:drop-shadow(0 8px 14px rgba(0,0,0,.35));animation:heroFly 11s cubic-bezier(.45,.05,.55,.95) 1.2s infinite}
+@keyframes heroFly{0%{left:-8%;top:62%;transform:rotate(-25deg)}22%{top:18%;transform:rotate(10deg)}45%{left:108%;top:58%;transform:rotate(70deg)}100%{left:108%;top:58%}}
+.hero .wrap{position:relative;z-index:1}
+.hero .kicker,.hero h1,.hero-sub,.hero-actions,.stats,.next-card,.hero-logo,.tagline{animation:heroRise .9s cubic-bezier(.2,.8,.2,1) both}
+.hero-logo{animation-delay:.05s}.tagline{animation-delay:.12s}.hero .kicker{animation-delay:.2s}.hero h1{animation-delay:.28s}.hero-sub{animation-delay:.42s}.hero-actions{animation-delay:.52s}.stats{animation-delay:.62s}.next-card{animation-delay:.7s}
+@keyframes heroRise{from{opacity:0;transform:translateY(26px)}}
+.next-count{display:block;margin:-.2rem 0 .9rem;padding:.55rem .8rem;border-radius:12px;background:rgba(242,193,78,.16);border:1px solid rgba(242,193,78,.35);font-size:.9rem}
+.next-count b{font-family:'Geist Mono',monospace;font-weight:500;letter-spacing:.02em;color:#FFE3A3}
+.btn-gold{position:relative;overflow:hidden}
+.btn-gold::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.55) 50%,transparent 70%);transform:translateX(-120%);animation:shine 4.5s ease-in-out 2s infinite}
+@keyframes shine{0%,70%{transform:translateX(-120%)}100%{transform:translateX(120%)}}
+.tilt{transition:transform .25s ease-out;transform-style:preserve-3d;will-change:transform}
+@media (prefers-reduced-motion:reduce){.hero-shuttle{display:none}.hero .kicker,.hero h1,.hero-sub,.hero-actions,.stats,.next-card,.hero-logo,.tagline,.btn-gold::after{animation:none}}
 </style>
 </head>
 <body>
 
 <!-- ============================================== NAV -->
+<div class="sprog" id="sprog" aria-hidden="true"></div>
 <nav class="nav" id="siteNav" aria-label="Main">
   <div class="wrap">
     <button type="button" class="nav-toggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false" aria-controls="navMenu">
@@ -743,6 +758,7 @@ footer ul a:hover{color:var(--cream)}
 <!-- ============================================== HERO -->
 <header class="hero" id="top">
   <div class="hero-bg" aria-hidden="true"></div>
+  <span class="hero-shuttle" aria-hidden="true">🏸</span>
   <div class="wrap">
     <div>
       <div class="hero-logo"><img src="images/logo-mark.png" alt="Dropshot Folks logo"><span>Dropshot <em>Folks</em></span></div>
@@ -756,13 +772,14 @@ footer ul a:hover{color:var(--cream)}
       </div>
       <div class="stats">
         <div><span data-edit="founded">Founded</span><b>2025</b></div>
-        <div><span>Members</span><b>300+</b></div>
-        <div><span>Sessions/wk</span><b>2</b></div>
+        <div><span>Members</span><b data-count="300" data-suffix="+">300+</b></div>
+        <div><span>Sessions/wk</span><b data-count="2">2</b></div>
         <div><span>Venues</span><b>2 in East London</b></div>
       </div>
     </div>
     <aside class="next-card" aria-label="Weekly sessions">
       <h2><span class="live" aria-hidden="true"></span>Weekly sessions</h2>
+      <div class="next-count" id="nextCount" hidden></div>
       <div class="next-row"><div class="next-day">Thu</div><div><b>18:30 – 21:30 · All levels</b><small>Swanlea School, E1 5DJ</small></div></div>
       <div class="next-row"><div class="next-day">Sat</div><div><b>13:00 – 16:00 · High intermediate+</b><small>Mulberry Sports &amp; Leisure Centre, E1 2JR</small></div></div>
       <a href="#games" class="btn btn-line-light">See all session details</a>
@@ -1917,5 +1934,57 @@ document.querySelectorAll('.t-card[data-ends]').forEach(c => {
 })();
 </script>
 <script src="./src.js" defer></script>
+<script>
+// Cool bits: scroll progress, next-game countdown, count-up stats, card tilt
+(function(){
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const bar = document.getElementById('sprog');
+  const onScroll = () => { const h = document.documentElement; bar.style.width = (h.scrollTop / Math.max(1, h.scrollHeight - h.clientHeight) * 100) + '%'; };
+  addEventListener('scroll', onScroll, {passive:true}); onScroll();
+
+  // next game: read the real sessions from the booking app (public, read-only)
+  const box = document.getElementById('nextCount'), DAY = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  let sessions = [];
+  const str = f => f && (f.stringValue ?? null);
+  fetch('https://firestore.googleapis.com/v1/projects/dropshotfolks/databases/(default)/documents/sessions?pageSize=200')
+    .then(r => r.ok ? r.json() : {}).then(j => {
+      sessions = (j.documents || []).map(d => { const f = d.fields || {}, date = str(f.date), st = str(f.start), en = str(f.end);
+        if (!date || !st || !en) return null;
+        const venue = str(f.venue) || (st < '17:00' ? 'Mulberry' : 'Swanlea');
+        return {st:new Date(date + 'T' + st + ':00'), en:new Date(date + 'T' + en + ':00'), name:DAY[new Date(date + 'T12:00:00').getDay()] + ' · ' + venue.split(/[ ,]/)[0]}; }).filter(Boolean);
+      tick();
+    }).catch(() => {});
+  function tick(){
+    const now = new Date(), best = sessions.filter(x => x.en > now).sort((a, b) => a.st - b.st)[0];
+    if (!best) { box.hidden = true; return; }
+    const ms = best.st - now;
+    if (ms <= 0) box.innerHTML = '🟢 <span>Playing right now: <b>' + best.name + '</b></span>';
+    else { const d = Math.floor(ms/864e5), h = Math.floor(ms%864e5/36e5), m = Math.floor(ms%36e5/6e4), s = Math.floor(ms%6e4/1e3);
+      box.innerHTML = '🏸 <span>Next game: ' + best.name + ' in <b>' + (d ? d + 'd ' : '') + h + 'h ' + String(m).padStart(2,'0') + 'm ' + String(s).padStart(2,'0') + 's</b></span>'; }
+    box.hidden = false;
+  }
+  tick(); setInterval(tick, 1000);
+
+  // count the stats up when they come into view
+  const nums = document.querySelectorAll('[data-count]');
+  if (!still && 'IntersectionObserver' in window) {
+    const io = new IntersectionObserver(es => es.forEach(e => { if (!e.isIntersecting) return; io.unobserve(e.target);
+      const el = e.target, to = +el.dataset.count, suf = el.dataset.suffix || '', t0 = performance.now();
+      const step = t => { const p = Math.min(1, (t - t0) / 1400), v = Math.round(to * (1 - Math.pow(1 - p, 3))); el.textContent = v + (p === 1 ? suf : ''); if (p < 1) requestAnimationFrame(step); };
+      requestAnimationFrame(step); }), {threshold:.6});
+    nums.forEach(n => io.observe(n));
+  }
+
+  // cards lean towards the pointer (mouse only)
+  if (!still && matchMedia('(hover:hover) and (pointer:fine)').matches) {
+    document.querySelectorAll('.door, .tile, .price, .session').forEach(el => {
+      el.classList.add('tilt');
+      el.addEventListener('pointermove', e => { const r = el.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
+        el.style.transform = 'perspective(800px) rotateX(' + (-y * 7).toFixed(2) + 'deg) rotateY(' + (x * 9).toFixed(2) + 'deg) translateY(-4px)'; });
+      el.addEventListener('pointerleave', () => { el.style.transform = ''; });
+    });
+  }
+})();
+</script>
 </body>
 </html>

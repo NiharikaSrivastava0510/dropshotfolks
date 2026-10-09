@@ -326,6 +326,21 @@ function showAlerts(list){
   clearTimeout(showAlerts.t); showAlerts.t=setTimeout(()=>{ el.hidden=true }, 25000);
 }
 
+/* ---------- little celebrations ---------- */
+function burst(icons=["🏸","🎉","✨","🪶","🎊","🏆"]){
+  if(matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const el=document.createElement("div"); el.className="burst"; el.setAttribute("aria-hidden","true");
+  el.innerHTML=Array.from({length:28},(_,k)=>`<span style="left:${Math.random()*100}%;animation-delay:${(Math.random()*.5).toFixed(2)}s;animation-duration:${(2.2+Math.random()*1.4).toFixed(2)}s">${icons[k%icons.length]}</span>`).join("");
+  document.body.append(el); setTimeout(()=>el.remove(),4200);
+}
+// "next session" chip in the header, with a live countdown
+function nextChip(){
+  const s=upcoming()[0]; if(!s) return "";
+  const r=rotInfo(s), v=venueOf(s);
+  return r.live ? `<span class="nc-live"></span><b>Live now</b> · ${esc(v.venue||"on court")} · <a href="#" data-go="live">Live courts →</a>`
+    : `🏸 Next: <b>${fmtDate(s.date)} · ${esc(s.start)}</b> · starts in <span class="cd" data-at="${sessStart(s).toISOString()}">–</span>`;
+}
+
 /* ---------- check-in and session view ---------- */
 function checkinList(s){
   const list=S.bookings.filter(b=>b.sessionId===s.id && ACTIVE.includes(b.status)).sort((a,b)=>a.court-b.court || String(a.name).localeCompare(b.name));
@@ -351,7 +366,7 @@ async function tryUnlock(code){
   toast("That code doesn't match an upcoming session"); return false;
 }
 function viewCourt(){
-  if(!S.loaded) return `<section class="panel"><div class="empty">Loading…</div></section>`;
+  if(!S.loaded) return `<section class="panel"><div class="empty loading">Loading…</div></section>`;
   const s = S.kiosk && S.sessions.find(x=>x.id===S.kiosk);
   if(!s || !canRun(s)) return `<section class="panel"><div><h2>Session view</h2><p class="muted">For whoever is hosting the session. Enter the code the organiser gives you. Once it's open on this device you can check people in, enter scores and see the rotation for that session.</p></div>
     <div class="row" style="max-width:440px;flex-wrap:nowrap"><input id="k-code" placeholder="Session code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" style="text-transform:uppercase;letter-spacing:.2em;font-family:var(--mono)"><button class="btn primary" data-kopen="1">Open</button></div></section>`;
@@ -384,6 +399,9 @@ function render(){
     "o-overview":orgOverview, "o-sessions":orgSessions, "o-players":orgPlayers, "o-club":orgClub};
   const head = view==="organiser" ? modeBanner() : reminderBanner() + modeBanner();
   $("#main").innerHTML = (Store.mode!=="db" && !LOCAL) ? setupPanel() : head + (views[tab]||viewBook)();
+  if(S.lastTab!==tab){ const m=$("#main"); m.classList.remove("swap"); void m.offsetWidth; m.classList.add("swap"); S.lastTab=tab }
+  const nc=$("#nextup"); if(nc){ const h=S.loaded?nextChip():""; nc.innerHTML=h; nc.hidden=!h }
+  tickCountdowns();
   Object.entries(keep).forEach(([id,k])=>{ const el=document.getElementById(id); if(!el) return; if("c" in k){ if(!el.disabled) el.checked=k.c } else el.value=k.v });
   document.querySelectorAll("#main details[id]").forEach(d=>{ if(openD.has(d.id)) d.open=true; else if(shut.has(d.id)) d.open=false });
   if(focusId) document.getElementById(focusId)?.focus({preventScroll:true});
@@ -610,7 +628,7 @@ function teamHtml(team, names){
   return team.map(id=>`<div class="pl ${id===S.me?"me":""}">${avatar(id,names[id])}<span>${esc(names[id])}</span></div>`).join("");
 }
 function viewLive(){
-  if(!S.loaded) return `<section class="panel"><div class="empty">Loading…</div></section>`;
+  if(!S.loaded) return `<section class="panel"><div class="empty loading">Loading…</div></section>`;
   const ups = upcoming(), s = pickLiveSession();
   if(!s) return `<section class="panel"><h2>Live courts</h2><div class="empty">No sessions coming up.</div></section>`;
   const r = rotInfo(s), v = venueOf(s);
@@ -637,7 +655,7 @@ function courtLive(s,c){
     <details id="rot-${s.id}-${c}"><summary>Full rotation (${games.length} games)</summary><div class="games">
       ${games.map((x,i)=>gameBox(s,c,i,x,names,r,cur)).join("")}
     </div></details>`;
-  return `<div class="court-live" style="--cc:${CLR[c]}">
+  return `<div class="court-live ${r.live?"live":""}" style="--cc:${CLR[c]}">
     <div class="hd"><span class="num">Court ${c}</span><span>${courtChips(s,c)} ${esc(courtName(s,c))}</span><span class="muted" style="font-size:.85rem">${roster.length}/${cap(s,c)} players</span></div>
     ${roster.length?`<div class="stack">${roster.map(b=>avatar(b.playerId,b.name)).join("")}</div>`:""}
     ${body}
@@ -849,7 +867,7 @@ async function standardCourts(sid){
 const orgClub = () => S.isAdmin ? orgParts().club : notOrg;
 function orgOverview(){
   if(!S.isAdmin) return notOrg;
-  if(!S.loaded) return `<section class="panel"><div class="empty">Loading…</div></section>`;
+  if(!S.loaded) return `<section class="panel"><div class="empty loading">Loading…</div></section>`;
   const ups = upcoming(), s = ups.find(x=>rotInfo(x).live) || ups[0], warn = setupBanner();
   const toCheck = S.bookings.filter(b=>b.status==="paid" && ups.some(x=>x.id===b.sessionId));
   const reqs = S.players.filter(p=>p.levelRequest);
@@ -981,6 +999,7 @@ async function bookSelected(){
   }
   S.guests=[]; S.gq={}; S.picks.clear();
   S.result={ok, title: ok?"You're booked in. Pay to confirm your places.":"Booking done, with some notes:", lines};
+  if(ok){ burst(); sfx("match") }
   render(); window.scrollTo({top:0,behavior:"smooth"});
 }
 async function setBooking(id,patch,text,msg="Updated"){
@@ -1177,7 +1196,7 @@ document.addEventListener("submit", async e=>{
     if(!level){ toast("Answer all five level questions"); return }
     if(await savePlayer({id,email,name,phone,level,quiz:packQuiz(S.reg.ans),verified:false,levelRequest:null,createdAt:nowIso()})){
       if(S.reg.photo) await savePhoto(id,S.reg.photo);
-      S.me=id; if(Store.mode!=="db") ls.set("dsf:me",id); S.reg={ans:{},photo:null}; toast(`Welcome! You're ${level} ${lvByCode(level).name}.`); render() }
+      S.me=id; if(Store.mode!=="db") ls.set("dsf:me",id); S.reg={ans:{},photo:null}; burst(); toast(`Welcome! You're ${level} ${lvByCode(level).name}.`); render() }
   }
   if(e.target.id==="sessForm"){
     const date=$("#s-date").value, start=$("#s-start").value, end=$("#s-end").value, c=Number($("#s-cap").value)||PER_COURT, weeks=Number($("#s-weeks").value)||1;
@@ -1197,13 +1216,16 @@ document.addEventListener("submit", async e=>{
 });
 
 /* ---------- clock: countdowns tick, courts rotate on their own ---------- */
-setInterval(()=>{
+function tickCountdowns(){
   document.querySelectorAll(".cd[data-at]").forEach(el=>{
     const ms=new Date(el.dataset.at)-Date.now();
     if(ms<=0){ el.textContent="now"; return }
-    const h=Math.floor(ms/3600e3), m=Math.floor(ms%3600e3/60e3), s=Math.floor(ms%60e3/1e3);
-    el.textContent = h>0 ? `${h}h ${m}m` : `${m}:${String(s).padStart(2,"0")}`;
+    const d=Math.floor(ms/864e5), h=Math.floor(ms%864e5/3600e3), m=Math.floor(ms%3600e3/60e3), s=Math.floor(ms%60e3/1e3);
+    el.textContent = d>0 ? `${d}d ${h}h ${m}m` : h>0 ? `${h}h ${m}m` : `${m}:${String(s).padStart(2,"0")}`;
   });
+}
+setInterval(()=>{
+  tickCountdowns();
   if(S.loaded && liveKey()!==S.liveKey) render();
 },1000);
 

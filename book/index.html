@@ -340,6 +340,30 @@ nav.tabs button[data-tab="court"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='htt
 .lb li::before{counter-increment:lb;content:counter(lb);font-family:var(--mono);color:var(--muted);width:18px;text-align:right}
 .lb li b{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--accent)}
 .chip.off{background:var(--ok-bg);color:var(--ok)}
+/* ---------- cool bits ---------- */
+.hshuttle{position:absolute;z-index:0;top:18px;left:-40px;font-size:1.3rem;opacity:.85;pointer-events:none;animation:hFly 14s ease-in-out 1.5s infinite}
+@keyframes hFly{0%{left:-40px;top:60px;transform:rotate(-20deg)}18%{top:6px;transform:rotate(15deg)}36%{left:calc(100% + 40px);top:70px;transform:rotate(60deg)}100%{left:calc(100% + 40px);top:70px}}
+.nextup{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;padding:7px 13px;border-radius:99px;background:rgba(255,255,255,.14);color:#fff;font-size:.82rem}
+.nextup b{font-weight:700}
+.nextup a{color:#FFE3A3}
+.nextup .cd{font-family:var(--mono);background:rgba(0,0,0,.18);padding:1px 7px;border-radius:7px}
+.nc-live{width:9px;height:9px;border-radius:50%;background:#7CF29A;box-shadow:0 0 0 0 rgba(124,242,154,.7);animation:ncPulse 1.6s infinite}
+@keyframes ncPulse{70%{box-shadow:0 0 0 9px rgba(124,242,154,0)}100%{box-shadow:0 0 0 0 rgba(124,242,154,0)}}
+#main.swap>*{animation:tabIn .38s cubic-bezier(.2,.8,.2,1) both}
+#main.swap>*:nth-child(2){animation-delay:.05s} #main.swap>*:nth-child(3){animation-delay:.1s} #main.swap>*:nth-child(n+4){animation-delay:.14s}
+@keyframes tabIn{from{opacity:0;transform:translateY(12px)}}
+.btn:active{transform:scale(.97)}
+.btn.primary{position:relative;overflow:hidden}
+.btn.primary::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.35) 50%,transparent 70%);transform:translateX(-120%);transition:transform .6s}
+.btn.primary:hover::after{transform:translateX(120%)}
+.empty.loading{color:transparent;position:relative;overflow:hidden;min-height:90px;border-style:solid;background:linear-gradient(100deg,var(--surface) 30%,var(--tint) 50%,var(--surface) 70%) 0 0/200% 100%;animation:shimmer 1.2s linear infinite}
+@keyframes shimmer{to{background-position:-200% 0}}
+.court-live.live{animation:courtGlow 2.6s ease-in-out infinite}
+@keyframes courtGlow{50%{box-shadow:var(--shadow),0 0 0 4px color-mix(in srgb,var(--cc) 30%,transparent)}}
+.burst{position:fixed;inset:0;pointer-events:none;z-index:50;overflow:hidden}
+.burst span{position:absolute;top:-40px;font-size:1.6rem;animation:burstFall 3s ease-in both}
+@keyframes burstFall{to{transform:translateY(110vh) rotate(720deg)}}
+@media (prefers-reduced-motion:reduce){.hshuttle,#main.swap>*,.court-live.live,.nc-live,.empty.loading{animation:none}.hshuttle{display:none}}
 /* phones: tabs become a bottom bar within thumb reach */
 @media (max-width:720px){
   body{padding-bottom:calc(104px + env(safe-area-inset-bottom,0px))}
@@ -360,7 +384,7 @@ nav.tabs button[data-tab="court"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='htt
 </style>
 
 <div class="wrap">
-<header class="top">
+<header class="top"><span class="hshuttle" aria-hidden="true">🏸</span>
   <div class="bar">
     <img class="logo" alt="Dropshot Folks logo" src="../images/logo-mark.png">
     <div><h1>DROPSHOT <i>FOLKS</i></h1><span class="tag">Play. Meet. Repeat.</span></div>
@@ -368,6 +392,7 @@ nav.tabs button[data-tab="court"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='htt
   </div>
   <div class="toprow">
     <a class="back" href="../">← dropshotfolks.co.uk</a>
+    <div class="nextup" id="nextup" hidden></div>
     <div class="viewbar" id="viewbar" hidden>
       <div class="seg" role="group" aria-label="Switch view">
         <button data-view="player" aria-pressed="true">Player view</button>

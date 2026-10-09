@@ -175,7 +175,9 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
       allow update: if refOk(resource.data.tid)
-        && onlyChanges(['games', 'status', 'winner', 'court', 'updatedAt'])
+        && onlyChanges(['games', 'status', 'winner', 'court', 'updatedAt', 'svc', 'seq'])
+        && request.resource.data.get('svc', []) is list && request.resource.data.get('svc', []).size() <= 5
+        && request.resource.data.get('seq', []) is list && request.resource.data.get('seq', []).size() <= 5
         && request.resource.data.status in ['scheduled', 'live', 'done']
         && request.resource.data.get('winner', null) in [null, 'a', 'b']
         && request.resource.data.get('games', []) is list && request.resource.data.get('games', []).size() <= 5

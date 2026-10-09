@@ -17,7 +17,7 @@ const S = {
   tab: location.hash==="#screen" ? "screen" : ls.get("dsf:ttab","reg"),
   tourneys:[], teams:[], matches:[], contacts:{}, secret:null, unlock:null,
   uid:null, isAdmin:false, loaded:false, tid: ls.get("dsf:tid",null),
-  cat: null, myTeam: ls.get("dsf:myteam",null), refCourt: ls.get("dsf:refcourt",1), edit:null, scrIdx:0
+  cat: null, toss: {}, myTeam: ls.get("dsf:myteam",null), refCourt: ls.get("dsf:refcourt",1), edit:null, scrIdx:0
 };
 let db=null, auth=null;
 const T = () => S.tourneys.find(t=>t.id===S.tid) || [...S.tourneys].sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")))[0] || null;
@@ -48,6 +48,20 @@ function matchWinner(m, r){
   const w=gamesWon(m,r), need=Math.floor(r.bestOf/2)+1; return w.a>=need?"a":w.b>=need?"b":null }
 const pts = m => (m.games||[]).reduce((s,g)=>({a:s.a+g[0], b:s.b+g[1]}),{a:0,b:0});
 const gamesTxt = m => (m.games||[]).filter(g=>g[0]||g[1]).map(g=>`${g[0]}–${g[1]}`).join(", ");
+
+/* ---------- service: who serves, from which court, who receives ---------- */
+// svc[game] = {s: serving team "a"/"b", sp: first server 1/2, rp: first receiver 1/2, won?: toss winner}; seq[game] = rally winners e.g. "aabab"
+const otherSide = x => x==="a"?"b":"a";
+function svcState(m, gi){
+  const sv=(m.svc||[])[gi]; if(!sv || sv.skip || !sv.s) return null;
+  const pos={}; pos[sv.s]={R:sv.sp, L:3-sv.sp}; pos[otherSide(sv.s)]={R:sv.rp, L:3-sv.rp};
+  let serving=sv.s; const sc={a:0,b:0};
+  for(const ch of String((m.seq||[])[gi]||"")){ if(ch!=="a"&&ch!=="b") continue; sc[ch]++;
+    if(ch===serving){ const p=pos[ch]; pos[ch]={R:p.L, L:p.R} } else serving=ch }   // servers swap courts only when their side wins the rally
+  const court = sc[serving]%2===0 ? "R" : "L";
+  return {serving, court, server:pos[serving][court], receiver:pos[otherSide(serving)][court]};
+}
+const pName = (teamId, i) => { const x=teamById(teamId); return x ? (i===1?x.p1:x.p2) : `Player ${i}` };
 
 /* ---------- knockout: teams come from winners of earlier matches ---------- */
 function groupDone(t, cat, G){ const g=matchesOf(t,cat).filter(m=>m.stage==="group" && m.group===G); return g.length>0 && g.every(m=>m.status==="done") }
@@ -223,8 +237,10 @@ function bracket(t, cat){
 function courtCard(t, c){
   const m=liveOn(t,c), r=rules(t);
   if(!m) return `<div class="ct idle"><div class="cn"><span>Court ${c}</span><span>free</span></div><div class="muted">Waiting for the next match</div></div>`;
-  const g=(m.games||[]).slice(-1)[0]||[0,0], w=gamesWon(m,r), need=Math.floor(r.bestOf/2)+1;
-  const side=(s,i)=>{ const id=sideTeam(m,s), tm=teamById(id); return `<div class="row2"><div class="nm">${esc(tName(id))}<small>${esc(tm?`${tm.p1} & ${tm.p2}`:"")}</small>${r.bestOf>1?`<span class="gw">${Array.from({length:need},(_,k)=>`<i class="${k<w[s]?"on":""}"></i>`).join("")}</span>`:""}</div><div class="pt">${g[i]}</div></div>` };
+  const g=(m.games||[]).slice(-1)[0]||[0,0], w=gamesWon(m,r), need=Math.floor(r.bestOf/2)+1, sv=svcState(m,Math.max(0,(m.games||[]).length-1));
+  const side=(s,i)=>{ const id=sideTeam(m,s), tm=teamById(id), srv=sv&&sv.serving===s;
+    const pl=k=>esc(tm?(k===1?tm.p1:tm.p2):""), names=tm?(srv?(sv.server===1?`🏸 ${pl(1)} & ${pl(2)}`:`${pl(1)} & 🏸 ${pl(2)}`):`${pl(1)} & ${pl(2)}`):"";
+    return `<div class="row2"><div class="nm">${srv?"🏸 ":""}${esc(tName(id))}<small>${names}</small>${r.bestOf>1?`<span class="gw">${Array.from({length:need},(_,k)=>`<i class="${k<w[s]?"on":""}"></i>`).join("")}</span>`:""}</div><div class="pt">${g[i]}</div></div>` };
   return `<div class="ct"><div class="cn"><span>Court ${c} · ${esc(catName(t,m.cat))}</span><span>${esc(m.stage==="ko"?(m.roundName||"Knockout"):`Group ${m.group}`)}</span></div>${side("a",0)}${side("b",1)}</div>`;
 }
 
@@ -311,13 +327,31 @@ function viewRef(){
       ${S.unlock?`<button class="btn small ghost" data-refexit="1">Close referee mode</button>`:""}</section>`;
   }
   const games=m.games?.length?m.games:[[0,0]], g=games[games.length-1], w=gamesWon(m,r), win=matchWinner({games},r), a=sideTeam(m,"a"), b=sideTeam(m,"b"), A=teamById(a), B=teamById(b);
+  const gi=games.length-1, needToss=!win && !(m.svc||[])[gi] && g[0]===0 && g[1]===0;
+  if(needToss){
+    const key=m.id+"#"+gi, prevWin = gi>0 ? (games[gi-1][0]>games[gi-1][1]?"a":"b") : null;
+    const d = S.toss[key] ||= {won:null, s:prevWin, sp:null, rp:null};
+    const tid = x => x==="a"?a:b, pick=(field,val,label,on)=>`<button type="button" data-toss="${field}" data-v="${val}" aria-pressed="${on}">${esc(label)}</button>`;
+    return `<section class="panel refbox"><div class="row" style="justify-content:space-between"><h2>Court ${c} · ${gi?`Game ${gi+1}`:"Toss"}</h2><span class="livebadge">Live</span></div>${courtPick}
+      <p class="muted">${esc(tName(a))} vs ${esc(tName(b))} · ${esc(catName(t,m.cat))}${gi?` · ${esc(tName(tid(prevWin)))} won the last game, so they serve first`:""}</p>
+      ${gi?"":`<div><span class="lbl">🪙 Who won the toss?</span><div class="cats">${pick("won","a",tName(a),d.won==="a")}${pick("won","b",tName(b),d.won==="b")}</div></div>`}
+      <div><span class="lbl">🏸 Serving first</span><div class="cats">${pick("s","a",tName(a),d.s==="a")}${pick("s","b",tName(b),d.s==="b")}</div></div>
+      ${d.s?`<div><span class="lbl">Who serves? (${esc(tName(tid(d.s)))})</span><div class="cats">${pick("sp",1,pName(tid(d.s),1),d.sp===1)}${pick("sp",2,pName(tid(d.s),2),d.sp===2)}</div></div>
+        <div><span class="lbl">Who receives? (${esc(tName(tid(otherSide(d.s))))})</span><div class="cats">${pick("rp",1,pName(tid(otherSide(d.s)),1),d.rp===1)}${pick("rp",2,pName(tid(otherSide(d.s)),2),d.rp===2)}</div></div>`:""}
+      <div class="row"><button class="btn primary" data-svcgo="${esc(m.id)}" ${d.s&&d.sp&&d.rp?"":"disabled"}>Start game ${gi+1} ▶</button><button class="btn small ghost" data-svcskip="${esc(m.id)}">Skip (don't track serve)</button></div>
+      <div class="refctl"><button class="btn small ghost" data-stop="${esc(m.id)}">Stop match (back to queue)</button></div></section>`;
+  }
+  const sv=svcState(m,gi), tid=x=>x==="a"?a:b;
+  const svLine = sv && !win ? `<div class="svc">🏸 <b>${esc(pName(tid(sv.serving),sv.server))}</b> serves from the <b>${sv.court==="R"?"right":"left"}</b> → <b>${esc(pName(tid(otherSide(sv.serving)),sv.receiver))}</b> receives</div>` : "";
+  const tag = s => sv && !win && sv.serving===s ? `<span class="svtag">🏸 serving</span>` : "";
   return `<section class="panel refbox"><div class="row" style="justify-content:space-between"><h2>Court ${c} · ${esc(catName(t,m.cat))}</h2><span class="livebadge">Live</span></div>${courtPick}
     <p class="muted">${esc(m.stage==="ko"?(m.roundName||"Knockout"):`Group ${m.group}`)} · Game ${games.length}${r.bestOf===2?` of 2 · games ${w.a}–${w.b}${w.a===1&&w.b===1?" · total points decide":""}`:r.bestOf>1?` of up to ${r.bestOf} · games ${w.a}–${w.b}`:""} · ${esc(ruleTxt(r))}</p>
+    ${svLine}
     <div class="refpad">
-      <button class="refside" data-pt="a" ${win?"disabled":""}><span class="nm">${esc(tName(a))}</span><small>${esc(A?`${A.p1} & ${A.p2}`:"")}</small><span class="pt">${g[0]}</span><small>Tap for a point</small></button>
-      <button class="refside b" data-pt="b" ${win?"disabled":""}><span class="nm">${esc(tName(b))}</span><small>${esc(B?`${B.p1} & ${B.p2}`:"")}</small><span class="pt">${g[1]}</span><small>Tap for a point</small></button>
+      <button class="refside" data-pt="a" ${win?"disabled":""}>${tag("a")}<span class="nm">${esc(tName(a))}</span><small>${esc(A?`${A.p1} & ${A.p2}`:"")}</small><span class="pt">${g[0]}</span><small>Tap for a point</small></button>
+      <button class="refside b" data-pt="b" ${win?"disabled":""}>${tag("b")}<span class="nm">${esc(tName(b))}</span><small>${esc(B?`${B.p1} & ${B.p2}`:"")}</small><span class="pt">${g[1]}</span><small>Tap for a point</small></button>
     </div>
-    <div class="refctl"><button class="btn small" data-undo="a">− ${esc(tName(a))}</button><button class="btn small" data-undo="b">− ${esc(tName(b))}</button></div>
+    <div class="refctl">${(m.seq||[])[gi]||gi>0?`<button class="btn small" data-undo="last">↶ Undo last point</button>`:""}${!(m.seq||[]).some(x=>x)?`<button class="btn small" data-undo="a">− ${esc(tName(a))}</button><button class="btn small" data-undo="b">− ${esc(tName(b))}</button>`:""}</div>
     ${games.length>1?`<p class="muted" style="text-align:center">Earlier games: ${esc(games.slice(0,-1).map(x=>`${x[0]}–${x[1]}`).join(", "))}</p>`:""}
     ${win?`<div class="banner ok"><div class="grow"><b>${esc(tName(win==="a"?a:b))} win ${esc(gamesTxt({games}))}${r.bestOf===2&&w.a===w.b?` on total points (${Math.max(pts({games}).a,pts({games}).b)}–${Math.min(pts({games}).a,pts({games}).b)})`:""}.</b> Check the score, then confirm.</div><button class="btn primary" data-finish="${esc(m.id)}">Confirm result ✓</button></div>`:""}
     <div class="refctl"><button class="btn small ghost" data-stop="${esc(m.id)}">Stop match (back to queue)</button></div>
@@ -439,13 +473,19 @@ const fromDb = g => (g||[]).map(x=>Array.isArray(x)?x:[x?.a||0, x?.b||0]);
 const upd = (id, data) => db.collection("tmatches").doc(id).update({...data, ...(data.games?{games:toDb(data.games)}:{}), updatedAt:nowIso()}).catch(e=>toast(e?.code==="permission-denied"?"Not allowed. Is referee mode still on?":"Couldn't save. Check your connection."));
 async function point(m, side, delta){
   const t=T(), r=rules(t); let games=(m.games?.length?m.games:[[0,0]]).map(g=>[...g]);
-  let g=games[games.length-1];
-  if(delta<0){ if(g[0]===0&&g[1]===0&&games.length>1){ games.pop(); g=games[games.length-1] } const i=side==="a"?0:1; if(g[i]>0) g[i]--; return upd(m.id,{games}) }
+  const seq=(m.seq||[]).map(String); while(seq.length<games.length) seq.push("");
+  let gi=games.length-1, g=games[gi];
+  if(delta<0){
+    if(g[0]===0&&g[1]===0&&gi>0){ games.pop(); seq.length=games.length; gi--; g=games[gi] }
+    if(side==="last"){ const last=seq[gi].slice(-1); if(!last) return; seq[gi]=seq[gi].slice(0,-1); const i=last==="a"?0:1; if(g[i]>0) g[i]--; }
+    else { const i=side==="a"?0:1; if(g[i]>0) g[i]--; const k=seq[gi].lastIndexOf(side); if(k>=0) seq[gi]=seq[gi].slice(0,k)+seq[gi].slice(k+1) }
+    return upd(m.id,{games, seq});
+  }
   if(matchWinner({games},r)) return;
-  g[side==="a"?0:1]++;
-  if(gameDone(g,r) && !matchWinner({games},r)) { games.push([0,0]); toast(`Game to ${tName(sideTeam(m,side))}! Change ends.`) }
+  g[side==="a"?0:1]++; seq[gi]+=side;
+  if(gameDone(g,r) && !matchWinner({games},r)) { games.push([0,0]); seq.push(""); toast(`Game to ${tName(sideTeam(m,side))}! Change ends.`) }
   try{ navigator.vibrate?.(30) }catch{}
-  return upd(m.id,{games});
+  return upd(m.id,{games, seq});
 }
 
 document.addEventListener("click", async e=>{
@@ -467,6 +507,14 @@ document.addEventListener("click", async e=>{
   if(ds.start){ const m=S.matches.find(x=>x.id===ds.start); if(!m) return; const c=Number(ds.court);
     if(liveOn(t,c)){ toast(`Court ${c} already has a match`); return }
     await upd(m.id,{status:"live", court:c, games:m.games?.length?m.games:[[0,0]], winner:null}); return }
+  if(ds.toss){ const m=liveOn(t,Math.min(Math.max(1,Number(t.courts)||4),S.refCourt)); if(!m) return; const gi=Math.max(0,(m.games||[]).length-1), d=S.toss[m.id+"#"+gi]||(S.toss[m.id+"#"+gi]={});
+    const v=ds.toss==="sp"||ds.toss==="rp"?Number(ds.v):ds.v; d[ds.toss]=v; if(ds.toss==="s"){ d.sp=null; d.rp=null } render(); return }
+  if(ds.svcgo||ds.svcskip){ const m=S.matches.find(x=>x.id===(ds.svcgo||ds.svcskip)); if(!m) return; const gi=Math.max(0,(m.games||[]).length-1), d=S.toss[m.id+"#"+gi]||{};
+    const svc=[...(m.svc||[])]; while(svc.length<gi) svc.push({skip:true});
+    svc[gi] = ds.svcskip ? {skip:true} : {s:d.s, sp:d.sp, rp:d.rp, ...(gi===0&&d.won?{won:d.won}:{})};
+    const seq=(m.seq||[]).map(String); while(seq.length<=gi) seq.push("");
+    await upd(m.id,{svc, seq, games:m.games?.length?m.games:[[0,0]]});
+    if(ds.svcgo){ const sv=svcState({svc, seq},gi), tid=x=>x==="a"?sideTeam(m,"a"):sideTeam(m,"b"); toast(`${pName(tid(sv.serving),sv.server)} to serve. Play!`) } return }
   if(ds.pt){ const m=liveOn(t,Math.min(Math.max(1,Number(t.courts)||4),S.refCourt)); if(m) point(m, ds.pt, 1); return }
   if(ds.undo){ const m=liveOn(t,Math.min(Math.max(1,Number(t.courts)||4),S.refCourt)); if(m) point(m, ds.undo, -1); return }
   if(ds.finish){ const m=S.matches.find(x=>x.id===ds.finish), w=matchWinner(m,rules(t)); if(!w) return;

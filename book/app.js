@@ -1,11 +1,14 @@
 /* ---------- Club rules ---------- */
 const LEVELS = [
-  {code:"E", key:"E", name:"Beginner", court:null, desc:"New to badminton or still learning the basics: serving, hitting the shuttle over the net and keeping score."},
-  {code:"D-", key:"Dm", name:"Lower Intermediate", court:1, desc:"You can keep a steady rally going and are learning to place the shuttle. Serves are getting consistent."},
-  {code:"D+", key:"Dp", name:"Intermediate", court:2, desc:"Reliable serve, rallies of 6+ shots, and you use drops and lifts on purpose."},
-  {code:"C-", key:"Cm", name:"Mid Intermediate", court:3, desc:"You control pace and placement, rotate well in doubles and play competitive games regularly."},
-  {code:"C+", key:"Cp", name:"High Intermediate (upper)", court:4, desc:"Strong all-round game. You build points, cover the court and play league or tournament level."}
+  {code:"E", key:"E", name:"Beginner", court:null, desc:"Still learning to hold the racket, can't yet clear from one end of the court to the other, or doesn't know the doubles rules yet. Not for Thursday sessions: start with coaching or a beginners' session."},
+  {code:"D-", key:"Dm", name:"Lower Intermediate", court:1, desc:"Social player. Clears from one end to the other, smashes from the front, tries drops, knows the basic serves and how doubles works, but medium-paced games are still a stretch."},
+  {code:"D+", key:"Dp", name:"Intermediate", court:2, desc:"Rallies of 6–10 shots, knows doubles rotation, plays clears, smashes and net shots, and enjoys fast-paced badminton."},
+  {code:"C-", key:"Cm", name:"Mid Intermediate", court:3, desc:"Fast-paced player. Hits smashes, keeps rallies of 10–15 shots, kills at the net, clears and smashes with only a few mistakes."},
+  {code:"C+", key:"Cp", name:"High Intermediate (upper)", court:4, desc:"Plays tournaments regularly, knows every shot and makes hardly any mistakes."}
 ];
+// Club rule: no beginners (E) on Thursday sessions, whatever the court setup says.
+const NO_BEGINNER_DAYS = [4];   // 0 = Sunday … 4 = Thursday
+const beginnersBarred = s => !!s?.date && NO_BEGINNER_DAYS.includes(new Date(s.date+"T12:00:00").getDay());
 const lvByCode = c => LEVELS.find(l=>l.code===c);
 const lvByCourt = n => LEVELS.find(l=>l.court===n);
 const CLR = {1:"var(--d1)",2:"var(--d2)",3:"var(--c1)",4:"var(--c2)"};
@@ -14,32 +17,48 @@ const PER_COURT = 7, GAME_MINS = 12;
 // Level quiz: "about you" answers score 0 (beginner) to 4 (upper high intermediate);
 // quick-quiz questions have one right answer and show why.
 const QUIZ = [
-  {e:"⏳", img:"hero-hall", call:"Pre-match chat", q:"First things first: how long have you been playing badminton?", ic:["🐣","🌱","🌿","🌳","🦸"], a:["I'm just starting out","Less than a year","1–3 years","3–5 years","5+ years, it's my life"]},
-  {e:"🔁", img:"court-lunge", call:"Warm-up", q:"How long can you keep a rally going with someone at your level?", ic:["🐣","🙂","💪","🔥","🦸"], a:["I'm just learning to hit the shuttle","A few shots, I'm still finding consistency","6–10 shots most of the time","Long rallies, and I can change the pace","As long as I need, while setting up a winner"]},
+  {e:"⏳", img:"hero-hall", call:"Pre-match chat", k:"years", q:"First things first: how long have you been playing badminton?", ic:["🐣","🌱","🌿","🌳","🦸"], a:["I'm just starting out","Less than a year","1–3 years","3–5 years","5+ years, it's my life"]},
+  {e:"🤝", img:"ready-stance", call:"Warm-up", k:"grip", q:"Pick up your racket. How do you hold it?", ic:["🍳","🤔","🤝","🔄","🪄"], a:["Like a frying pan, or not sure","I'm still learning the proper grip","Handshake grip, comfortably","I switch between forehand and backhand grips","I change grips without even thinking"]},
+  {e:"📆", img:"court-wide-2", call:"Warm-up", k:"week", q:"How many times a week do you get on court?", ic:["😴","1️⃣","2️⃣","3️⃣","🏠"], a:["Hardly ever, maybe once a month","About once a week","Twice a week","Three times a week","Four or more, I basically live here"]},
   {e:"🏸", img:"service-ready", call:"Rally 1 · the serve", tag:"serve", q:"Love all, play! You're serving to start a doubles rally. Which serve do most players use?", a:["High serve to the back line","Smash it down","Low serve, just over the net","Drive it at their body"], correct:2, why:"The low serve stays tight to the net so the receiver can't attack it."},
-  {e:"📆", img:"court-wide-2", call:"Warm-up", q:"How many times a week do you get on court?", ic:["😴","1️⃣","2️⃣","3️⃣","🏠"], a:["Hardly ever, maybe once a month","About once a week","Twice a week","Three times a week","Four or more, I basically live here"]},
-  {e:"🎯", img:"ready-stance", call:"Warm-up", q:"How's your serve?", ic:["🐣","🙂","👍","🎯","🏆"], a:["I'm still learning to serve","It goes in more often than not","Reliable, with basic placement","I vary length and placement","Consistent, and I use it to win points"]},
-  {e:"🦘", img:"jump-reach", call:"Rally 2 · read the receiver", tag:"serve", q:"The receiver is creeping right up to the front line, ready to pounce on your low serve. What do you serve?", a:["A flick serve over their head","The same low serve, just faster","Serve it into the net","Wait for them to step back"], correct:0, why:"A flick serve flies just over their reach to the back of the court."},
-  {e:"💥", img:"backhand-defence", call:"Warm-up", q:"Which shots do you play on purpose?", ic:["🤷","➡️","🪶","💥","🎩"], a:["I don't know the different shots yet","Mainly clears and straight returns","Lifts and some drop shots","Drops, drives, lifts and smashes","The full range, including deception"]},
-  {e:"👀", img:"kneel-celebrate", call:"Rally 3 · spot the shot", tag:"shot", q:"Coach jumps at the back and hits it fast and steep, straight down at you. What shot was that?", a:["Clear","Lift","Smash","Net shot"], correct:2, why:"That's the smash: the big attacking shot to win the point."},
-  {e:"🧑‍🏫", img:"net-high-five", call:"Change of ends", q:"Ever had a coach in your corner?", ic:["🙅","👋","📚","📈","🎓"], a:["Never, self-taught all the way","A taster session or two","Some lessons or group classes","Regular coaching for a while","Years of coaching or squad training"]},
-  {e:"🪶", img:"court-three", call:"Rally 4 · spot the shot", tag:"shot", q:"Coach is at the back again, but this time it's soft and drops just over the net. What shot was that?", a:["Drive","Drop shot","Clear","Smash"], correct:1, why:"The drop shot pulls you forward and opens up the back of your court."},
-  {e:"👯", img:"group-high-five", call:"Warm-up", q:"How do you play doubles?", ic:["🙋","🧭","↕️","🔄","♟️"], a:["I haven't played doubles","I'm still working out where to stand","I know front-and-back and side-by-side","We rotate and cover the court well","We play tactical formations"]},
+  {e:"🌈", img:"court-wide-1", call:"Warm-up", k:"clear", q:"Can you clear the shuttle from your back line all the way to the other end?", ic:["🙈","🤏","👍","🚀","🎯"], a:["Not yet, it lands mid-court","Sometimes, if I really go for it","Yes, most of the time","Yes, high and deep every time","Yes, and I attack with flat clears too"]},
+  {e:"📏", img:"service-ready", call:"Rally 2 · doubles rules", tag:"rules", q:"Doubles serve: where must it land to be in?", a:["Anywhere on the other side","In the box straight in front of you","In the box diagonally opposite, not past the doubles back service line","Only between the back tramlines"], correct:2, why:"Diagonally opposite, and in doubles the serve is short at the back: the inner back line."},
+  {e:"🔁", img:"court-lunge", call:"Warm-up", k:"rally", q:"How long can your rallies go with players at your level?", ic:["🐣","🙂","💪","🔥","🦸"], a:["I'm just learning to hit the shuttle","A few shots, under 6","6–10 shots","10–15 shots","15+, and I build the point to win it"]},
+  {e:"🦘", img:"jump-reach", call:"Rally 3 · read the receiver", tag:"serve", q:"The receiver is creeping right up to the front line, ready to pounce on your low serve. What do you serve?", a:["A flick serve over their head","The same low serve, just faster","Serve it into the net","Wait for them to step back"], correct:0, why:"A flick serve flies just over their reach to the back of the court."},
+  {e:"⚡", img:"backhand-defence", call:"Warm-up", k:"pace", q:"What pace of game feels comfortable?", ic:["🐢","🚶","🏃","🏎️","🚀"], a:["Slow and gentle","Social pace; medium-paced games are a stretch","Medium to fast","Fast-paced rallies, all game","Tournament pace"]},
+  {e:"👀", img:"kneel-celebrate", call:"Rally 4 · spot the shot", tag:"shot", q:"Coach jumps at the back and hits it fast and steep, straight down at you. What shot was that?", a:["Clear","Lift","Smash","Net shot"], correct:2, why:"That's the smash: the big attacking shot to win the point."},
+  {e:"💥", img:"backhand-defence", call:"Warm-up", k:"shots", q:"Which shots do you play on purpose?", ic:["🤷","➡️","🪶","💥","🎩"], a:["I don't know the different shots yet","Clears and front-court smashes","Clears, smashes, drops and net shots","All of those, plus drives and lifts under pressure","Every shot, including deception"]},
+  {e:"🧑‍🏫", img:"net-high-five", call:"Change of ends", k:"coach", q:"Ever had a coach in your corner?", ic:["🙅","👋","📚","📈","🎓"], a:["Never, self-taught all the way","A taster session or two","Some lessons or group classes","Regular coaching for a while","Years of coaching or squad training"]},
+  {e:"🪶", img:"court-three", call:"Rally 5 · spot the shot", tag:"shot", q:"Coach is at the back again, but this time it's soft and drops just over the net. What shot was that?", a:["Drive","Drop shot","Clear","Smash"], correct:1, why:"The drop shot pulls you forward and opens up the back of your court."},
+  {e:"🥅", img:"net-high-five", call:"Warm-up", k:"net", q:"The shuttle pops up just above the net on your side. You…", ic:["🙈","↩️","👇","🔨","🎩"], a:["Duck!","Push it back over","Tap it down sometimes","Kill it, most of the time","Kill it or play a tight net shot, my choice"]},
+  {e:"🔢", img:"group-high-five", call:"Rally 6 · scoring", tag:"rules", q:"How does a game of badminton finish?", a:["First to 15","First to 21, win by 2, and 30 wins if it's still close","First to 11, three times","First to 25"], correct:1, why:"21 points, you need a 2-point lead, and at 29–all the next point (30) wins."},
+  {e:"🎯", img:"court-three", call:"Warm-up", k:"errors", q:"Be honest: how often do you make unforced errors?", ic:["😅","🙃","🙂","😎","🧊"], a:["Most rallies","Quite often","Sometimes","Only a few","Hardly ever"]},
+  {e:"👯", img:"group-high-five", call:"Warm-up", k:"doubles", q:"How do you play doubles?", ic:["🙋","🧭","🔄","🛡️","♟️"], a:["I haven't played doubles","I'm still working out where to stand","Front-and-back and side-by-side, and we rotate","We rotate smoothly and cover every gap","We play tactical formations"]},
   {e:"🧭", img:"court-wide-1", call:"Match point · positions", tag:"court", q:"Your side is attacking. Where do you and your partner stand?", a:["Side by side","Both at the net","Both at the back","One at the front, one at the back"], correct:3, why:"Front-and-back when attacking, side-by-side when defending."},
-  {e:"🏆", img:"kneel-celebrate", call:"Cool-down", q:"Tournaments: what's your story?", ic:["🙈","🎪","🤝","🏅","🥇"], a:["Never played one","Tried a fun one once","A few social tournaments","Regular club or league matches","Regular competitive tournaments, medals included"]}
+  {e:"🏆", img:"kneel-celebrate", call:"Cool-down", k:"tour", q:"Tournaments: what's your story?", ic:["🙈","🎪","🤝","🏅","🥇"], a:["Never played one","Tried a fun one once","A few social tournaments","I play tournaments regularly","Regular competitive tournaments, medals included"]}
 ];
 const packQuiz = ans => ({v:2, a:QUIZ.map((_,i)=>ans?.[i] ?? "").join(",")});
 const knowCount = ans => QUIZ.filter((x,i)=>x.correct!=null && ans?.[i]===x.correct).length;
+const qv = (ans,k) => ans[QUIZ.findIndex(x=>x.k===k)];
+const rulesRight = ans => QUIZ.some((x,i)=>x.tag==="rules" && ans[i]===x.correct);
 function levelFrom(ans){
   if(QUIZ.some((_,i)=>ans?.[i]==null)) return null;
   const self = QUIZ.map((x,i)=>x.correct==null ? ans[i] : null).filter(v=>v!=null);
-  // "about you" answers scaled to 0–20 so adding questions doesn't shift the levels
-  const selfTotal = self.reduce((a,b)=>a+b,0) * 20 / (self.length*4), know = knowCount(ans);
-  if(selfTotal<=4 || self.filter(v=>v===0).length >= Math.ceil(self.length*.6)) return "E";
-  const t = selfTotal + know;
+  const nKnow = QUIZ.filter(x=>x.correct!=null).length, know = knowCount(ans);
+  // E: can't hold the racket yet, can't clear end to end, or doesn't know the doubles rules
+  if(qv(ans,"grip")===0 || qv(ans,"clear")===0 || !rulesRight(ans)) return "E";
+  // "about you" answers scaled to 0–20 and quiz to 0–5, so the number of questions doesn't shift levels
+  const t = self.reduce((a,b)=>a+b,0)*20/(self.length*4) + know*5/nKnow;
+  if(t<=4 || self.filter(v=>v===0).length >= Math.ceil(self.length*.6)) return "E";
+  const order=["D-","D+","C-","C+"];
   let lv = t<=9?"D-":t<=15?"D+":t<=20?"C-":"C+";
-  // knowing your serves and shots backs up the level; if not, step down one
-  if(lv==="C+" && know<4) lv="C-"; else if(lv==="C-" && know<3) lv="D+"; else if(lv==="D+" && know<2) lv="D-";
+  // each level also needs what defines it
+  const can = {
+    "C+": qv(ans,"tour")>=3 && qv(ans,"errors")>=3 && know>=nKnow-1,
+    "C-": qv(ans,"rally")>=3 && qv(ans,"pace")>=3 && qv(ans,"net")>=3 && qv(ans,"errors")>=2 && know>=nKnow-2,
+    "D+": qv(ans,"rally")>=2 && qv(ans,"pace")>=2 && qv(ans,"doubles")>=2 && qv(ans,"shots")>=2 && know>=Math.ceil(nKnow/2)
+  };
+  while(lv!=="D-" && !can[lv]) lv=order[order.indexOf(lv)-1];
   return lv;
 }
 const STATUS = {
@@ -158,7 +177,8 @@ const activeIn = (sid, court) => S.bookings.filter(b=>b.sessionId===sid && b.cou
 const cap = (s,court) => { const v = Number(s.capacity?.[court] ?? s.capacity ?? PER_COURT); return Number.isFinite(v) ? v : PER_COURT };
 const courtsOf = s => [1,2,3,4].filter(c => cap(s,c) > 0);
 // each session can name its courts and choose which levels play on each (default: court n = level n)
-const courtLevels = (s,c) => { const v=s?.courts?.[c]?.levels; return Array.isArray(v) && v.length ? v : [lvByCourt(c).code] };
+const courtLevels = (s,c) => { const v=s?.courts?.[c]?.levels, l=Array.isArray(v) && v.length ? v : [lvByCourt(c).code];
+  return beginnersBarred(s) ? l.filter(x=>x!=="E") : l };
 const courtName = (s,c) => s?.courts?.[c]?.label || lvByCourt(c).name;
 const courtChips = (s,c) => courtLevels(s,c).map(lvChip).join(" ");
 // a player only ever goes on a court that includes their level: the first one with space, else the first one (waiting list)
@@ -401,7 +421,7 @@ function quizFields(prefix, ans){
   if(i>=n){
     const lv=levelFrom(ans), l=lv&&lvByCode(lv), right=k=>ans[k]===QUIZ[k].correct;
     const tagged=t=>QUIZ.every((x,k)=>x.tag!==t || right(k));
-    const badges=[["🏸","Serve savvy",tagged("serve")],["👀","Shot spotter",tagged("shot")],["🧭","Court sense",tagged("court")]];
+    const badges=[["🏸","Serve savvy",tagged("serve")],["👀","Shot spotter",tagged("shot")],["📏","Rules ref",tagged("rules")],["🧭","Court sense",tagged("court")]];
     const confetti=Array.from({length:18},(_,k)=>`<span style="left:${(k*53)%100}%;animation-delay:${(k%6)*.18}s">${["🏸","🎉","✨","🏆","🪶","🎊"][k%6]}</span>`).join("");
     return `<div class="qcard qres">${board}${fb}<div class="qconf" aria-hidden="true">${confetti}</div>
       <div class="qemoji">🏆</div><p class="lbl">Game, set and match</p>
@@ -438,10 +458,18 @@ function sfx(kind){
     if(kind==="match"){ [523,659,784,1046].forEach((f,k)=>tone(f,.1+k*.14,.35)) }
   }catch{}
 }
+// a warm female voice: the best match the phone or browser has
+const FEMALE = /female|woman|libby|sonia|maisie|hazel|susan|serena|kate|stephanie|martha|fiona|moira|tessa|karen|samantha|victoria|zira|aria|jenny|emma|amy|ava|allison|google uk english female/i;
+function umpireVoice(){
+  const vs=("speechSynthesis" in window) ? speechSynthesis.getVoices() : [];
+  const en=vs.filter(v=>/^en/i.test(v.lang)), gb=en.filter(v=>/GB/i.test(v.lang));
+  return gb.find(v=>FEMALE.test(v.name)) || en.find(v=>FEMALE.test(v.name)) || gb[0] || en[0] || null;
+}
+if("speechSynthesis" in window) try{ speechSynthesis.getVoices(); speechSynthesis.addEventListener?.("voiceschanged", ()=>speechSynthesis.getVoices()) }catch{}
 function say(text){
   if(!S.fx || !("speechSynthesis" in window)) return;
-  try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.lang="en-GB"; u.rate=1.05;
-    const v=speechSynthesis.getVoices().find(v=>/en-GB/i.test(v.lang)); if(v) u.voice=v; speechSynthesis.speak(u) }catch{}
+  try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text), v=umpireVoice();
+    u.lang=v?.lang||"en-GB"; if(v) u.voice=v; u.rate=1; u.pitch=1.2; speechSynthesis.speak(u) }catch{}
 }
 function quizCall(prefix, ans){
   let i=S.qpos[prefix]; if(i==null){ i=QUIZ.findIndex((_,k)=>ans[k]==null); if(i<0) i=QUIZ.length }
@@ -476,7 +504,7 @@ function registerPanel(){
   if(Store.mode==="db" && !S.uid) return signInPanel();
   const lv = levelFrom(S.reg.ans);
   return `<section class="panel">
-    <div><h2>Join Dropshot Folks</h2><p class="muted">Register once. New players answer five quick questions so we can put you on the right court. Beginners are welcome on sessions with a beginners' court.${Store.mode==="db"?"":" Already registered? Enter your email and press Continue."}</p></div>
+    <div><h2>Join Dropshot Folks</h2><p class="muted">Register once. New players play a quick level-check match against the coach so we can put you on the right court. Beginners are welcome on sessions with a beginners' court.${Store.mode==="db"?"":" Already registered? Enter your email and press Continue."}</p></div>
     <form id="regForm" class="quiz">
       <div class="grid2">
         <label class="f">Full name<input id="r-name" placeholder="First and last name" autocomplete="name"></label>
@@ -699,7 +727,7 @@ function bookingCard(b,s){
 /* ----- level guide ----- */
 function viewLevel(){
   const res = levelFrom(S.quiz), p = meP();
-  return `<section class="panel"><div><h2>Level guide</h2><p class="muted">Each court is for one level. You book a session and we put you on the court for your level. Beginners (E) can book sessions that have a beginners' court.</p></div>
+  return `<section class="panel"><div><h2>Level guide</h2><p class="muted">Each court is for one level. You book a session and we put you on the court for your level. Beginners (E) can book sessions that have a beginners' court, but not Thursday sessions.</p></div>
     <div class="levels">${LEVELS.map(l=>`<div class="lvrow"><span class="lv lv-${l.key}">${l.code}</span><div><b>${l.name}</b>${l.court?` · Court ${l.court}`:" · court set per session"}<p class="muted">${l.desc}</p></div></div>`).join("")}</div></section>
   <section class="panel"><div><h2>Think you've moved up?</h2><p class="muted">Take the questions again. If the answer changes, ask the organiser to move you.</p></div>
     <form class="quiz" id="quiz">${quizFields("q", S.quiz)}</form>
@@ -916,7 +944,7 @@ async function bookSelected(){
     const myId=`${s.id}_${p.id}`;
     const pickCourt=lvl=>{ const cs=courtsOf(s).filter(c=>courtLevels(s,c).includes(lvl)); return cs.find(c=>used(c)<cap(s,c)) ?? cs[0] ?? null };
     const myCourt=pickCourt(p.level);
-    if(!myCourt){ ok=false; lines.push(`${fmtDate(s.date)}: this session isn't running a court for ${esc(p.level)} players`); continue }
+    if(!myCourt){ ok=false; lines.push(p.level==="E" && beginnersBarred(s) ? `${fmtDate(s.date)}: Thursday sessions aren't for beginners (E). Coaching is a great way to start.` : `${fmtDate(s.date)}: this session isn't running a court for ${esc(p.level)} players`); continue }
     if(!S.bookings.find(b=>b.id===myId && b.status!=="cancelled")) await place(myId, {playerId:p.id, name:p.name, level:p.level}, myCourt, "You");
     let k = S.bookings.filter(b=>b.sessionId===s.id && b.hostId===p.id).length;
     for(const g of S.guests){

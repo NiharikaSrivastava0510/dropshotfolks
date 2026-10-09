@@ -162,7 +162,8 @@ const myBookings = () => S.bookings.filter(b=>b.playerId===S.me || b.hostId===S.
 
 /* ---------- rotation: same answer for everyone, worked out from the roster and the clock ---------- */
 function rotInfo(s){
-  const startT = s.rotationStart ? new Date(s.rotationStart) : sessStart(s);
+  // a session's rotation only runs on its own day, between its start and end times
+  const startT = sessStart(s);
   const mins = Number(s.gameMins)||GAME_MINS, ms = mins*60e3, end = sessEnd(s), now = Date.now();
   const total = Math.max(1, Math.floor((end-startT)/ms));
   const idx = now<startT ? -1 : Math.min(total-1, Math.floor((now-startT)/ms));
@@ -939,7 +940,6 @@ document.addEventListener("click", async e=>{
   if(ds.offer){ setBooking(ds.offer,{status:"awaiting"},"A place opened up. Please pay to confirm."); return }
   if(ds.absent){ const b=S.bookings.find(x=>x.id===ds.absent); setBooking(ds.absent,{absent:!b.absent},null, b.absent?"Back in the rotation":"Taken out of the rotation"); return }
   if(ds.acancel){ arm(t,"Confirm cancel",()=>setBooking(ds.acancel,{status:"cancelled"},"The organiser cancelled this booking.")); return }
-  if(ds.restart){ const s=S.sessions.find(x=>x.id===ds.restart); const {id,...body}=s; save("sessions",id,{...body,rotationStart:nowIso()},"Rotation restarted from game 1"); return }
   if(ds.approve){ const p=S.players.find(x=>x.id===ds.approve), lv=p.levelRequest;
     if(await savePlayer({...p, level:lv, levelRequest:null, verified:true})){ const n=await moveToLevelCourt(p.id, lv); toast(n?`Level updated. ${n} upcoming booking${n>1?"s":""} moved to their new court.`:"Level updated") } return }
   if(ds.decline){ const p=S.players.find(x=>x.id===ds.decline); await savePlayer({...p, levelRequest:null}); toast("Request declined"); return }
@@ -1027,8 +1027,6 @@ document.addEventListener("click", async e=>{
     save("sessions",id,{...body, rot},`Game ${Number(gi)+1} back to automatic`); return }
   if(ds.reall){ const s=S.sessions.find(x=>x.id===ds.reall), c=ds.c; const {id,...body}=s, rot={...(s.rot||{})}; rot[c]={};
     arm(t,"Tap again to reset",()=>save("sessions",id,{...body, rot},"Rotation back to automatic")); return }
-  if(ds.jump){ const s=S.sessions.find(x=>x.id===ds.jump), gi=Number(ds.gi), mins=Number(s.gameMins)||GAME_MINS;
-    const {id,...body}=s; save("sessions",id,{...body, rotationStart:new Date(Date.now()-gi*mins*60e3).toISOString()},`Game ${gi+1} is on now`); return }
   if(ds.delsess){ arm(t,"Tap again to delete",()=>Store.del("sessions",ds.delsess).then(()=>toast("Session deleted")).catch(()=>toast("Couldn't delete"))); return }
 });
 document.addEventListener("change", async e=>{

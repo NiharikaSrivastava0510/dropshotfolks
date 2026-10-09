@@ -297,7 +297,7 @@ function viewFix(){
   const head=`${pickBar(t)}<section class="panel"><h2>Fixtures & results</h2>
     <label class="f" style="max-width:420px">🔎 Find my team<select id="myTeam" data-myteam="1"><option value="">Choose your team…</option>${all.map(x=>`<option value="${esc(x.id)}" ${x.id===S.myTeam?"selected":""}>${esc(x.name)} · ${esc(catName(t,x.cat))}</option>`).join("")}</select></label>
     ${me?`<div class="mlist">${mine.length?mine.map(m=>matchRow(t,m,{me:me.id,cat:true})).join(""):`<div class="empty">No matches for ${esc(me.name)} yet.</div>`}</div>`:""}
-    ${catBar(t)}</section>`;
+    ${catBar(t)}</section>${S.isAdmin && matchesOf(t).length ? schedPanel(t) : ""}`;
   const groups=t.groups?.[S.cat], ms=matchesOf(t,S.cat), edit=canRef(t);
   if(!groups && !ms.length) return head+`<section class="panel"><div class="empty">Fixtures appear here once the organiser makes the groups.</div></section>`;
   const ko=bracket(t,S.cat);
@@ -313,6 +313,18 @@ function viewLive(){
     <div class="courts">${Array.from({length:n},(_,i)=>courtCard(t,i+1)).join("")}</div></section>
     <section class="panel"><h2>Up next</h2>${nx.length?`<div class="mlist">${nx.map(m=>matchRow(t,m,{cat:true})).join("")}</div>`:`<div class="empty">Nothing waiting.</div>`}</section>
     ${done.length?`<section class="panel"><h2>Latest results</h2><div class="mlist">${done.map(m=>matchRow(t,m,{cat:true})).join("")}</div></section>`:""}`;
+}
+
+// organiser: courts & times right on the Fixtures tab
+function schedPanel(t){
+  const has=matchesOf(t).some(m=>m.ptime), last=has?matchesOf(t).filter(m=>m.ptime).map(m=>m.ptime).sort().slice(-1)[0]:"";
+  return `<section class="panel"><h2>🕒 Courts & times</h2>
+    <div class="row" style="align-items:flex-end">
+      <label class="f" style="width:140px">First match<input id="fx-start" type="time" value="${esc(t.startTime||"10:00")}"></label>
+      <label class="f" style="width:150px">Minutes per match<input id="fx-mins" type="number" min="5" max="60" value="${esc(t.matchMins||15)}"></label>
+      <label class="f" style="width:110px">Courts<input id="fx-courts" type="number" min="1" max="12" value="${esc(t.courts||4)}"></label>
+      <button class="btn primary" data-fxsched="1">${has?"Update courts & times":"Assign courts & times"}</button></div>
+    <p class="muted" style="font-size:.85rem">Covers every category. Nobody plays twice at once, and knockouts come after their groups${matchesOf(t).some(m=>m.stage==="ko")?"":" (make the knockout bracket first in Organiser → Fixtures so it gets times too)"}. ${has?`Last match at <b>${esc(last)}</b>. `:""}To move one match, tap it below and change its court or time.</p></section>`;
 }
 
 /* referee */
@@ -565,6 +577,10 @@ document.addEventListener("click", async e=>{
   if(ds.oadd){ const v=id=>($(`#oa-${id}`)?.value||"").trim(); if(!v("name")||!v("p1")||!v("p2")){ toast("Add a team name and both players"); return }
     await db.collection("tteams").add({tid:t.id, cat:ds.oadd, name:v("name"), p1:v("p1"), p2:v("p2"), createdBy:S.uid, createdAt:nowIso(), status:"confirmed"}); ["name","p1","p2"].forEach(k=>$(`#oa-${k}`).value=""); toast("Team added"); return }
   if(ds.gen){ if(matchesOf(t,ds.gen).length && !confirm("This replaces all fixtures and results for this category. Carry on?")) return; await generateGroups(t, ds.gen); return }
+  if(ds.fxsched){ const start=$("#fx-start").value||"10:00", mins=Math.min(60,Math.max(5,Number($("#fx-mins").value)||15)), courts=Math.min(12,Math.max(1,Number($("#fx-courts").value)||4));
+    if(matchesOf(t).some(m=>m.ptime) && !confirm("Re-do the courts and times for every match?")) return;
+    await db.collection("tourneys").doc(t.id).set({startTime:start, matchMins:mins, courts},{merge:true});
+    await scheduleAll({...t, startTime:start, matchMins:mins, courts}); return }
   if(ds.sched){ if(matchesOf(t).some(m=>m.ptime) && !confirm("Re-do the courts and times for every match?")) return; await scheduleAll(t); return }
   if(ds.eplan){ const c=Number($("#ep-court").value)||0, tm=$("#ep-time").value; await db.collection("tmatches").doc(ds.eplan).update({pcourt:c||null, ptime:tm||null}).then(()=>toast("Court & time saved"),()=>toast("Couldn't save")); return }
   if(ds.genko){

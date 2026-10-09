@@ -14,7 +14,8 @@ function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; cle
 
 /* ---------- state ---------- */
 const S = {
-  tab: /^#(screen|court=\d+)$/.test(location.hash) ? "screen" : ls.get("dsf:ttab","reg"),
+  tab: /^#(screen|court=\d+)$/.test(location.hash) ? "screen" : location.hash==="#ref" ? "ref" : ls.get("dsf:ttab","reg"),
+  refOnly: location.hash==="#ref",
   tourneys:[], teams:[], matches:[], contacts:{}, secret:null, unlock:null,
   uid:null, isAdmin:false, loaded:false, tid: ls.get("dsf:tid",null),
   cat: null, toss: {}, myTeam: ls.get("dsf:myteam",null), refCourt: ls.get("dsf:refcourt",1), edit:null, scrIdx:0
@@ -331,14 +332,14 @@ function schedPanel(t){
 /* referee */
 function viewRef(){
   const t=T(); if(!t) return noTourney();
-  if(!canRef(t)) return `<section class="panel"><h2>Referee</h2><p class="muted">Enter the referee code from the organiser. Once it's open on this phone you can start matches on your court and score them live.</p>
+  if(!canRef(t)) return `<section class="panel"><h2>${S.refOnly?"🏸 Referee":"Referee"}</h2><p class="muted">Enter the referee code from the organiser. Once it's open on this phone you can start matches on your court and score them live.</p>
     <div class="row" style="max-width:440px;flex-wrap:nowrap"><input id="ref-code" placeholder="Referee code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" style="text-transform:uppercase;letter-spacing:.2em;font-family:var(--mono)"><button class="btn primary" data-refopen="1">Open</button></div></section>`;
   const n=Math.max(1,Number(t.courts)||4), c=Math.min(n,Math.max(1,S.refCourt)), m=liveOn(t,c), r=rules(t);
   const courtPick=`<div class="cats">${Array.from({length:n},(_,i)=>`<button data-refcourt="${i+1}" aria-pressed="${i+1===c}">Court ${i+1}${liveOn(t,i+1)?" 🔴":""}</button>`).join("")}</div>`;
   if(!m){ const nx=upNext(t,30).sort((x,y)=>(x.pcourt===c?0:1)-(y.pcourt===c?0:1)).slice(0,6);
     return `<section class="panel"><h2>Referee · Court ${c}</h2>${courtPick}
       ${nx.length?`<p class="muted">Pick the next match for Court ${c}. The first one is next in line.</p><div class="mlist">${nx.map((x,i)=>`<div style="display:grid;gap:6px">${matchRow(t,x,{cat:true})}<button class="btn ${i?"small":"primary"}" data-start="${esc(x.id)}" data-court="${c}">Start on Court ${c}</button></div>`).join("")}</div>`:`<div class="empty">No matches waiting. 🎉</div>`}
-      ${S.unlock?`<button class="btn small ghost" data-refexit="1">Close referee mode</button>`:""}</section>`;
+      <div class="row">${S.unlock?`<button class="btn small ghost" data-refexit="1">Close referee mode</button>`:""}${S.refOnly?`<button class="btn small ghost" data-refleave="1">See the full tournament page</button>`:""}</div></section>`;
   }
   const games=m.games?.length?m.games:[[0,0]], g=games[games.length-1], w=gamesWon(m,r), win=matchWinner({games},r), a=sideTeam(m,"a"), b=sideTeam(m,"b"), A=teamById(a), B=teamById(b);
   const gi=games.length-1, needToss=!win && !(m.svc||[])[gi] && g[0]===0 && g[1]===0;
@@ -397,7 +398,9 @@ function viewOrg(){
   return `${pickBar(t)}<section class="panel"><details id="org-edit"><summary><b>Tournament details</b> · ${esc(t.name)} · registration ${t.regOpen?"open":"closed"}</summary><div style="display:grid;gap:12px;margin-top:10px">${form(t)}<div class="row"><button class="btn primary" data-tsave="${esc(t.id)}">Save</button><button class="btn small" data-tsave="new">Save as a new tournament</button></div></div></details></section>
     <section class="panel"><h2>Referees & big screen</h2>
       <div class="row code-row"><span class="lbl">Referee code</span>${S.secret?`<b class="code">${esc(S.secret)}</b><button class="btn small" data-copy="${esc(S.secret)}">Copy</button><button class="btn small ghost" data-tcode="1">New code</button>`:`<button class="btn small primary" data-tcode="1">Create code</button>`}</div>
-      <p class="muted" style="font-size:.85rem">Referees open dropshotfolks.co.uk/tourney → Referee, enter the code and pick their court. A new code locks out phones using the old one.</p>
+      ${(()=>{ const link="https://dropshotfolks.co.uk/tourney/#ref", msg=`🏸 Referee for ${t.name||"the tournament"}\nOpen: ${link}\n${S.secret?`Code: ${S.secret}\n`:""}Pick your court, tap Start, do the toss, then tap a team for each point.`;
+        return `<div class="row"><span class="lbl">Referee link</span><b class="code" style="font-size:.95rem;letter-spacing:0">${esc(link.replace("https://",""))}</b><button class="btn small" data-copy="${esc(link)}">Copy link</button>${S.secret?`<a class="btn small primary" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">Send link & code on WhatsApp</a>`:""}</div>` })()}
+      <p class="muted" style="font-size:.85rem">Referees open the link on their phone and enter the code. They only see the scoring screen, nothing else. A new code locks out phones using the old one.</p>
       <div class="row"><a class="btn small" href="#screen" data-screen="1">📺 Open big screen</a><span class="muted" style="font-size:.85rem">Put it on the projector and press F for full screen.</span></div></section>
     <section class="panel"><h2>Teams</h2>${catBar(t)}
       ${(()=>{ const ts=teamsOf(t,S.cat); return ts.length?`<div class="row"><span class="muted">${ts.length} registered · ${ts.filter(x=>x.status==="confirmed").length} confirmed</span><button class="btn small" data-confirmall="${esc(S.cat)}">Confirm all</button></div>
@@ -469,6 +472,8 @@ function render(){
   const keep={}; document.querySelectorAll("#main input[id],#main select[id],#main textarea[id]").forEach(el=>{ if(el.type!=="file") keep[el.id]=el.type==="checkbox"?{c:el.checked}:{v:el.value} });
   const openD=new Set([...document.querySelectorAll("#main details[id][open]")].map(d=>d.id));
   document.body.classList.toggle("screen", S.tab==="screen");
+  document.body.classList.toggle("refonly", !!S.refOnly);
+  if(S.refOnly) S.tab="ref";
   if(S.tab==="screen"){ const fc=/^#court=(\d+)$/.exec(location.hash); $("#main").innerHTML = fc ? viewFocus(Number(fc[1])) : viewScreen(); tickClock(); return }
   const tabs=TABS(); if(!tabs.some(([k])=>k===S.tab)) S.tab="reg";
   const t=T(), anyLive=t && matchesOf(t).some(m=>m.status==="live");
@@ -483,7 +488,8 @@ function render(){
 function tickClock(){ const c=$("#clock"); if(c) c.textContent=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}) }
 setInterval(()=>{ if(S.tab==="screen"){ tickClock() } },15000);
 setInterval(()=>{ if(S.tab==="screen"){ S.scrIdx++; render() } },12000);
-addEventListener("hashchange",()=>{ S.tab = /^#(screen|court=\d+)$/.test(location.hash) ? "screen" : (S.tab==="screen"?"live":S.tab); render() });
+addEventListener("hashchange",()=>{ S.refOnly = location.hash==="#ref";
+  S.tab = /^#(screen|court=\d+)$/.test(location.hash) ? "screen" : S.refOnly ? "ref" : (S.tab==="screen"?"live":S.tab); render() });
 document.addEventListener("keydown",e=>{ if(S.tab!=="screen") return;
   if(e.key==="f"||e.key==="F") document.documentElement.requestFullscreen?.().catch(()=>{});
   if(e.key==="Escape" && !document.fullscreenElement) location.hash="" });
@@ -536,8 +542,9 @@ document.addEventListener("click", async e=>{
   // referee
   if(ds.refopen){ const code=($("#ref-code")?.value||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,""); if(code.length<4){ toast("Enter the referee code"); return } tryRefUnlock(code); return }
   if(ds.refexit){ try{ await db.collection("tunlocks").doc(auth.currentUser.uid).delete() }catch{} S.unlock=null; render(); return }
+  if(ds.refleave){ S.refOnly=false; history.replaceState(null,"",location.pathname); S.tab="live"; render(); return }
   if(ds.refcourt){ S.refCourt=Number(ds.refcourt); ls.set("dsf:refcourt",S.refCourt); render(); return }
-  if(ds.start){ const m=S.matches.find(x=>x.id===ds.start); if(!m) return; const c=Number(ds.court);
+  if(ds.start){ const m=S.matches.find(x=>x.id===ds.start); if(!m) return; const c=Number(ds.court); keepAwake();
     if(liveOn(t,c)){ toast(`Court ${c} already has a match`); return }
     await upd(m.id,{status:"live", court:c, games:m.games?.length?m.games:[[0,0]], winner:null}); return }
   if(ds.toss){ const m=liveOn(t,Math.min(Math.max(1,Number(t.courts)||4),S.refCourt)); if(!m) return; const gi=Math.max(0,(m.games||[]).length-1), d=S.toss[m.id+"#"+gi]||(S.toss[m.id+"#"+gi]={});
@@ -627,6 +634,11 @@ function burst(){
   el.innerHTML=Array.from({length:26},(_,k)=>`<span style="left:${Math.random()*100}%;animation-delay:${(Math.random()*.5).toFixed(2)}s">${["🏸","🎉","🏆","✨"][k%4]}</span>`).join("");
   document.body.append(el); setTimeout(()=>el.remove(),4000);
 }
+
+// stop the referee's phone going to sleep mid-match
+let wakeLock=null;
+async function keepAwake(){ try{ if("wakeLock" in navigator && !wakeLock){ wakeLock=await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release",()=>{ wakeLock=null }) } }catch{} }
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible" && S.tab==="ref" && S.unlock) keepAwake() });
 
 /* ---------- stay up to date: reload when a newer version is published ---------- */
 const APP_VERSION = (document.currentScript?.src.match(/[?&]v=(\d+)/)||[])[1] || "";

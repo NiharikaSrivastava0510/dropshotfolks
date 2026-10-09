@@ -30,10 +30,22 @@ const matchesOf = (t,cat) => S.matches.filter(m=>m.tid===t?.id && (!cat || m.cat
 const canRef = t => !!t && (S.isAdmin || (S.unlock?.tid===t.id));
 
 /* ---------- scoring rules ---------- */
-const rules = t => ({to:Number(t?.pointsTo)||21, cap:Number(t?.cap)||30, bestOf:Number(t?.bestOf)||1});
-function gameDone(g, r){ const [a,b]=g, hi=Math.max(a,b), lo=Math.min(a,b); return hi>=r.cap || (hi>=r.to && hi-lo>=2) }
+// points per game 11/15/21; with deuce you must win by 2, up to a cap (11→15, 15→21, 21→30); without deuce first to the target wins
+const CAP_FOR = {11:15, 15:21, 21:30};
+const rules = t => { const to=[11,15,21].includes(Number(t?.pointsTo))?Number(t.pointsTo):21, deuce=t?.deuce!==false;
+  return {to, deuce, cap:deuce?(CAP_FOR[to]||to+9):to, bestOf:Number(t?.bestOf)||1} };
+const ruleTxt = r => `to ${r.to}${r.deuce?`, deuce (win by 2, max ${r.cap})`:", no deuce"}`;
+function gameDone(g, r){ const [a,b]=g, hi=Math.max(a,b), lo=Math.min(a,b); return r.deuce ? (hi>=r.cap || (hi>=r.to && hi-lo>=2)) : hi>=r.to }
 function gamesWon(m, r){ let a=0,b=0; (m.games||[]).forEach(g=>{ if(gameDone(g,r)) g[0]>g[1]?a++:b++ }); return {a,b} }
-function matchWinner(m, r){ const w=gamesWon(m,r), need=Math.floor(r.bestOf/2)+1; return w.a>=need?"a":w.b>=need?"b":null }
+function matchWinner(m, r){
+  if(r.bestOf===2){
+    // always two games; at 1–1 the higher total points wins (if level, the second game's winner)
+    const done=(m.games||[]).filter(g=>gameDone(g,r)); if(done.length<2) return null;
+    const w=gamesWon(m,r); if(w.a!==w.b) return w.a>w.b?"a":"b";
+    const p=done.slice(0,2).reduce((s,g)=>({a:s.a+g[0], b:s.b+g[1]}),{a:0,b:0});
+    return p.a!==p.b ? (p.a>p.b?"a":"b") : (done[1][0]>done[1][1]?"a":"b");
+  }
+  const w=gamesWon(m,r), need=Math.floor(r.bestOf/2)+1; return w.a>=need?"a":w.b>=need?"b":null }
 const pts = m => (m.games||[]).reduce((s,g)=>({a:s.a+g[0], b:s.b+g[1]}),{a:0,b:0});
 const gamesTxt = m => (m.games||[]).filter(g=>g[0]||g[1]).map(g=>`${g[0]}–${g[1]}`).join(", ");
 
@@ -185,12 +197,15 @@ function viewReg(){
   const t=T(); if(!t) return noTourney();
   const mine=S.uid?S.teams.filter(x=>x.tid===t.id && x.createdBy===S.uid):[];
   const full=c=>Number(t.maxTeams)>0 && teamsOf(t,c).length>=Number(t.maxTeams);
-  return `${pickBar(t)}<section class="panel tinfo">
+  const mapQ=[t.venue,t.address].filter(Boolean).join(", "), r=rules(t);
+  return `${pickBar(t)}${t.poster?`<section class="panel" style="padding:10px"><img src="${esc(t.poster)}" alt="${esc(t.name||"Tournament")} poster" style="width:100%;max-height:80vh;object-fit:contain;border-radius:16px;display:block"></section>`:""}<section class="panel tinfo">
       <span class="lbl">${esc(fmtDate(t.date))}${t.venue?` · ${esc(t.venue)}`:""}</span>
       <div class="big">${esc(t.name||"Tournament")}</div>
       ${t.info?`<p>${esc(t.info).replace(/\n/g,"<br>")}</p>`:""}
       <div class="row">${cats(t).map(c=>`<span class="chip st-paid">${esc(c.name)} · ${teamsOf(t,c.id).length}${Number(t.maxTeams)?`/${Number(t.maxTeams)}`:""} teams</span>`).join("")}</div>
       ${t.entry?`<p><b>Entry:</b> ${esc(t.entry)}</p>`:""}${t.prizes?`<p><b>Prizes:</b> ${esc(t.prizes)}</p>`:""}
+      <p><b>Scoring:</b> ${r.bestOf===1?"1 game":r.bestOf===2?"2 games (total points decide at 1–1)":"best of 3 games"}, ${esc(ruleTxt(r))}.</p>
+      ${mapQ?`<div class="row" style="align-items:flex-start"><a class="btn small" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQ)}" target="_blank" rel="noopener">📍 Directions</a><span style="font-size:.9rem">${esc(mapQ)}${t.directions?`<br><span class="muted">${esc(t.directions).replace(/\n/g,"<br>")}</span>`:""}</span></div>`:""}
     </section>
     <section class="panel"><h2>Register a team</h2>
     ${t.regOpen ? `<form id="regForm" class="grid2">
@@ -247,14 +262,14 @@ function viewRef(){
   }
   const games=m.games?.length?m.games:[[0,0]], g=games[games.length-1], w=gamesWon(m,r), win=matchWinner({games},r), a=sideTeam(m,"a"), b=sideTeam(m,"b"), A=teamById(a), B=teamById(b);
   return `<section class="panel refbox"><div class="row" style="justify-content:space-between"><h2>Court ${c} · ${esc(catName(t,m.cat))}</h2><span class="livebadge">Live</span></div>${courtPick}
-    <p class="muted">${esc(m.stage==="ko"?(m.roundName||"Knockout"):`Group ${m.group}`)} · Game ${games.length}${r.bestOf>1?` of up to ${r.bestOf} · games ${w.a}–${w.b}`:""} · to ${r.to}${r.cap>r.to?`, max ${r.cap}`:""}</p>
+    <p class="muted">${esc(m.stage==="ko"?(m.roundName||"Knockout"):`Group ${m.group}`)} · Game ${games.length}${r.bestOf===2?` of 2 · games ${w.a}–${w.b}${w.a===1&&w.b===1?" · total points decide":""}`:r.bestOf>1?` of up to ${r.bestOf} · games ${w.a}–${w.b}`:""} · ${esc(ruleTxt(r))}</p>
     <div class="refpad">
       <button class="refside" data-pt="a" ${win?"disabled":""}><span class="nm">${esc(tName(a))}</span><small>${esc(A?`${A.p1} & ${A.p2}`:"")}</small><span class="pt">${g[0]}</span><small>Tap for a point</small></button>
       <button class="refside b" data-pt="b" ${win?"disabled":""}><span class="nm">${esc(tName(b))}</span><small>${esc(B?`${B.p1} & ${B.p2}`:"")}</small><span class="pt">${g[1]}</span><small>Tap for a point</small></button>
     </div>
     <div class="refctl"><button class="btn small" data-undo="a">− ${esc(tName(a))}</button><button class="btn small" data-undo="b">− ${esc(tName(b))}</button></div>
     ${games.length>1?`<p class="muted" style="text-align:center">Earlier games: ${esc(games.slice(0,-1).map(x=>`${x[0]}–${x[1]}`).join(", "))}</p>`:""}
-    ${win?`<div class="banner ok"><div class="grow"><b>${esc(tName(win==="a"?a:b))} win ${esc(gamesTxt({games}))}.</b> Check the score, then confirm.</div><button class="btn primary" data-finish="${esc(m.id)}">Confirm result ✓</button></div>`:""}
+    ${win?`<div class="banner ok"><div class="grow"><b>${esc(tName(win==="a"?a:b))} win ${esc(gamesTxt({games}))}${r.bestOf===2&&w.a===w.b?` on total points (${Math.max(pts({games}).a,pts({games}).b)}–${Math.min(pts({games}).a,pts({games}).b)})`:""}.</b> Check the score, then confirm.</div><button class="btn primary" data-finish="${esc(m.id)}">Confirm result ✓</button></div>`:""}
     <div class="refctl"><button class="btn small ghost" data-stop="${esc(m.id)}">Stop match (back to queue)</button></div>
   </section>`;
 }
@@ -265,13 +280,17 @@ function viewOrg(){
   const t=T();
   const f=(id,label,val,type="text",extra="")=>`<label class="f">${label}<input id="to-${id}" type="${type}" value="${esc(val??"")}" ${extra}></label>`;
   const form=x=>`<div class="grid2">
-      ${f("name","Tournament name",x?.name)}${f("date","Date",x?.date,"date")}${f("venue","Venue",x?.venue)}${f("entry","Entry fee (shown to players)",x?.entry)}
+      ${f("name","Tournament name",x?.name)}${f("date","Date",x?.date,"date")}${f("venue","Venue",x?.venue)}${f("address","Venue address (for the map)",x?.address,"text",'placeholder="e.g. Lodge Ave, Dagenham RM8 2JR"')}${f("entry","Entry fee (shown to players)",x?.entry)}
+      <label class="f" style="grid-column:1/-1">Directions & travel tips<textarea id="to-dirs" rows="2" placeholder="Nearest station, buses, parking, which entrance…">${esc(x?.directions||"")}</textarea></label>
+      <div style="grid-column:1/-1;display:grid;gap:6px"><span class="lbl">Poster</span>
+        ${(S.posterDraft ?? x?.poster) ? `<img src="${esc(S.posterDraft ?? x.poster)}" alt="Poster preview" style="max-width:220px;border-radius:12px;box-shadow:var(--shadow)">` : `<span class="muted" style="font-size:.85rem">No poster yet.</span>`}
+        <div class="row"><label class="btn small" for="to-poster">${(S.posterDraft ?? x?.poster)?"Change poster":"Upload poster"}</label><input id="to-poster" type="file" accept="image/*" hidden>${(S.posterDraft ?? x?.poster)?`<button class="btn small ghost danger" data-noposter="1" type="button">Remove</button>`:""}<span class="muted" style="font-size:.82rem">Shrunk automatically. Press Save to publish it.</span></div></div>
       <label class="f" style="grid-column:1/-1">About (shown on the Register tab)<textarea id="to-info" rows="3">${esc(x?.info||"")}</textarea></label>
       ${f("prizes","Prizes",x?.prizes)}${f("max","Max teams per category (0 = no limit)",x?.maxTeams??0,"number",'min="0" max="128"')}
       ${f("courts","Courts",x?.courts??4,"number",'min="1" max="12"')}${f("gsize","Teams per group",x?.groupSize??4,"number",'min="3" max="8"')}
-      ${f("adv","Teams through per group",x?.advance??2,"number",'min="1" max="4"')}${f("to","Points per game",x?.pointsTo??21,"number",'min="5" max="30"')}
-      ${f("cap","Maximum points (cap)",x?.cap??30,"number",'min="5" max="40"')}
-      <label class="f">Games per match<select id="to-bo">${[1,3].map(n=>`<option value="${n}" ${Number(x?.bestOf||1)===n?"selected":""}>${n===1?"1 game":"Best of 3"}</option>`).join("")}</select></label>
+      ${f("adv","Teams through per group",x?.advance??2,"number",'min="1" max="4"')}<label class="f">Points per game<select id="to-to">${[11,15,21].map(n=>`<option value="${n}" ${Number(x?.pointsTo||21)===n?"selected":""}>${n} points</option>`).join("")}</select></label>
+      <label class="f">Deuce<select id="to-deuce"><option value="1" ${x?.deuce!==false?"selected":""}>Deuce on: win by 2 (max 15 / 21 / 30)</option><option value="0" ${x?.deuce===false?"selected":""}>No deuce: first to the points wins</option></select></label>
+      <label class="f">Games per match<select id="to-bo">${[[1,"1 game"],[2,"2 games (total points if 1–1)"],[3,"Best of 3"]].map(([n,l])=>`<option value="${n}" ${Number(x?.bestOf||1)===n?"selected":""}>${l}</option>`).join("")}</select></label>
       <div style="grid-column:1/-1"><span class="lbl">Categories</span><div class="row">${CAT_PRESETS.map(([id,nm])=>`<label class="row" style="gap:6px"><input type="checkbox" style="width:auto" id="to-cat-${id}" ${!x||x.catIds?.includes(id)?"checked":""}> ${nm}</label>`).join("")}</div></div>
       <label class="row" style="gap:6px;grid-column:1/-1"><input type="checkbox" style="width:auto" id="to-open" ${x?.regOpen?"checked":""}> Registration open</label>
     </div>`;
@@ -326,7 +345,7 @@ function viewScreen(){
 /* ---------- render ---------- */
 const TABS = () => [["reg","Register"],["teams","Teams"],["fix","Fixtures"],["live","Live"],["ref","Referee"],...(S.isAdmin?[["org","Organiser"]]:[])];
 function render(){
-  const keep={}; document.querySelectorAll("#main input[id],#main select[id],#main textarea[id]").forEach(el=>keep[el.id]=el.type==="checkbox"?{c:el.checked}:{v:el.value});
+  const keep={}; document.querySelectorAll("#main input[id],#main select[id],#main textarea[id]").forEach(el=>{ if(el.type!=="file") keep[el.id]=el.type==="checkbox"?{c:el.checked}:{v:el.value} });
   const openD=new Set([...document.querySelectorAll("#main details[id][open]")].map(d=>d.id));
   document.body.classList.toggle("screen", S.tab==="screen");
   if(S.tab==="screen"){ $("#main").innerHTML=viewScreen(); tickClock(); return }
@@ -402,19 +421,21 @@ document.addEventListener("click", async e=>{
   if(ds.eclose){ S.edit=null; render(); return }
   if(ds.esave){ const m=S.matches.find(x=>x.id===ds.esave), r=rules(t), games=[];
     for(let i=0;i<r.bestOf;i++){ const a=$(`#eg-${i}-a`), b=$(`#eg-${i}-b`); if(!a) break; const g=[Number(a.value)||0, Number(b.value)||0]; if(g[0]||g[1]) games.push(g) }
-    const w=matchWinner({games},r); if(!w){ toast(`That isn't a finished match yet (games to ${r.to}, win by 2, max ${r.cap})`); return }
+    const w=matchWinner({games},r); if(!w){ toast(`That isn't a finished match yet (${r.bestOf===2?"2 games, ":""}games ${ruleTxt(r)})`); return }
     await upd(m.id,{games, winner:w, status:"done", court:0}); S.edit=null; toast("Result saved"); render(); return }
   if(ds.ereset){ await upd(ds.ereset,{games:[], winner:null, status:"scheduled", court:0}); S.edit=null; render(); return }
   // organiser
   if(!S.isAdmin) return;
+  if(ds.noposter){ S.posterDraft=""; render(); return }
   if(ds.tsave){ const g=id=>$(`#to-${id}`), catIds=CAT_PRESETS.filter(([id])=>g(`cat-${id}`)?.checked).map(([id])=>id);
     if(!g("name").value.trim()){ toast("Give the tournament a name"); return } if(!catIds.length){ toast("Pick at least one category"); return }
     const data={name:g("name").value.trim(), date:g("date").value, venue:g("venue").value.trim(), entry:g("entry").value.trim(), info:g("info").value.trim(), prizes:g("prizes").value.trim(),
       maxTeams:Number(g("max").value)||0, courts:Math.min(12,Math.max(1,Number(g("courts").value)||4)), groupSize:Math.min(8,Math.max(3,Number(g("gsize").value)||4)), advance:Math.min(4,Math.max(1,Number(g("adv").value)||2)),
-      pointsTo:Number(g("to").value)||21, cap:Number(g("cap").value)||30, bestOf:Number(g("bo").value)||1, regOpen:g("open").checked,
+      pointsTo:Number(g("to").value)||21, deuce:g("deuce").value!=="0", bestOf:Number(g("bo").value)||1,
+      address:g("address").value.trim(), directions:g("dirs").value.trim(), ...(S.posterDraft!==undefined?{poster:S.posterDraft}:{}), regOpen:g("open").checked,
       catIds, cats:CAT_PRESETS.filter(([id])=>catIds.includes(id)).map(([id,name])=>({id,name}))};
     const id = ds.tsave==="new" ? `t${(data.date||nowIso().slice(0,10)).replace(/-/g,"")}-${Date.now().toString(36).slice(-4)}` : ds.tsave;
-    await db.collection("tourneys").doc(id).set(data,{merge:true}).then(()=>{ S.tid=id; ls.set("dsf:tid",id); toast("Tournament saved") },()=>toast("Couldn't save")); return }
+    await db.collection("tourneys").doc(id).set(data,{merge:true}).then(()=>{ S.tid=id; ls.set("dsf:tid",id); S.posterDraft=undefined; toast("Tournament saved") },()=>toast("Couldn't save")); return }
   if(ds.tcode){ const code=newCode(); await db.collection("tsecrets").doc(t.id).set({code}).then(()=>{ S.secret=code; render(); toast(`Referee code ${code}`) },()=>toast("Couldn't save the code")); return }
   if(ds.tconfirm){ await db.collection("tteams").doc(ds.tconfirm).update({status:ds.v}).catch(()=>toast("Couldn't update")); return }
   if(ds.confirmall){ const b=db.batch(); teamsOf(t,ds.confirmall).filter(x=>x.status!=="confirmed").forEach(x=>b.update(db.collection("tteams").doc(x.id),{status:"confirmed"})); await b.commit(); toast("All confirmed"); return }
@@ -428,6 +449,16 @@ document.addEventListener("click", async e=>{
     await generateKnockouts(t, ds.genko); return }
   if(ds.clearfix){ if(!confirm("Delete all fixtures and results for this category?")) return; await clearMatches(t, ds.clearfix);
     await db.collection("tourneys").doc(t.id).set({groups:{...(t.groups||{}), [ds.clearfix]:firebase.firestore.FieldValue.delete()}},{merge:true}); toast("Fixtures cleared"); return }
+});
+// poster: shrink to fit the database (max 1400px, JPEG)
+function shrinkImage(file, max=1400){
+  return new Promise((res,rej)=>{ const img=new Image(); img.onload=()=>{ const k=Math.min(1,max/Math.max(img.width,img.height)), c=document.createElement("canvas");
+    c.width=Math.round(img.width*k); c.height=Math.round(img.height*k); c.getContext("2d").drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(img.src);
+    let q=.85, out=c.toDataURL("image/jpeg",q); while(out.length>700000 && q>.4){ q-=.1; out=c.toDataURL("image/jpeg",q) } res(out) }; img.onerror=rej; img.src=URL.createObjectURL(file) });
+}
+document.addEventListener("change", async e=>{
+  if(e.target.id!=="to-poster" || !e.target.files?.[0]) return;
+  try{ S.posterDraft=await shrinkImage(e.target.files[0]); render(); toast("Poster ready. Press Save to publish it.") }catch{ toast("Couldn't read that image") }
 });
 document.addEventListener("submit", async e=>{
   if(e.target.id!=="regForm") return; e.preventDefault();

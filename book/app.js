@@ -11,20 +11,31 @@ const lvByCourt = n => LEVELS.find(l=>l.court===n);
 const CLR = {1:"var(--d1)",2:"var(--d2)",3:"var(--c1)",4:"var(--c2)"};
 const COACHING = "https://dropshotfolks.co.uk/#coaching";
 const PER_COURT = 7, GAME_MINS = 12;
-// each answer scores 0 (beginner) to 4 (upper high intermediate)
+// Level quiz: "about you" answers score 0 (beginner) to 4 (upper high intermediate);
+// quick-quiz questions have one right answer and show why.
 const QUIZ = [
-  {q:"How long can you keep a rally going with a similar-level partner?", a:["I'm just learning to hit the shuttle","A few shots, I'm still finding consistency","6–10 shots most of the time","Long rallies, and I can change the pace","As long as I need, while setting up a winner"]},
-  {q:"How is your serve?", a:["I'm still learning to serve","It goes in more often than not","Reliable, with basic placement","I vary length and placement","Consistent and I use it to win points"]},
-  {q:"Which shots do you play on purpose?", a:["I don't know the different shots yet","Mainly clears and straight returns","Lifts and some drop shots","Drops, drives, lifts and smashes","The full range, including deception"]},
-  {q:"How do you play doubles?", a:["I haven't played doubles","I'm still working out where to stand","I know front-and-back and side-by-side","We rotate and cover the court well","We play tactical formations"]},
-  {q:"How much have you played?", a:["Only a handful of times","Social games now and then","Regular club games","Club games and some matches","League or tournament play"]}
+  {e:"🔁", q:"How long can you keep a rally going with someone at your level?", a:["I'm just learning to hit the shuttle","A few shots, I'm still finding consistency","6–10 shots most of the time","Long rallies, and I can change the pace","As long as I need, while setting up a winner"]},
+  {e:"🏸", q:"Doubles serve: which one do most players use to start a rally?", a:["High serve to the back line","Smash it down","Low serve, just over the net","Drive it at their body"], correct:2, why:"The low serve stays tight to the net so the receiver can't attack it."},
+  {e:"🎯", q:"How's your serve?", a:["I'm still learning to serve","It goes in more often than not","Reliable, with basic placement","I vary length and placement","Consistent, and I use it to win points"]},
+  {e:"🦘", q:"The receiver is creeping right up to the front line, ready to pounce on your low serve. What do you serve?", a:["A flick serve over their head","The same low serve, just faster","Serve it into the net","Wait for them to step back"], correct:0, why:"A flick serve flies just over their reach to the back of the court."},
+  {e:"💥", q:"Which shots do you play on purpose?", a:["I don't know the different shots yet","Mainly clears and straight returns","Lifts and some drop shots","Drops, drives, lifts and smashes","The full range, including deception"]},
+  {e:"👀", q:"Spot the shot: hit from the back, fast and steep down to finish the point.", a:["Clear","Lift","Smash","Net shot"], correct:2, why:"That's the smash: the big attacking shot to win the point."},
+  {e:"🪶", q:"Spot the shot: soft from the back of the court, it drops just over the net.", a:["Drive","Drop shot","Clear","Smash"], correct:1, why:"The drop shot pulls your opponent forward and opens up the back."},
+  {e:"👯", q:"How do you play doubles?", a:["I haven't played doubles","I'm still working out where to stand","I know front-and-back and side-by-side","We rotate and cover the court well","We play tactical formations"]},
+  {e:"🧭", q:"Doubles: your side is attacking. Where do you and your partner stand?", a:["Side by side","Both at the net","Both at the back","One at the front, one at the back"], correct:3, why:"Front-and-back when attacking, side-by-side when defending."},
+  {e:"📅", q:"How much have you played?", a:["Only a handful of times","Social games now and then","Regular club games","Club games and some matches","League or tournament play"]}
 ];
+const knowCount = ans => QUIZ.filter((x,i)=>x.correct!=null && ans?.[i]===x.correct).length;
 function levelFrom(ans){
-  const v = QUIZ.map((_,i)=>ans?.[i]);
-  if(v.some(x=>x==null)) return null;
-  const total = v.reduce((a,b)=>a+b,0), zeros = v.filter(x=>x===0).length;
-  if(total<=4 || zeros>=3) return "E";
-  return total<=8?"D-":total<=13?"D+":total<=17?"C-":"C+";
+  if(QUIZ.some((_,i)=>ans?.[i]==null)) return null;
+  const self = QUIZ.map((x,i)=>x.correct==null ? ans[i] : null).filter(v=>v!=null);
+  const selfTotal = self.reduce((a,b)=>a+b,0), know = knowCount(ans);
+  if(selfTotal<=4 || self.filter(v=>v===0).length>=3) return "E";
+  const t = selfTotal + know;
+  let lv = t<=9?"D-":t<=15?"D+":t<=20?"C-":"C+";
+  // knowing your serves and shots backs up the level; if not, step down one
+  if(lv==="C+" && know<4) lv="C-"; else if(lv==="C-" && know<3) lv="D+"; else if(lv==="D+" && know<2) lv="D-";
+  return lv;
 }
 const STATUS = {
   awaiting:{label:"Awaiting payment", cls:"st-awaiting"},
@@ -131,6 +142,7 @@ const S = {
   gq: {}, guests: [],               // guest questions and guests waiting to be booked
   liveSess: null, result: null, liveKey: "",
   picks: new Set(),                 // sessions ticked but not booked yet
+  qpos: {}, qfb: {},                // level quiz: card on screen and last answer feedback, per quiz
   rotEdit: {}, pedit: null,         // organiser: game being edited per court, player being edited
   kiosk: ls.get("dsf:kiosk", null), // session this device has open in session view
   unlock: null, secrets: {}         // this device's unlock; organiser: session codes
@@ -183,8 +195,12 @@ function courtPlan(s,c){
 
 /* ---------- Court 4 points ---------- */
 // Winners of a scored Court 4 game each earn the winning margin in points.
+// Points on every court. The winning margin is shared by the two winners (win 21–15: 3 points each);
+// a game won at deuce (loser on 20 or more) is worth 1 point, so 0.5 each.
 // 200 points: £2 off your next 2 sessions. 500 points: £4 off your next 3 sessions.
-const POINTS_COURT = 4;
+const POINTS_COURT = 4;   // court whose card shows the points leaderboard
+const gamePts = x => (Math.min(x.sa,x.sb)>=20 ? 1 : Math.abs(x.sa-x.sb)) / 2;   // points per winner
+const fmtPts = n => Number.isInteger(n) ? String(n) : n.toFixed(1);
 const TIERS = [{at:200, off:2, n:2}, {at:500, off:4, n:3}];
 function scoreOf(s,c,gi){ const x=s?.scores?.[c]?.[gi], ok=n=>Number.isInteger(n) && n>=0 && n<=30;
   return x && Array.isArray(x.a) && Array.isArray(x.b) && x.a.length===2 && x.b.length===2 && ok(x.sa) && ok(x.sb) ? x : null }
@@ -193,15 +209,14 @@ function pointsState(){
   if(ptsCache && ptsCache.sess===S.sessions && ptsCache.bk===S.bookings) return ptsCache.v;
   const pts={}, cross={}, off={};
   [...S.sessions].sort((a,b)=>sessStart(a)-sessStart(b)).forEach(s=>{
-    const sc=s.scores?.[POINTS_COURT]||{};
-    Object.keys(sc).map(Number).sort((a,b)=>a-b).forEach(gi=>{
-      const x=scoreOf(s,POINTS_COURT,gi); if(!x || x.sa===x.sb) return;
-      const m=Math.abs(x.sa-x.sb);
+    [1,2,3,4].forEach(c=>Object.keys(s.scores?.[c]||{}).map(Number).sort((a,b)=>a-b).forEach(gi=>{
+      const x=scoreOf(s,c,gi); if(!x || x.sa===x.sb) return;
+      const m=gamePts(x);
       (x.sa>x.sb?x.a:x.b).forEach(id=>{ if(String(id).startsWith("guest-")) return;
         if(!S.bookings.some(b=>b.sessionId===s.id && b.playerId===id && b.status!=="cancelled")) return;
         const before=pts[id]||0; pts[id]=before+m;
         TIERS.forEach((t,ti)=>{ if(before<t.at && pts[id]>=t.at) (cross[id] ||= [])[ti]=sessStart(s).getTime() }) });
-    });
+    }));
   });
   // each reward covers the player's next sessions booked after the one where they reached it
   Object.keys(cross).forEach(pid=>{
@@ -228,7 +243,7 @@ function gameBox(s,c,i,x,names,r,cur=0){
   const nm = id => names[id] ?? S.players.find(p=>p.id===id)?.name ?? "Player";
   const won = sc ? (sc.sa>sc.sb?0:1) : -1, now = r.live && i===cur && !sc;
   const side = (t,k) => `<div class="team ${won===k?"won":""}">${t.map(id=>`<div class="nm ${id===S.me?"me":""}">${avatar(id,nm(id),"sm")}<span>${esc(nm(id))}</span></div>`).join("")}</div>`;
-  const mid = sc ? `<div class="sc">${sc.sa}–${sc.sb}${c===POINTS_COURT?`<small>+${Math.abs(sc.sa-sc.sb)} pts</small>`:""}</div>` : `<div class="vs">vs</div>`;
+  const mid = sc ? `<div class="sc">${sc.sa}–${sc.sb}<small>+${fmtPts(gamePts(sc))} pts each</small></div>` : `<div class="vs">vs</div>`;
   const org = canRun(s);
   return `<div class="game ${now?"now":""} ${sc?"done":""}">
     <div class="gh"><span class="lbl">Game ${i+1}</span>${sc?'<span class="chip st-confirmed">Finished</span>':now?'<span class="chip st-awaiting">On court</span>':""}${x.edited&&!sc?'<span class="chip st-paid">edited</span>':""}</div>
@@ -241,15 +256,15 @@ function leaderboard(){
   const {pts}=pointsState(), name=id=>S.players.find(p=>p.id===id)?.name || S.bookings.find(b=>b.playerId===id)?.name || "Player";
   const top=Object.entries(pts).sort((a,b)=>b[1]-a[1]).slice(0,10);
   return `<details id="lb-${POINTS_COURT}"><summary>Points leaderboard</summary>
-    <p class="muted" style="font-size:.85rem;margin-top:6px">Win a game on Court ${POINTS_COURT} to earn your winning margin in points. ${TIERS.map(t=>`<b>${t.at} points</b>: £${t.off} off your next ${t.n} sessions`).join(" · ")}.</p>
-    ${top.length?`<ol class="lb">${top.map(([id,n])=>`<li>${avatar(id,name(id),"sm")}<span>${esc(name(id))}</span><b>${n}</b></li>`).join("")}</ol>`:`<div class="empty" style="margin-top:8px">No scores yet.</div>`}
+    <p class="muted" style="font-size:.85rem;margin-top:6px">Win a game on any court and you and your partner share the winning margin (21–15 = 3 points each; a deuce win = 0.5 each). ${TIERS.map(t=>`<b>${t.at} points</b>: £${t.off} off your next ${t.n} sessions`).join(" · ")}.</p>
+    ${top.length?`<ol class="lb">${top.map(([id,n])=>`<li>${avatar(id,name(id),"sm")}<span>${esc(name(id))}</span><b>${fmtPts(n)}</b></li>`).join("")}</ol>`:`<div class="empty" style="margin-top:8px">No scores yet.</div>`}
   </details>`;
 }
 function pointsPanel(p){
   const {pts,cross,off}=pointsState(), n=pts[p.id]||0, next=TIERS.find(t=>n<t.at);
   const used=S.bookings.filter(b=>b.playerId===p.id && off[b.id]).map(b=>({b,s:S.sessions.find(x=>x.id===b.sessionId)})).filter(x=>x.s).sort((a,b)=>sessStart(a.s)-sessStart(b.s));
-  return `<section class="panel"><div><h2>Court ${POINTS_COURT} points</h2><p class="muted">Win a game on Court ${POINTS_COURT} and you earn your winning margin in points (win 21–15, get 6).</p></div>
-    <div class="pts"><div class="row" style="justify-content:space-between"><b style="font-family:var(--display);font-size:1.6rem">${n} points</b><span class="muted">${next?`${next.at-n} to go for £${next.off} off ${next.n} sessions`:"All rewards unlocked"}</span></div>
+  return `<section class="panel"><div><h2>Your points</h2><p class="muted">Win a game on any court and you and your partner share the winning margin: win 21–15 and you each get 3. A game won at deuce is worth 0.5 each. Points are yours alone, whoever you partner.</p></div>
+    <div class="pts"><div class="row" style="justify-content:space-between"><b style="font-family:var(--display);font-size:1.6rem">${fmtPts(n)} points</b><span class="muted">${next?`${fmtPts(next.at-n)} to go for £${next.off} off ${next.n} sessions`:"All rewards unlocked"}</span></div>
       <div class="meter"><i style="width:${Math.min(100,n/TIERS[TIERS.length-1].at*100)}%"></i></div>
       <div class="row" style="font-size:.85rem">${TIERS.map((t,ti)=>`<span class="chip ${cross[p.id]?.[ti]!=null?"off":"st-waitlist"}">${t.at} pts · £${t.off} off ${t.n} sessions${cross[p.id]?.[ti]!=null?" ✓":""}</span>`).join("")}</div></div>
     ${used.length?`<p style="font-size:.9rem">Discount applied to: ${used.map(({b,s})=>`${fmtDate(s.date)} (£${off[b.id]} off)`).join(", ")}. Book more sessions to use any rewards left.</p>`:cross[p.id]?`<p style="font-size:.9rem">You have a reward waiting. It comes off your next sessions automatically when you book.</p>`:""}
@@ -365,10 +380,31 @@ function reminderBanner(){
 
 /* ----- registration (new players answer the level questions first) ----- */
 function quizFields(prefix, ans){
-  return QUIZ.map((x,i)=>`<fieldset class="q"><legend>${i+1}. ${x.q}</legend>${x.a.map((a,j)=>`<label class="opt"><input type="radio" id="${prefix}${i}_${j}" name="${prefix}${i}" value="${j}" ${ans[i]===j?"checked":""}>${a}</label>`).join("")}</fieldset>`).join("");
+  const n=QUIZ.length; let i=S.qpos[prefix];
+  if(i==null){ i=QUIZ.findIndex((_,k)=>ans[k]==null); if(i<0) i=n }
+  const bar=`<div class="qbar" aria-hidden="true">${QUIZ.map((_,k)=>`<i class="${ans[k]!=null?"done":""} ${k===i?"on":""}"></i>`).join("")}</div>`;
+  const f=S.qfb[prefix], fb = f && f.i===i-1 ? `<div class="qfb ${f.ok?"ok":"no"}">${f.ok?"✓ Nice one. ":"Not quite. "}${esc(QUIZ[f.i].why)}</div>` : "";
+  if(i>=n){
+    const lv=levelFrom(ans), l=lv&&lvByCode(lv), right=k=>ans[k]===QUIZ[k].correct;
+    const badges=[["🏸","Serve savvy",right(1)&&right(3)],["👀","Shot spotter",right(5)&&right(6)],["🧭","Court sense",right(8)]];
+    return `<div class="qcard qres">${bar}${fb}<div class="qemoji">${lv==="C+"?"🏆":lv==="E"?"🌱":"🔥"}</div>
+      ${l?`<h3 class="qq">${prefix==="gq"?"They're":"You're"} ${lvChip(l.code)} ${esc(l.name)}</h3><p class="muted">${esc(l.desc)}</p>`:`<h3 class="qq">Almost there</h3><p class="muted">A question was skipped. Go back to answer it.</p>`}
+      <div class="row qbadges">${badges.map(([e,t,ok])=>`<span class="qbadge ${ok?"got":""}">${e} ${t}${ok?" ✓":""}</span>`).join("")}</div>
+      <p class="muted" style="font-size:.85rem">Quick quiz: ${knowCount(ans)} of ${QUIZ.filter(x=>x.correct!=null).length} right.</p>
+      <div class="row qnav"><button type="button" class="btn small ghost" data-qback="${prefix}">← Back</button><button type="button" class="btn small" data-qredo="${prefix}">Start again</button></div></div>`;
+  }
+  const x=QUIZ[i], a=ans[i], know=x.correct!=null;
+  return `<div class="qcard">${bar}${fb}
+    <div class="row" style="justify-content:space-between"><span class="lbl">${know?"Quick quiz":"About you"} · ${i+1} of ${n}</span>${i>0?`<button type="button" class="btn small ghost" data-qback="${prefix}">← Back</button>`:""}</div>
+    <div class="qemoji" aria-hidden="true">${x.e}</div>
+    <fieldset class="q"><legend class="qq">${esc(x.q)}</legend>
+      <div class="qopts">${x.a.map((t,j)=>`<label class="qopt ${a===j?"picked":""}"><input type="radio" id="${prefix}${i}_${j}" name="${prefix}${i}" value="${j}" ${a===j?"checked":""}><span>${esc(t)}</span></label>`).join("")}</div>
+    </fieldset>
+    ${a!=null?`<div class="row qnav"><button type="button" class="btn small primary" data-qnext="${prefix}">${i===n-1?"See my level":"Next →"}</button></div>`:""}
+  </div>`;
 }
 function levelVerdict(lv, who="you"){
-  if(!lv) return `<p class="muted">Answer all five questions to see ${who==="you"?"your":"their"} court.</p>`;
+  if(!lv) return `<p class="muted">Answer all the questions to see ${who==="you"?"your":"their"} court.</p>`;
   const l=lvByCode(lv);
   return `<div class="banner ok"><div class="grow">${who==="you"?"You're":"They're"} ${lvChip(l.code)} <b>${esc(l.name)}</b>. ${who==="you"?"You'll":"They'll"} play on the court for this level at each session.</div></div>`;
 }
@@ -509,7 +545,8 @@ function viewLive(){
     <div class="sess">${ups.slice(0,6).map(x=>`<button data-live="${x.id}" aria-pressed="${x.id===s.id}"><b>${fmtDate(x.date)}</b><span>${esc(x.start)}–${esc(x.end)}${rotInfo(x).live?" · live now":""}</span></button>`).join("")}</div>
     <p>${r.live?`<span class="dot pulse"></span><b>Live now</b> · each court moves to its next game when the score is saved`:r.done?"This session has finished.":`First game at <b>${hhmm(r.startT)}</b> · starts in <span class="cd" data-at="${r.startT.toISOString()}">–</span>`} ${v.venue?` · ${esc(v.venue)}`:""}</p>
   </section>
-  <div class="court-grid">${courtsOf(s).map(c=>courtLive(s,c)).join("")}</div>`;
+  <div class="court-grid">${courtsOf(s).map(c=>courtLive(s,c)).join("")}</div>
+  <section class="panel">${leaderboard()}</section>`;
 }
 function courtLive(s,c){
   const {roster,r,games,names}=courtPlan(s,c);
@@ -530,7 +567,6 @@ function courtLive(s,c){
     <div class="hd"><span class="num">Court ${c}</span><span>${courtChips(s,c)} ${esc(courtName(s,c))}</span><span class="muted" style="font-size:.85rem">${roster.length}/${cap(s,c)} players</span></div>
     ${roster.length?`<div class="stack">${roster.map(b=>avatar(b.playerId,b.name)).join("")}</div>`:""}
     ${body}
-    ${c===POINTS_COURT ? leaderboard() : ""}
     ${canRun(s) ? (()=>{ const away=S.bookings.filter(b=>b.sessionId===s.id&&b.court===c&&ACTIVE.includes(b.status)&&b.absent);
       return (S.isAdmin && S.view==="organiser" ? rotEditor(s,c,games,roster,r) : "") + `<details id="ctl-${s.id}-${c}"><summary>Who's here (${roster.length})</summary><div style="display:grid;gap:6px;margin-top:8px">
         ${[...roster,...away].map(b=>`<div class="row" style="justify-content:space-between"><span class="pl">${avatar(b.playerId,b.name,"sm")}<span>${esc(b.name)}</span></span><button class="btn small ghost" data-absent="${esc(b.id)}">${b.absent?"Back in rotation":"Not here"}</button></div>`).join("")}
@@ -943,6 +979,12 @@ document.addEventListener("click", async e=>{
       toast(`Court setup copied to ${same.length} more session${same.length===1?"":"s"}`);
     }
     return }
+  if(ds.qnext||ds.qback||ds.qredo){ const k=ds.qnext||ds.qback||ds.qredo, ans=k==="rq"?S.reg.ans:k==="gq"?S.gq:S.quiz;
+    let i=S.qpos[k]; if(i==null){ i=QUIZ.findIndex((_,j)=>ans[j]==null); if(i<0) i=QUIZ.length }
+    S.qfb[k]=null;
+    if(ds.qredo){ if(k==="rq") S.reg.ans={}; else if(k==="gq") S.gq={}; else S.quiz={}; S.qpos[k]=0 }
+    else S.qpos[k] = ds.qnext ? Math.min(QUIZ.length,i+1) : Math.max(0,i-1);
+    render(); return }
   if(ds.alertok){ $("#alert").hidden=true; return }
   if(ds.kopen){ const code=($("#k-code")?.value||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,"");
     if(code.length<4){ toast("Enter the session code"); return }
@@ -992,7 +1034,9 @@ document.addEventListener("click", async e=>{
 document.addEventListener("change", async e=>{
   const t=e.target;
   const m=/^(rq|gq|q)(\d)$/.exec(t.name||"");
-  if(m){ const target = m[1]==="rq"?S.reg.ans : m[1]==="gq"?S.gq : S.quiz; target[Number(m[2])]=Number(t.value); render(); return }
+  if(m){ const target = m[1]==="rq"?S.reg.ans : m[1]==="gq"?S.gq : S.quiz, qi=Number(m[2]), x=QUIZ[qi]; target[qi]=Number(t.value);
+    // swipe on to the next card; quick-quiz answers show why on the next card
+    S.qfb[m[1]] = x.correct!=null ? {i:qi, ok:target[qi]===x.correct} : null; S.qpos[m[1]]=qi+1; render(); return }
   if(t.id==="r-photo" || t.id==="photoChange"){
     const file=t.files?.[0]; if(!file) return;
     try{ const img=await toThumb(file);

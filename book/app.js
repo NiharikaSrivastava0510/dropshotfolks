@@ -179,6 +179,74 @@ function courtPlan(s,c){
     return {teams:[[o[0],o[1]],[o[2],o[3]]], sit:ids.filter(x=>!o.includes(x)), edited:true} });
   return {roster, r, games, names:Object.fromEntries(roster.map(b=>[b.playerId,b.name]))} }
 
+/* ---------- Court 4 points ---------- */
+// Winners of a scored Court 4 game each earn the winning margin in points.
+// 200 points: £2 off your next 2 sessions. 500 points: £4 off your next 3 sessions.
+const POINTS_COURT = 4;
+const TIERS = [{at:200, off:2, n:2}, {at:500, off:4, n:3}];
+function scoreOf(s,c,gi){ const x=s?.scores?.[c]?.[gi];
+  return x && Array.isArray(x.a) && Array.isArray(x.b) && Number.isInteger(x.sa) && Number.isInteger(x.sb) ? x : null }
+let ptsCache = null;
+function pointsState(){
+  if(ptsCache && ptsCache.sess===S.sessions && ptsCache.bk===S.bookings) return ptsCache.v;
+  const pts={}, cross={}, off={};
+  [...S.sessions].sort((a,b)=>sessStart(a)-sessStart(b)).forEach(s=>{
+    const sc=s.scores?.[POINTS_COURT]||{};
+    Object.keys(sc).map(Number).sort((a,b)=>a-b).forEach(gi=>{
+      const x=scoreOf(s,POINTS_COURT,gi); if(!x || x.sa===x.sb) return;
+      const m=Math.abs(x.sa-x.sb);
+      (x.sa>x.sb?x.a:x.b).forEach(id=>{ if(String(id).startsWith("guest-")) return;
+        const before=pts[id]||0; pts[id]=before+m;
+        TIERS.forEach((t,ti)=>{ if(before<t.at && pts[id]>=t.at) (cross[id] ||= [])[ti]=sessStart(s).getTime() }) });
+    });
+  });
+  // each reward covers the player's next sessions booked after the one where they reached it
+  Object.keys(cross).forEach(pid=>{
+    const own=S.bookings.filter(b=>b.playerId===pid && !b.hostId && b.status!=="cancelled")
+      .map(b=>({b,s:S.sessions.find(x=>x.id===b.sessionId)})).filter(x=>x.s).sort((a,b)=>sessStart(a.s)-sessStart(b.s));
+    TIERS.forEach((t,ti)=>{ const at=cross[pid][ti]; if(at==null) return; let n=0;
+      for(const x of own){ if(n>=t.n) break; if(sessStart(x.s).getTime()<=at || off[x.b.id]) continue; off[x.b.id]=t.off; n++ } });
+  });
+  const v={pts,cross,off}; ptsCache={sess:S.sessions, bk:S.bookings, v}; return v;
+}
+const offChip = b => { const o=pointsState().off[b.id]; return o?` <span class="chip off">Points reward · £${o} off</span>`:"" };
+function scoreForm(s,gi,sc,idp){
+  return `<div class="scorein"><span class="lbl">Score</span><input type="number" min="0" max="30" inputmode="numeric" id="${idp}a-${esc(s.id)}-${gi}" value="${sc?sc.sa:""}" aria-label="Team A score"><span>–</span><input type="number" min="0" max="30" inputmode="numeric" id="${idp}b-${esc(s.id)}-${gi}" value="${sc?sc.sb:""}" aria-label="Team B score">
+    <button class="btn small primary" data-score="${esc(s.id)}" data-gi="${gi}">${sc?"Update":"Save score"}</button>${sc?`<button class="btn small ghost danger" data-unscore="${esc(s.id)}" data-gi="${gi}">Clear</button>`:""}</div>`;
+}
+function gameBox(s,c,i,x,names,r){
+  const sc = c===POINTS_COURT ? scoreOf(s,c,i) : null, teams = sc ? [sc.a,sc.b] : x.teams;
+  const nm = id => names[id] ?? S.players.find(p=>p.id===id)?.name ?? "Player";
+  const won = sc ? (sc.sa>sc.sb?0:1) : -1, now = r.live && i===r.idx;
+  const side = (t,k) => `<div class="team ${won===k?"won":""}">${t.map(id=>`<div class="nm ${id===S.me?"me":""}">${avatar(id,nm(id),"sm")}<span>${esc(nm(id))}</span></div>`).join("")}</div>`;
+  const mid = sc ? `<div class="sc">${sc.sa}–${sc.sb}<small>+${Math.abs(sc.sa-sc.sb)} pts</small></div>` : `<div class="vs">vs</div>`;
+  const org = c===POINTS_COURT && S.isAdmin && S.view==="organiser";
+  return `<div class="game ${now?"now":""} ${sc?"done":""}">
+    <div class="gh"><span class="lbl">Game ${i+1} · ${hhmm(r.at(i))}</span>${sc?'<span class="chip st-confirmed">Finished</span>':now?'<span class="chip st-awaiting">On court</span>':""}${x.edited&&!sc?'<span class="chip st-paid">edited</span>':""}</div>
+    <div class="teams">${side(teams[0],0)}${mid}${side(teams[1],1)}</div>
+    ${x.sit.length && !sc ? `<div class="rest">Resting: ${x.sit.map(id=>esc(nm(id))).join(", ")}</div>` : ""}
+    ${org ? scoreForm(s,i,sc,"g") : ""}
+  </div>`;
+}
+function leaderboard(){
+  const {pts}=pointsState(), name=id=>S.players.find(p=>p.id===id)?.name || S.bookings.find(b=>b.playerId===id)?.name || "Player";
+  const top=Object.entries(pts).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  return `<details id="lb-${POINTS_COURT}"><summary>Points leaderboard</summary>
+    <p class="muted" style="font-size:.85rem;margin-top:6px">Win a game on Court ${POINTS_COURT} to earn your winning margin in points. ${TIERS.map(t=>`<b>${t.at} points</b>: £${t.off} off your next ${t.n} sessions`).join(" · ")}.</p>
+    ${top.length?`<ol class="lb">${top.map(([id,n])=>`<li>${avatar(id,name(id),"sm")}<span>${esc(name(id))}</span><b>${n}</b></li>`).join("")}</ol>`:`<div class="empty" style="margin-top:8px">No scores yet.</div>`}
+  </details>`;
+}
+function pointsPanel(p){
+  const {pts,cross,off}=pointsState(), n=pts[p.id]||0, next=TIERS.find(t=>n<t.at);
+  const used=S.bookings.filter(b=>b.playerId===p.id && off[b.id]).map(b=>({b,s:S.sessions.find(x=>x.id===b.sessionId)})).filter(x=>x.s).sort((a,b)=>sessStart(a.s)-sessStart(b.s));
+  return `<section class="panel"><div><h2>Court ${POINTS_COURT} points</h2><p class="muted">Win a game on Court ${POINTS_COURT} and you earn your winning margin in points (win 21–15, get 6).</p></div>
+    <div class="pts"><div class="row" style="justify-content:space-between"><b style="font-family:var(--display);font-size:1.6rem">${n} points</b><span class="muted">${next?`${next.at-n} to go for £${next.off} off ${next.n} sessions`:"All rewards unlocked"}</span></div>
+      <div class="meter"><i style="width:${Math.min(100,n/TIERS[TIERS.length-1].at*100)}%"></i></div>
+      <div class="row" style="font-size:.85rem">${TIERS.map((t,ti)=>`<span class="chip ${cross[p.id]?.[ti]!=null?"off":"st-waitlist"}">${t.at} pts · £${t.off} off ${t.n} sessions${cross[p.id]?.[ti]!=null?" ✓":""}</span>`).join("")}</div></div>
+    ${used.length?`<p style="font-size:.9rem">Discount applied to: ${used.map(({b,s})=>`${fmtDate(s.date)} (£${off[b.id]} off)`).join(", ")}. Book more sessions to use any rewards left.</p>`:cross[p.id]?`<p style="font-size:.9rem">You have a reward waiting. It comes off your next sessions automatically when you book.</p>`:""}
+  </section>`;
+}
+
 /* ---------- rendering ---------- */
 function render(){
   // keep what people are typing when live data redraws the page
@@ -375,16 +443,19 @@ function courtLive(s,c){
   if(!games.length) body = `<div class="empty">Rotation starts once 4 players have booked. ${roster.length} so far.</div>`;
   else body = `
     <div class="lbl">${r.live?`Game ${cur+1} · on court now`:`Game 1 · ${hhmm(r.at(0))}`}</div>
-    <div class="match"><div class="side">${teamHtml(g.teams[0],names)}</div><div class="vs">vs</div><div class="side">${teamHtml(g.teams[1],names)}</div></div>
+    ${(()=>{ const sc = c===POINTS_COURT ? scoreOf(s,c,cur) : null, tm = sc ? [sc.a,sc.b] : g.teams;
+      return `<div class="match"><div class="side">${teamHtml(tm[0],names)}</div>${sc?`<div class="vs" style="font-style:normal;font-weight:700;color:var(--accent)">${sc.sa}–${sc.sb}</div>`:`<div class="vs">vs</div>`}<div class="side">${teamHtml(tm[1],names)}</div></div>`
+        + (c===POINTS_COURT && S.isAdmin && S.view==="organiser" ? scoreForm(s,cur,sc,"m") : ""); })()}
     ${g.sit.length?`<div class="row"><span class="lbl">Resting</span><span class="stack">${g.sit.map(id=>avatar(id,names[id],"sm")).join("")}</span><span class="muted" style="font-size:.85rem">${g.sit.map(id=>esc(names[id])).join(", ")}</span></div>`:""}
     ${nx?`<div class="row"><span class="lbl">Next up · ${hhmm(r.at(cur+1))}</span><span style="font-size:.88rem">${nx.teams.map(t=>t.map(id=>esc(names[id])).join(" & ")).join(" <i class='muted'>vs</i> ")}</span></div>`:""}
-    <details id="rot-${s.id}-${c}"><summary>Full rotation (${games.length} games)</summary><div class="tbl"><table><thead><tr><th>#</th><th>Time</th><th>Team A</th><th>Team B</th><th>Resting</th></tr></thead><tbody>
-      ${games.map((x,i)=>`<tr class="${r.live&&i===r.idx?"now":""}"><td>${i+1}${x.edited?' <span class="chip st-paid">edited</span>':""}</td><td>${hhmm(r.at(i))}</td><td>${x.teams[0].map(id=>esc(names[id])).join(" & ")}</td><td>${x.teams[1].map(id=>esc(names[id])).join(" & ")}</td><td class="muted">${x.sit.map(id=>esc(names[id])).join(", ")}</td></tr>`).join("")}
-    </tbody></table></div></details>`;
+    <details id="rot-${s.id}-${c}"><summary>Full rotation (${games.length} games)</summary><div class="games">
+      ${games.map((x,i)=>gameBox(s,c,i,x,names,r)).join("")}
+    </div></details>`;
   return `<div class="court-live" style="--cc:${CLR[c]}">
     <div class="hd"><span class="num">Court ${c}</span><span>${courtChips(s,c)} ${esc(courtName(s,c))}</span><span class="muted" style="font-size:.85rem">${roster.length}/${cap(s,c)} players</span></div>
     ${roster.length?`<div class="stack">${roster.map(b=>avatar(b.playerId,b.name)).join("")}</div>`:""}
     ${body}
+    ${c===POINTS_COURT ? leaderboard() : ""}
     ${S.isAdmin && S.view==="organiser" ? (()=>{ const away=S.bookings.filter(b=>b.sessionId===s.id&&b.court===c&&ACTIVE.includes(b.status)&&b.absent);
       return rotEditor(s,c,games,roster,r) + `<details id="ctl-${s.id}-${c}"><summary>Who's here (${roster.length})</summary><div style="display:grid;gap:6px;margin-top:8px">
         ${[...roster,...away].map(b=>`<div class="row" style="justify-content:space-between"><span class="pl">${avatar(b.playerId,b.name,"sm")}<span>${esc(b.name)}</span></span><button class="btn small ghost" data-absent="${esc(b.id)}">${b.absent?"Back in rotation":"Not here"}</button></div>`).join("")}
@@ -422,6 +493,7 @@ function viewMine(){
     ${p.levelRequest?"":`<details id="reqBox"><summary>Ask the organiser to change my level</summary>
       <div class="row" style="margin-top:8px"><select id="reqLevel" style="max-width:280px">${LEVELS.filter(l=>l.code!==p.level).map(l=>`<option value="${l.code}">${l.code} · ${l.name}</option>`).join("")}</select><button class="btn small" id="reqBtn">Send request</button></div></details>`}
   </section>`;
+  html += pointsPanel(p);
   const upc = mine.filter(x=>sessEnd(x.s)>=new Date()), past = mine.filter(x=>sessEnd(x.s)<new Date()).reverse();
   html += `<section class="panel"><h2>My bookings</h2>${upc.length?upc.map(({b,s})=>bookingCard(b,s)).join(""):`<div class="empty">No bookings. <a href="#" data-go="book">Book a session</a></div>`}</section>`;
   if(past.length) html += `<section class="panel"><details id="pastBox"><summary><b>Past sessions (${past.length})</b></summary><div style="display:grid;gap:10px;margin-top:10px">${past.map(({b,s})=>bookingCard(b,s)).join("")}</div></details></section>`;
@@ -432,10 +504,11 @@ function bookingCard(b,s){
   const guests = isGuest ? [] : S.bookings.filter(x=>x.hostId===b.playerId && x.sessionId===s.id && x.status==="awaiting");
   // amount to transfer: the session fee (e.g. "£15") times you + guests, when the fee is a plain number
   const people = guests.length+1, fee = parseFloat(String(c.price||"").replace(/[^0-9.]/g,""));
-  const amount = Number.isFinite(fee) && fee>0 ? "£"+(fee*people).toFixed(2).replace(/\.00$/,"") : "";
+  const off = pointsState().off[b.id] || 0;
+  const amount = Number.isFinite(fee) && fee>0 ? "£"+Math.max(0,fee*people-off).toFixed(2).replace(/\.00$/,"") : "";
   const allDetails = [c.accountName&&`Name: ${c.accountName}`, c.sortCode&&`Sort code: ${c.sortCode}`, c.accountNumber&&`Account number: ${c.accountNumber}`, amount&&`Amount: ${amount}`, `Reference: ${b.ref}`].filter(Boolean).join("\n");
   const pay = b.status==="awaiting" && !isGuest ? `
-    <p><b>Pay ${amount?amount:(c.price?esc(c.price):"the session fee")}${guests.length?` (you + ${guests.length} guest${guests.length>1?"s":""})`:""}</b> by bank transfer from your banking app, using this reference so the organiser can match it.</p>
+    <p><b>Pay ${amount?amount:(c.price?esc(c.price):"the session fee")}${guests.length?` (you + ${guests.length} guest${guests.length>1?"s":""})`:""}</b>${off?` <span class="chip off">£${off} points reward taken off</span>`:""} by bank transfer from your banking app, using this reference so the organiser can match it.</p>
     <dl class="paybox">
       ${c.accountName?`<dt>Name</dt><dd>${esc(c.accountName)}</dd><span></span>`:""}
       ${c.bankName?`<dt>Bank</dt><dd>${esc(c.bankName)}</dd><span></span>`:""}
@@ -457,7 +530,7 @@ function bookingCard(b,s){
   const cal = b.status==="confirmed" && !past && !isGuest ? `<div class="row"><a class="btn small" href="${gcalUrl(b,s)}" target="_blank" rel="noopener">Add to Google Calendar</a><button class="btn small" data-ics="${esc(b.id)}">Download calendar reminder</button>${v.address?`<a class="btn small" href="${mapsFor(v)}" target="_blank" rel="noopener">Directions</a>`:""}</div>` : "";
   return `<div class="bk">
     <div class="row" style="justify-content:space-between"><h3>${isGuest?`Guest: ${esc(b.name)} · `:""}${fmtLong(s.date)} · ${esc(s.start)}–${esc(s.end)}</h3>${stChip(b.status)}</div>
-    <p>Court ${esc(b.court)} · ${esc(courtName(s,b.court))} ${courtChips(s,b.court)}${v.venue?` · ${esc(v.venue)}`:""}</p>
+    <p>Court ${esc(b.court)} · ${esc(courtName(s,b.court))} ${courtChips(s,b.court)}${v.venue?` · ${esc(v.venue)}`:""}${offChip(b)}</p>
     ${b.status==="waitlist"?`<p class="muted">This court is full. If a place opens up, the organiser will offer it to you before you pay.</p>`:""}
     ${b.status==="paid"?`<p class="muted">Thanks. The organiser will confirm once the payment arrives.</p>`:""}
     ${isGuest&&b.status==="awaiting"?`<p class="muted">Paid together with your own place for this session.</p>`:""}
@@ -592,7 +665,7 @@ function orgOverview(){
   </section>`;
   html += `<section class="panel"><h2>Payments to check</h2>
     ${toCheck.length?`<p class="muted">Check your bank for these references, then confirm.</p><div class="tbl"><table><thead><tr><th>Player</th><th>Session</th><th>Ref</th><th></th></tr></thead><tbody>
-      ${toCheck.sort((a,b)=>a.sessionId.localeCompare(b.sessionId)).map(b=>{const ss=S.sessions.find(x=>x.id===b.sessionId); return `<tr><td>${esc(b.name)}</td><td>${fmtDate(ss.date)} · Court ${esc(b.court)}</td><td class="mono">${esc(b.ref)}</td><td><button class="btn small primary" data-confirm="${esc(b.id)}">Confirm paid</button></td></tr>`}).join("")}
+      ${toCheck.sort((a,b)=>a.sessionId.localeCompare(b.sessionId)).map(b=>{const ss=S.sessions.find(x=>x.id===b.sessionId); return `<tr><td>${esc(b.name)}${offChip(b)}</td><td>${fmtDate(ss.date)} · Court ${esc(b.court)}</td><td class="mono">${esc(b.ref)}</td><td><button class="btn small primary" data-confirm="${esc(b.id)}">Confirm paid</button></td></tr>`}).join("")}
     </tbody></table></div>`:`<div class="empty">Nothing to check. Payments players mark as sent will appear here.</div>`}
   </section>`;
   if(reqs.length) html += `<div class="banner info"><div class="grow"><b>${reqs.length} level change request${reqs.length>1?"s":""}</b> waiting for you.</div><button class="btn small" data-tab-go="o-players">Review</button></div>`;
@@ -608,7 +681,7 @@ function adminSession(s){
     const list = S.bookings.filter(b=>b.sessionId===s.id && b.court===c && b.status!=="cancelled").sort((a,b)=>String(a.createdAt).localeCompare(b.createdAt));
     if(!cap(s,c) && !list.length) return "";
     return `<tr><td colspan="5" style="background:var(--sunk)"><b>Court ${c}</b> · ${esc(courtName(s,c))} ${courtChips(s,c)} · ${activeIn(s.id,c).length}/${cap(s,c)}${cap(s,c)?"":" · not running"}</td></tr>` +
-      (list.length?list.map(b=>{ const em=S.players.find(p=>p.id===b.playerId)?.email; return `<tr><td>${esc(b.name)}${b.hostId?` <span class="chip st-waitlist">guest ${lvChip(b.level)}</span>`:""}${em?`<br><span class="muted" style="font-size:.82rem">${esc(em)}</span>`:""}</td><td class="mono">${esc(b.ref)}</td><td><select data-status="${esc(b.id)}" aria-label="Status for ${esc(b.name)}">${Object.entries(STATUS).map(([k,v])=>`<option value="${k}" ${k===b.status?"selected":""}>${v.label}</option>`).join("")}</select>${b.absent?' <span class="chip st-cancelled">Not here</span>':""}</td>
+      (list.length?list.map(b=>{ const em=S.players.find(p=>p.id===b.playerId)?.email; return `<tr><td>${esc(b.name)}${offChip(b)}${b.hostId?` <span class="chip st-waitlist">guest ${lvChip(b.level)}</span>`:""}${em?`<br><span class="muted" style="font-size:.82rem">${esc(em)}</span>`:""}</td><td class="mono">${esc(b.ref)}</td><td><select data-status="${esc(b.id)}" aria-label="Status for ${esc(b.name)}">${Object.entries(STATUS).map(([k,v])=>`<option value="${k}" ${k===b.status?"selected":""}>${v.label}</option>`).join("")}</select>${b.absent?' <span class="chip st-cancelled">Not here</span>':""}</td>
         <td><select data-court="${esc(b.id)}" aria-label="Court for ${esc(b.name)}">${[1,2,3,4].map(n=>`<option value="${n}" ${n===b.court?"selected":""}>Court ${n}</option>`).join("")}</select></td>
         <td class="row">${b.status==="paid"||b.status==="awaiting"?`<button class="btn small primary" data-confirm="${esc(b.id)}">Confirm paid</button>`:""}
         ${b.status==="waitlist"?`<button class="btn small" data-offer="${esc(b.id)}">Offer place</button>`:""}
@@ -796,6 +869,17 @@ document.addEventListener("click", async e=>{
       toast(`Court setup copied to ${same.length} more session${same.length===1?"":"s"}`);
     }
     return }
+  if(ds.score){ const s=S.sessions.find(x=>x.id===ds.score), gi=Number(ds.gi), box=t.closest(".scorein"); if(!s||!box) return;
+    const [ia,ib]=box.querySelectorAll("input"), sa=Number(ia.value), sb=Number(ib.value);
+    if(ia.value===""||ib.value===""||!Number.isInteger(sa)||!Number.isInteger(sb)||sa<0||sb<0||sa>30||sb>30){ toast("Enter both scores (0–30)"); return }
+    if(sa===sb){ toast("Scores can't be level"); return }
+    const g=courtPlan(s,POINTS_COURT).games[gi], prev=scoreOf(s,POINTS_COURT,gi); if(!g && !prev) return;
+    const teams = prev ? [prev.a,prev.b] : g.teams;
+    const {id,...body}=s, scores={...(s.scores||{})}; scores[POINTS_COURT]={...(scores[POINTS_COURT]||{}), [gi]:{a:teams[0], b:teams[1], sa, sb, at:nowIso()}};
+    save("sessions",id,{...body, scores},`Game ${gi+1}: ${sa}–${sb} saved`); return }
+  if(ds.unscore){ const s=S.sessions.find(x=>x.id===ds.unscore), gi=String(ds.gi); if(!s) return;
+    arm(t,"Tap again to clear",()=>{ const {id,...body}=s, scores={...(s.scores||{})}, cs={...(scores[POINTS_COURT]||{})}; delete cs[gi]; scores[POINTS_COURT]=cs;
+      save("sessions",id,{...body, scores},`Game ${Number(gi)+1} score cleared`) }); return }
   if(ds.resave){ const s=S.sessions.find(x=>x.id===ds.sid), k=ds.resave, gi=Number(ds.gi), c=ds.c;
     const ids=[0,1,2,3].map(i=>$(`#re-${k}-${gi}-${i}`).value);
     if(new Set(ids).size!==4){ toast("Pick four different players"); return }

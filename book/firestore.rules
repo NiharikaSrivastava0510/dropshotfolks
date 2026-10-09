@@ -72,8 +72,9 @@ service cloud.firestore {
     match /sessions/{id} {
       allow read: if true;
       allow write: if isAdmin();
-      allow update: if unlockOk(id) && onlyChanges(['scores'])
-        && request.resource.data.scores is map && request.resource.data.scores.keys().hasOnly(['4']);
+      allow update: if unlockOk(id) && onlyChanges(['scores', 'rotationStart'])
+        && request.resource.data.get('scores', {}) is map && request.resource.data.get('scores', {}).keys().hasOnly(['1', '2', '3', '4'])
+        && request.resource.data.get('rotationStart', '') is string;
     }
     // Session codes: only the organiser can see or change them.
     match /secrets/{sid} {

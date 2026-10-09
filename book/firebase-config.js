@@ -4,7 +4,7 @@
 // While apiKey is empty, the public page shows "Online booking is coming soon".
 window.FIREBASE_CONFIG = {
   apiKey: "AIzaSyAP7O7DMk-sJFCqICW2dPZar53TlVi9jaA",
-  authDomain: "dropshotfolks.firebaseapp.com",
+  authDomain: "dropshotfolks.co.uk",
   projectId: "dropshotfolks",
   appId: "1:871666667741:web:a678db0cf7b73369a08b34"
 };

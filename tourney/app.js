@@ -333,7 +333,7 @@ function render(){
   const tabs=TABS(); if(!tabs.some(([k])=>k===S.tab)) S.tab="reg";
   const t=T(), anyLive=t && matchesOf(t).some(m=>m.status==="live");
   $("#tabs").innerHTML=tabs.map(([k,l])=>`<button role="tab" data-tab="${k}" aria-selected="${k===S.tab}">${k==="live"&&anyLive?'<span class="dot pulse"></span>':""}${esc(l)}</button>`).join("");
-  $("#who").innerHTML=(S.isAdmin?`<span class="org-flag">Organiser</span>`:"")+(S.uid && !auth?.currentUser?.isAnonymous?` <button class="btn small" id="signOut" type="button">Sign out</button>`:"");
+  $("#who").innerHTML=(S.isAdmin?`<span class="org-flag">Organiser</span>`:`<button class="btn small" data-signin="1" type="button">🔑 Organiser sign in</button>`)+(S.uid && !auth?.currentUser?.isAnonymous?` <button class="btn small" id="signOut" type="button">Sign out</button>`:"");
   const tn=$("#tname"); tn.innerHTML=t?`🏆 <b>${esc(t.name||"Tournament")}</b> · ${esc(fmtDate(t.date))}`:""; tn.hidden=!t;
   const views={reg:viewReg, teams:viewTeams, fix:viewFix, live:viewLive, ref:viewRef, org:viewOrg};
   $("#main").innerHTML = !S.loaded ? `<section class="panel"><div class="empty loading">Loading…</div></section>` : (S.edit?editPanel():"") + views[S.tab]();
@@ -383,7 +383,7 @@ document.addEventListener("click", async e=>{
   if(ds.tid){ S.tid=ds.tid; ls.set("dsf:tid",S.tid); render(); return }
   if(ds.cat){ S.cat=ds.cat; render(); return }
   if(ds.copy){ try{ await navigator.clipboard.writeText(ds.copy); toast("Copied") }catch{ toast(ds.copy) } return }
-  if(ds.signin){ try{ await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); location.reload() }catch{ toast("Sign-in didn't finish") } return }
+  if(ds.signin){ try{ await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); ls.set("dsf:ttab","org"); location.reload() }catch{ toast("Sign-in didn't finish") } return }
   if(ds.withdraw){ const x=teamById(ds.withdraw); if(!x||!confirm(`Withdraw ${x.name}?`)) return;
     await db.collection("tcontacts").doc(x.id).delete().catch(()=>{}); await db.collection("tteams").doc(x.id).delete().then(()=>toast("Team withdrawn"),()=>toast("Couldn't withdraw")); return }
   // referee

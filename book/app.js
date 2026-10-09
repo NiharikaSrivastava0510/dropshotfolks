@@ -14,23 +14,28 @@ const PER_COURT = 7, GAME_MINS = 12;
 // Level quiz: "about you" answers score 0 (beginner) to 4 (upper high intermediate);
 // quick-quiz questions have one right answer and show why.
 const QUIZ = [
-  {e:"🔁", q:"How long can you keep a rally going with someone at your level?", a:["I'm just learning to hit the shuttle","A few shots, I'm still finding consistency","6–10 shots most of the time","Long rallies, and I can change the pace","As long as I need, while setting up a winner"]},
-  {e:"🏸", q:"Doubles serve: which one do most players use to start a rally?", a:["High serve to the back line","Smash it down","Low serve, just over the net","Drive it at their body"], correct:2, why:"The low serve stays tight to the net so the receiver can't attack it."},
-  {e:"🎯", q:"How's your serve?", a:["I'm still learning to serve","It goes in more often than not","Reliable, with basic placement","I vary length and placement","Consistent, and I use it to win points"]},
-  {e:"🦘", q:"The receiver is creeping right up to the front line, ready to pounce on your low serve. What do you serve?", a:["A flick serve over their head","The same low serve, just faster","Serve it into the net","Wait for them to step back"], correct:0, why:"A flick serve flies just over their reach to the back of the court."},
-  {e:"💥", q:"Which shots do you play on purpose?", a:["I don't know the different shots yet","Mainly clears and straight returns","Lifts and some drop shots","Drops, drives, lifts and smashes","The full range, including deception"]},
-  {e:"👀", q:"Spot the shot: hit from the back, fast and steep down to finish the point.", a:["Clear","Lift","Smash","Net shot"], correct:2, why:"That's the smash: the big attacking shot to win the point."},
-  {e:"🪶", q:"Spot the shot: soft from the back of the court, it drops just over the net.", a:["Drive","Drop shot","Clear","Smash"], correct:1, why:"The drop shot pulls your opponent forward and opens up the back."},
-  {e:"👯", q:"How do you play doubles?", a:["I haven't played doubles","I'm still working out where to stand","I know front-and-back and side-by-side","We rotate and cover the court well","We play tactical formations"]},
-  {e:"🧭", q:"Doubles: your side is attacking. Where do you and your partner stand?", a:["Side by side","Both at the net","Both at the back","One at the front, one at the back"], correct:3, why:"Front-and-back when attacking, side-by-side when defending."},
-  {e:"📅", q:"How much have you played?", a:["Only a handful of times","Social games now and then","Regular club games","Club games and some matches","League or tournament play"]}
+  {e:"⏳", img:"hero-hall", call:"Pre-match chat", q:"First things first: how long have you been playing badminton?", ic:["🐣","🌱","🌿","🌳","🦸"], a:["I'm just starting out","Less than a year","1–3 years","3–5 years","5+ years, it's my life"]},
+  {e:"🔁", img:"court-lunge", call:"Warm-up", q:"How long can you keep a rally going with someone at your level?", ic:["🐣","🙂","💪","🔥","🦸"], a:["I'm just learning to hit the shuttle","A few shots, I'm still finding consistency","6–10 shots most of the time","Long rallies, and I can change the pace","As long as I need, while setting up a winner"]},
+  {e:"🏸", img:"service-ready", call:"Rally 1 · the serve", tag:"serve", q:"Love all, play! You're serving to start a doubles rally. Which serve do most players use?", a:["High serve to the back line","Smash it down","Low serve, just over the net","Drive it at their body"], correct:2, why:"The low serve stays tight to the net so the receiver can't attack it."},
+  {e:"📆", img:"court-wide-2", call:"Warm-up", q:"How many times a week do you get on court?", ic:["😴","1️⃣","2️⃣","3️⃣","🏠"], a:["Hardly ever, maybe once a month","About once a week","Twice a week","Three times a week","Four or more, I basically live here"]},
+  {e:"🎯", img:"ready-stance", call:"Warm-up", q:"How's your serve?", ic:["🐣","🙂","👍","🎯","🏆"], a:["I'm still learning to serve","It goes in more often than not","Reliable, with basic placement","I vary length and placement","Consistent, and I use it to win points"]},
+  {e:"🦘", img:"jump-reach", call:"Rally 2 · read the receiver", tag:"serve", q:"The receiver is creeping right up to the front line, ready to pounce on your low serve. What do you serve?", a:["A flick serve over their head","The same low serve, just faster","Serve it into the net","Wait for them to step back"], correct:0, why:"A flick serve flies just over their reach to the back of the court."},
+  {e:"💥", img:"backhand-defence", call:"Warm-up", q:"Which shots do you play on purpose?", ic:["🤷","➡️","🪶","💥","🎩"], a:["I don't know the different shots yet","Mainly clears and straight returns","Lifts and some drop shots","Drops, drives, lifts and smashes","The full range, including deception"]},
+  {e:"👀", img:"kneel-celebrate", call:"Rally 3 · spot the shot", tag:"shot", q:"Coach jumps at the back and hits it fast and steep, straight down at you. What shot was that?", a:["Clear","Lift","Smash","Net shot"], correct:2, why:"That's the smash: the big attacking shot to win the point."},
+  {e:"🧑‍🏫", img:"net-high-five", call:"Change of ends", q:"Ever had a coach in your corner?", ic:["🙅","👋","📚","📈","🎓"], a:["Never, self-taught all the way","A taster session or two","Some lessons or group classes","Regular coaching for a while","Years of coaching or squad training"]},
+  {e:"🪶", img:"court-three", call:"Rally 4 · spot the shot", tag:"shot", q:"Coach is at the back again, but this time it's soft and drops just over the net. What shot was that?", a:["Drive","Drop shot","Clear","Smash"], correct:1, why:"The drop shot pulls you forward and opens up the back of your court."},
+  {e:"👯", img:"group-high-five", call:"Warm-up", q:"How do you play doubles?", ic:["🙋","🧭","↕️","🔄","♟️"], a:["I haven't played doubles","I'm still working out where to stand","I know front-and-back and side-by-side","We rotate and cover the court well","We play tactical formations"]},
+  {e:"🧭", img:"court-wide-1", call:"Match point · positions", tag:"court", q:"Your side is attacking. Where do you and your partner stand?", a:["Side by side","Both at the net","Both at the back","One at the front, one at the back"], correct:3, why:"Front-and-back when attacking, side-by-side when defending."},
+  {e:"🏆", img:"kneel-celebrate", call:"Cool-down", q:"Tournaments: what's your story?", ic:["🙈","🎪","🤝","🏅","🥇"], a:["Never played one","Tried a fun one once","A few social tournaments","Regular club or league matches","Regular competitive tournaments, medals included"]}
 ];
+const packQuiz = ans => ({v:2, a:QUIZ.map((_,i)=>ans?.[i] ?? "").join(",")});
 const knowCount = ans => QUIZ.filter((x,i)=>x.correct!=null && ans?.[i]===x.correct).length;
 function levelFrom(ans){
   if(QUIZ.some((_,i)=>ans?.[i]==null)) return null;
   const self = QUIZ.map((x,i)=>x.correct==null ? ans[i] : null).filter(v=>v!=null);
-  const selfTotal = self.reduce((a,b)=>a+b,0), know = knowCount(ans);
-  if(selfTotal<=4 || self.filter(v=>v===0).length>=3) return "E";
+  // "about you" answers scaled to 0–20 so adding questions doesn't shift the levels
+  const selfTotal = self.reduce((a,b)=>a+b,0) * 20 / (self.length*4), know = knowCount(ans);
+  if(selfTotal<=4 || self.filter(v=>v===0).length >= Math.ceil(self.length*.6)) return "E";
   const t = selfTotal + know;
   let lv = t<=9?"D-":t<=15?"D+":t<=20?"C-":"C+";
   // knowing your serves and shots backs up the level; if not, step down one
@@ -142,7 +147,7 @@ const S = {
   gq: {}, guests: [],               // guest questions and guests waiting to be booked
   liveSess: null, result: null, liveKey: "",
   picks: new Set(),                 // sessions ticked but not booked yet
-  qpos: {}, qfb: {},                // level quiz: card on screen and last answer feedback, per quiz
+  qpos: {}, qfb: {}, fx: ls.get("dsf:fx", true),                // level quiz: card on screen and last answer feedback, per quiz
   rotEdit: {}, pedit: null,         // organiser: game being edited per court, player being edited
   kiosk: ls.get("dsf:kiosk", null), // session this device has open in session view
   unlock: null, secrets: {}         // this device's unlock; organiser: session codes
@@ -380,29 +385,69 @@ function reminderBanner(){
 }
 
 /* ----- registration (new players answer the level questions first) ----- */
+/* ---- level check as a mini match against the coach ---- */
+const qScore = ans => { let you=0, coach=0, power=0;
+  QUIZ.forEach((x,k)=>{ const a=ans[k]; if(a==null) return; if(x.correct==null) power+=a; else if(a===x.correct) you++; else coach++ }); return {you,coach,power} };
 function quizFields(prefix, ans){
   const n=QUIZ.length; let i=S.qpos[prefix];
   if(i==null){ i=QUIZ.findIndex((_,k)=>ans[k]==null); if(i<0) i=n }
+  const sc=qScore(ans), maxPow=QUIZ.filter(x=>x.correct==null).length*4;
+  const board=`<div class="qboard"><span class="qside">🙋 <small>You</small> <b>${sc.you}</b></span><span class="qpow" title="Warm-up power">⚡ <i><em style="width:${Math.round(sc.power/maxPow*100)}%"></em></i></span><span class="qside"><b>${sc.coach}</b> <small>Coach</small> 🧢</span>
+    <button type="button" class="qsnd" data-qfx="1" aria-label="${S.fx?"Mute the umpire":"Turn on the umpire voice"}">${S.fx?"🔊":"🔇"}</button></div>`;
   const bar=`<div class="qbar" aria-hidden="true">${QUIZ.map((_,k)=>`<i class="${ans[k]!=null?"done":""} ${k===i?"on":""}"></i>`).join("")}</div>`;
-  const f=S.qfb[prefix], fb = f && f.i===i-1 ? `<div class="qfb ${f.ok?"ok":"no"}">${f.ok?"✓ Nice one. ":"Not quite. "}${esc(QUIZ[f.i].why)}</div>` : "";
+  const f=S.qfb[prefix];
+  const fb = f && f.i===i-1 ? (f.self ? `<div class="qfb pow">🔥 Warm-up done: +${f.v} power</div>`
+    : `<div class="qfb ${f.ok?"ok":"no"}">🗣️ ${f.ok?"Point to you! ":"Out! Point to Coach. "}${esc(QUIZ[f.i].why)}</div>`) : "";
   if(i>=n){
     const lv=levelFrom(ans), l=lv&&lvByCode(lv), right=k=>ans[k]===QUIZ[k].correct;
-    const badges=[["🏸","Serve savvy",right(1)&&right(3)],["👀","Shot spotter",right(5)&&right(6)],["🧭","Court sense",right(8)]];
-    return `<div class="qcard qres">${bar}${fb}<div class="qemoji">${lv==="C+"?"🏆":lv==="E"?"🌱":"🔥"}</div>
-      ${l?`<h3 class="qq">${prefix==="gq"?"They're":"You're"} ${lvChip(l.code)} ${esc(l.name)}</h3><p class="muted">${esc(l.desc)}</p>`:`<h3 class="qq">Almost there</h3><p class="muted">A question was skipped. Go back to answer it.</p>`}
+    const tagged=t=>QUIZ.every((x,k)=>x.tag!==t || right(k));
+    const badges=[["🏸","Serve savvy",tagged("serve")],["👀","Shot spotter",tagged("shot")],["🧭","Court sense",tagged("court")]];
+    const confetti=Array.from({length:18},(_,k)=>`<span style="left:${(k*53)%100}%;animation-delay:${(k%6)*.18}s">${["🏸","🎉","✨","🏆","🪶","🎊"][k%6]}</span>`).join("");
+    return `<div class="qcard qres">${board}${fb}<div class="qconf" aria-hidden="true">${confetti}</div>
+      <div class="qemoji">🏆</div><p class="lbl">Game, set and match</p>
+      ${l?`<h3 class="qq">${prefix==="gq"?"They're":"You're"} ${lvChip(l.code)} ${esc(l.name)}</h3><p class="muted">${esc(l.desc)}</p>`:`<h3 class="qq">Almost there</h3><p class="muted">A rally was skipped. Go back to play it.</p>`}
+      <p class="qfinal">Rallies <b>${sc.you}–${sc.coach}</b> · Power <b>${sc.power}/${maxPow}</b></p>
       <div class="row qbadges">${badges.map(([e,t,ok])=>`<span class="qbadge ${ok?"got":""}">${e} ${t}${ok?" ✓":""}</span>`).join("")}</div>
-      <p class="muted" style="font-size:.85rem">Quick quiz: ${knowCount(ans)} of ${QUIZ.filter(x=>x.correct!=null).length} right.</p>
-      <div class="row qnav"><button type="button" class="btn small ghost" data-qback="${prefix}">← Back</button><button type="button" class="btn small" data-qredo="${prefix}">Start again</button></div></div>`;
+      <div class="row qnav"><button type="button" class="btn small ghost" data-qback="${prefix}">← Back</button><button type="button" class="btn small" data-qredo="${prefix}">🔁 Rematch</button></div></div>`;
   }
   const x=QUIZ[i], a=ans[i], know=x.correct!=null;
-  return `<div class="qcard">${bar}${fb}
-    <div class="row" style="justify-content:space-between"><span class="lbl">${know?"Quick quiz":"About you"} · ${i+1} of ${n}</span>${i>0?`<button type="button" class="btn small ghost" data-qback="${prefix}">← Back</button>`:""}</div>
-    <div class="qemoji" aria-hidden="true">${x.e}</div>
+  return `<div class="qcard ${know?"rally":"warm"}">${board}${bar}${fb}
+    <div class="qphoto" style="background-image:url('../images/site/${x.img}.jpg')"><span class="qcall">${esc(x.call)}</span><span class="qemoji">${x.e}</span>
+      <div class="qcourt" aria-hidden="true"><span class="qnet"></span><span class="qshuttle">🏸</span></div></div>
+    <div class="row" style="justify-content:space-between"><span class="lbl">${know?"Rally":"Warm-up"} · ${i+1} of ${n}</span>${i>0?`<button type="button" class="btn small ghost" data-qback="${prefix}">← Back</button>`:""}</div>
     <fieldset class="q"><legend class="qq">${esc(x.q)}</legend>
-      <div class="qopts">${x.a.map((t,j)=>`<label class="qopt ${a===j?"picked":""}"><input type="radio" id="${prefix}${i}_${j}" name="${prefix}${i}" value="${j}" ${a===j?"checked":""}><span>${esc(t)}</span></label>`).join("")}</div>
+      <div class="qopts">${x.a.map((t,j)=>`<label class="qopt ${a===j?"picked":""}"><input type="radio" id="${prefix}${i}_${j}" name="${prefix}${i}" value="${j}" ${a===j?"checked":""}><span>${x.ic?`<span class="qic">${x.ic[j]}</span> `:""}${esc(t)}</span></label>`).join("")}</div>
     </fieldset>
-    ${a!=null?`<div class="row qnav"><button type="button" class="btn small primary" data-qnext="${prefix}">${i===n-1?"See my level":"Next →"}</button></div>`:""}
+    ${a!=null?`<div class="row qnav"><button type="button" class="btn small primary" data-qnext="${prefix}">${i===n-1?"🏆 See my level":"Next rally →"}</button></div>`:""}
   </div>`;
+}
+/* umpire voice and racket sounds (Web Speech and Web Audio, nothing to download) */
+let audioCtx=null;
+function sfx(kind){
+  if(!S.fx) return;
+  try{
+    audioCtx ||= new (window.AudioContext||window.webkitAudioContext)();
+    const t=audioCtx.currentTime, tone=(f,at,d,type="sine",vol=.18)=>{ const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.type=type; o.frequency.value=f; g.gain.setValueAtTime(vol,t+at); g.gain.exponentialRampToValueAtTime(.001,t+at+d); o.connect(g).connect(audioCtx.destination); o.start(t+at); o.stop(t+at+d) };
+    if(kind==="hit"){ const len=.07, buf=audioCtx.createBuffer(1,audioCtx.sampleRate*len,audioCtx.sampleRate), d=buf.getChannelData(0);
+      for(let k=0;k<d.length;k++) d[k]=(Math.random()*2-1)*Math.pow(1-k/d.length,3);
+      const src=audioCtx.createBufferSource(), bp=audioCtx.createBiquadFilter(), g=audioCtx.createGain(); bp.type="bandpass"; bp.frequency.value=2200; g.gain.value=.9;
+      src.buffer=buf; src.connect(bp).connect(g).connect(audioCtx.destination); src.start(t) }
+    if(kind==="win"){ tone(660,.08,.18); tone(880,.22,.3) }
+    if(kind==="lose"){ tone(330,.08,.2,"triangle"); tone(220,.24,.3,"triangle") }
+    if(kind==="power"){ tone(520,.06,.12,"triangle",.12); tone(700,.16,.16,"triangle",.12) }
+    if(kind==="match"){ [523,659,784,1046].forEach((f,k)=>tone(f,.1+k*.14,.35)) }
+  }catch{}
+}
+function say(text){
+  if(!S.fx || !("speechSynthesis" in window)) return;
+  try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.lang="en-GB"; u.rate=1.05;
+    const v=speechSynthesis.getVoices().find(v=>/en-GB/i.test(v.lang)); if(v) u.voice=v; speechSynthesis.speak(u) }catch{}
+}
+function quizCall(prefix, ans){
+  let i=S.qpos[prefix]; if(i==null){ i=QUIZ.findIndex((_,k)=>ans[k]==null); if(i<0) i=QUIZ.length }
+  const f=S.qfb[prefix], lead = f && f.i===i-1 ? (f.self ? "" : f.ok ? "Point to you! " : "Out! Point to Coach. ") : "";
+  if(i>=QUIZ.length){ const l=lvByCode(levelFrom(ans)||""); sfx("match"); say(`${lead}Game, set and match! ${l?`${prefix==="gq"?"They're":"You're"} ${l.name}.`:""}`); return }
+  say(lead + (i===0 ? "Love all, play! " : "") + QUIZ[i].q);
 }
 function levelVerdict(lv, who="you"){
   if(!lv) return `<p class="muted">Answer all the questions to see ${who==="you"?"your":"their"} court.</p>`;
@@ -877,7 +922,7 @@ async function bookSelected(){
     for(const g of S.guests){
       k++; const gid=`${s.id}_${p.id}_g${k}`, gCourt=pickCourt(g.level);
       if(!gCourt){ ok=false; lines.push(`${fmtDate(s.date)} · ${esc(g.name)}: no court for ${esc(g.level)} players this session`); continue }
-      await place(gid, {playerId:`guest-${p.id}-${k}`, hostId:p.id, name:`${g.name} (guest of ${p.name.split(" ")[0]})`, level:g.level, quiz:g.ans}, gCourt, g.name);
+      await place(gid, {playerId:`guest-${p.id}-${k}`, hostId:p.id, name:`${g.name} (guest of ${p.name.split(" ")[0]})`, level:g.level, quiz:packQuiz(g.ans)}, gCourt, g.name);
     }
   }
   S.guests=[]; S.gq={}; S.picks.clear();
@@ -984,7 +1029,9 @@ document.addEventListener("click", async e=>{
     S.qfb[k]=null;
     if(ds.qredo){ if(k==="rq") S.reg.ans={}; else if(k==="gq") S.gq={}; else S.quiz={}; S.qpos[k]=0 }
     else S.qpos[k] = ds.qnext ? Math.min(QUIZ.length,i+1) : Math.max(0,i-1);
-    render(); return }
+    render(); sfx("hit"); quizCall(k, ds.qredo ? {} : ans); return }
+  if(ds.qfx){ S.fx=!S.fx; ls.set("dsf:fx",S.fx); if(!S.fx) try{ speechSynthesis.cancel() }catch{}; render();
+    if(S.fx){ const k=t.closest("#quiz")?"q":t.closest("#regForm")?"rq":"gq"; quizCall(k, k==="rq"?S.reg.ans:k==="gq"?S.gq:S.quiz) } return }
   if(ds.alertok){ $("#alert").hidden=true; return }
   if(ds.kopen){ const code=($("#k-code")?.value||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,"");
     if(code.length<4){ toast("Enter the session code"); return }
@@ -1031,10 +1078,12 @@ document.addEventListener("click", async e=>{
 });
 document.addEventListener("change", async e=>{
   const t=e.target;
-  const m=/^(rq|gq|q)(\d)$/.exec(t.name||"");
+  const m=/^(rq|gq|q)(\d+)$/.exec(t.name||"");
   if(m){ const target = m[1]==="rq"?S.reg.ans : m[1]==="gq"?S.gq : S.quiz, qi=Number(m[2]), x=QUIZ[qi]; target[qi]=Number(t.value);
     // swipe on to the next card; quick-quiz answers show why on the next card
-    S.qfb[m[1]] = x.correct!=null ? {i:qi, ok:target[qi]===x.correct} : null; S.qpos[m[1]]=qi+1; render(); return }
+    const ok = target[qi]===x.correct;
+    S.qfb[m[1]] = x.correct!=null ? {i:qi, ok} : {i:qi, self:true, v:target[qi]}; S.qpos[m[1]]=qi+1; render();
+    sfx("hit"); setTimeout(()=>sfx(x.correct==null?"power":ok?"win":"lose"),120); quizCall(m[1], target); return }
   if(t.id==="r-photo" || t.id==="photoChange"){
     const file=t.files?.[0]; if(!file) return;
     try{ const img=await toThumb(file);
@@ -1071,7 +1120,7 @@ document.addEventListener("submit", async e=>{
     if(ex && Store.mode!=="db"){ S.me=id; ls.set("dsf:me",id); toast(`Welcome back, ${ex.name}`); render(); return }
     if(!name){ toast("Add your full name"); return }
     if(!level){ toast("Answer all five level questions"); return }
-    if(await savePlayer({id,email,name,phone,level,quiz:{...S.reg.ans},verified:false,levelRequest:null,createdAt:nowIso()})){
+    if(await savePlayer({id,email,name,phone,level,quiz:packQuiz(S.reg.ans),verified:false,levelRequest:null,createdAt:nowIso()})){
       if(S.reg.photo) await savePhoto(id,S.reg.photo);
       S.me=id; if(Store.mode!=="db") ls.set("dsf:me",id); S.reg={ans:{},photo:null}; toast(`Welcome! You're ${level} ${lvByCode(level).name}.`); render() }
   }

@@ -256,9 +256,40 @@ nav.tabs button[data-tab="court"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='htt
 .qfb.no{background:var(--warn-bg);color:var(--warn)}
 .qnav{justify-content:center}
 .qres{text-align:center;justify-items:center}
+.qres .qboard,.qres .qfb{justify-self:stretch;text-align:left}
 .qbadges{justify-content:center}
 .qbadge{padding:6px 12px;border-radius:99px;background:var(--sunk);color:var(--muted);font-weight:600;font-size:.85rem}
 .qbadge.got{background:var(--ok-bg);color:var(--ok)}
+/* level check match */
+.qboard{display:flex;align-items:center;gap:10px;background:var(--grad);color:#fff;border-radius:16px;padding:8px 12px;font-weight:600;font-size:.9rem}
+.qside{flex:none;display:flex;align-items:center;gap:5px;white-space:nowrap}
+.qside small{font-size:.85rem;font-weight:600}
+.qside b{font-family:var(--display);font-size:1.35rem;line-height:1}
+@media (max-width:400px){.qside small{display:none}}
+.qpow{flex:1;display:flex;align-items:center;gap:6px;min-width:60px}
+.qpow i{flex:1;height:8px;border-radius:9px;background:rgba(255,255,255,.22);overflow:hidden}
+.qpow em{display:block;height:100%;background:#F2C14E;border-radius:9px;transition:width .5s}
+.qsnd{all:unset;cursor:pointer;font-size:1.15rem;padding:2px 4px;border-radius:8px}
+.qsnd:focus-visible{outline:2px solid #fff}
+.qphoto{position:relative;height:150px;border-radius:18px;background:var(--sunk) center/cover no-repeat;overflow:hidden;display:grid;place-items:center}
+.qphoto::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(94,24,36,.25),rgba(94,24,36,.75))}
+.qphoto .qemoji{position:relative;font-size:3rem;filter:drop-shadow(0 6px 12px rgba(0,0,0,.4));margin:0;animation:qPop .45s cubic-bezier(.3,1.6,.5,1)}
+@keyframes qPop{from{transform:scale(.3);opacity:0}}
+.qcall{position:absolute;top:10px;left:12px;z-index:1;background:rgba(255,255,255,.9);color:var(--accent);font-weight:700;font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;padding:4px 10px;border-radius:99px}
+.qcard.warm .qcall{background:#F2C14E;color:#4a2a00}
+.qcourt{position:absolute;left:12px;right:12px;bottom:10px;height:30px;border:2px solid rgba(255,255,255,.7);border-radius:4px}
+.qnet{position:absolute;left:50%;top:-6px;bottom:-6px;width:3px;background:#fff;transform:translateX(-50%);box-shadow:0 0 0 1px rgba(0,0,0,.15)}
+.qshuttle{position:absolute;top:-4px;left:4%;font-size:1.2rem;animation:qFly 1.1s ease-in-out both}
+@keyframes qFly{0%{left:4%;transform:translateY(8px) rotate(-30deg)}50%{transform:translateY(-34px) rotate(10deg)}100%{left:86%;transform:translateY(6px) rotate(40deg)}}
+.qic{font-size:1.2rem;margin-right:4px}
+.qfb.pow{background:#FFF0C7;color:#6b4300}
+.qres{position:relative;overflow:hidden}
+.qres .qemoji{font-size:3.4rem;animation:qPop .6s cubic-bezier(.3,1.6,.5,1)}
+.qfinal{font-size:1rem;margin:0}
+.qconf{position:absolute;inset:0;pointer-events:none}
+.qconf span{position:absolute;top:-30px;font-size:1.4rem;animation:qFall 2.6s ease-in both}
+@keyframes qFall{to{transform:translateY(560px) rotate(540deg);opacity:0}}
+@media (prefers-reduced-motion:reduce){.qshuttle,.qconf span,.qphoto .qemoji,.qres .qemoji{animation:none}.qconf{display:none}}
 /* court pop-up */
 .court-alert{position:fixed;inset:0;z-index:30;display:grid;place-items:center;padding:16px;background:rgba(36,16,15,.45);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
 .al-card{width:min(100%,460px);max-height:85vh;overflow:auto;background:var(--surface);border-radius:24px;padding:20px;display:grid;gap:14px;box-shadow:0 30px 60px -20px rgba(0,0,0,.5);animation:alIn .25s ease-out}

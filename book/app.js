@@ -152,7 +152,7 @@ async function save(coll,id,data,okMsg){
 
 /* ---------- state ---------- */
 const TABS = {
-  player:[["book","Book a session"],["live","Live courts"],["mine","My bookings"],["court","Session view"],["level","Level guide"],["venue","Venue & contact"]],
+  player:[["book","Book a session"],["live","Live courts"],["mine","My bookings"],["court","Host view"],["level","Level guide"],["venue","Venue & contact"]],
   organiser:[["o-overview","Overview"],["o-sessions","Sessions & bookings"],["live","Live courts"],["o-players","Players"],["o-club","Club details"]]
 };
 const S = {
@@ -168,7 +168,7 @@ const S = {
   picks: new Set(),                 // sessions ticked but not booked yet
   qpos: {}, qfb: {}, fx: ls.get("dsf:fx", true),                // level quiz: card on screen and last answer feedback, per quiz
   rotEdit: {}, pedit: null,         // organiser: game being edited per court, player being edited
-  kiosk: ls.get("dsf:kiosk", null), // session this device has open in session view
+  kiosk: ls.get("dsf:kiosk", null), // session this device has open in host view
   unlock: null, secrets: {}         // this device's unlock; organiser: session codes
 };
 const meP = () => S.players.find(p=>p.id===S.me) || null;
@@ -341,7 +341,7 @@ function nextChip(){
     : `🏸 Next: <b>${fmtDate(s.date)} · ${esc(s.start)}</b> · starts in <span class="cd" data-at="${sessStart(s).toISOString()}">–</span>`;
 }
 
-/* ---------- check-in and session view ---------- */
+/* ---------- check-in and host view ---------- */
 function checkinList(s){
   const list=S.bookings.filter(b=>b.sessionId===s.id && ACTIVE.includes(b.status)).sort((a,b)=>a.court-b.court || String(a.name).localeCompare(b.name));
   if(!list.length) return `<div class="empty">No one booked yet.</div>`;
@@ -360,7 +360,7 @@ async function tryUnlock(code){
   for(const s of cands){
     if(Store.mode!=="db"){ if(S.secrets[s.id]===code){ S.kiosk=s.id; ls.set("dsf:kiosk",s.id); render(); return true } continue }
     try{ await Store.db.collection("unlocks").doc(S.uid).set({sessionId:s.id, code, at:nowIso()});
-      S.kiosk=s.id; S.unlock={sessionId:s.id, code}; ls.set("dsf:kiosk",s.id); render(); toast("Session view is open on this device"); return true }
+      S.kiosk=s.id; S.unlock={sessionId:s.id, code}; ls.set("dsf:kiosk",s.id); render(); toast("Host view is open on this device"); return true }
     catch(e){ if(e?.code!=="permission-denied") { toast("Couldn't check the code. Check your connection."); return false } }
   }
   toast("That code doesn't match an upcoming session"); return false;
@@ -368,10 +368,10 @@ async function tryUnlock(code){
 function viewCourt(){
   if(!S.loaded) return `<section class="panel"><div class="empty loading">Loading…</div></section>`;
   const s = S.kiosk && S.sessions.find(x=>x.id===S.kiosk);
-  if(!s || !canRun(s)) return `<section class="panel"><div><h2>Session view</h2><p class="muted">For whoever is hosting the session. Enter the code the organiser gives you. Once it's open on this device you can check people in, enter scores and see the rotation for that session.</p></div>
+  if(!s || !canRun(s)) return `<section class="panel"><div><h2>Host view</h2><p class="muted">For whoever is hosting the session. Enter the code the organiser gives you. Once it's open on this device you can check people in, enter scores and see the rotation for that session.</p></div>
     <div class="row" style="max-width:440px;flex-wrap:nowrap"><input id="k-code" placeholder="Session code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" style="text-transform:uppercase;letter-spacing:.2em;font-family:var(--mono)"><button class="btn primary" data-kopen="1">Open</button></div></section>`;
   const r=rotInfo(s), v=venueOf(s);
-  return `<section class="panel"><div class="row" style="justify-content:space-between;align-items:flex-start"><div><span class="lbl">Session view · you're hosting</span><h2>${fmtLong(s.date)} · ${esc(s.start)}–${esc(s.end)}</h2><p class="muted">${esc(v.venue||"")}${r.done?" · finished":r.live?" · live now":` · starts ${esc(s.start)}`}</p></div><button class="btn small ghost" data-kexit="1">Close session view</button></div>
+  return `<section class="panel"><div class="row" style="justify-content:space-between;align-items:flex-start"><div><span class="lbl">Host view · you're hosting</span><h2>${fmtLong(s.date)} · ${esc(s.start)}–${esc(s.end)}</h2><p class="muted">${esc(v.venue||"")}${r.done?" · finished":r.live?" · live now":` · starts ${esc(s.start)}`}</p></div><button class="btn small ghost" data-kexit="1">Close host view</button></div>
     <p class="muted" style="font-size:.88rem">Check people in and enter each game's score to keep the courts moving. When you save a score, the next four players pop up on screen and everyone's phone with the booking page open tells them they're on or up next.</p>
 </section>
   <section class="panel"><details id="ci-k-${s.id}" open><summary><b>Check-in</b></summary><div style="display:grid;gap:10px;margin-top:10px">${checkinList(s)}</div></details></section>
@@ -919,7 +919,7 @@ function adminSession(s){
   return `<div class="bk"><div class="row" style="justify-content:space-between"><h3>${fmtLong(s.date)} · ${esc(s.start)}–${esc(s.end)}${s.title?" · "+esc(s.title):""}</h3>
     <div class="row"><button class="btn small" data-msg="${s.id}">Copy reminder message</button><button class="btn small" data-emails="${s.id}">Copy player emails</button><button class="btn small" data-toggle="${s.id}">${s.open===false?"Open booking":"Close booking"}</button><button class="btn small ghost danger" data-delsess="${s.id}">Delete</button></div></div>
     <p class="muted">${esc(v.venue||"No venue set")}${v.address?" · "+esc(v.address):""}</p>
-    <div class="row code-row"><span class="lbl">Session view code</span>${S.secrets[s.id]?`<b class="code">${esc(S.secrets[s.id])}</b><button class="btn small" data-copy="${esc(S.secrets[s.id])}">Copy</button><button class="btn small ghost" data-newcode="${esc(s.id)}">New code</button>`:`<button class="btn small primary" data-newcode="${esc(s.id)}">Create code</button>`}<span class="muted" style="font-size:.82rem">Give it to whoever runs the court-side device. A new code locks out devices using the old one.</span></div>
+    <div class="row code-row"><span class="lbl">Host view code</span>${S.secrets[s.id]?`<b class="code">${esc(S.secrets[s.id])}</b><button class="btn small" data-copy="${esc(S.secrets[s.id])}">Copy</button><button class="btn small ghost" data-newcode="${esc(s.id)}">New code</button>`:`<button class="btn small primary" data-newcode="${esc(s.id)}">Create code</button>`}<span class="muted" style="font-size:.82rem">Give it to whoever runs the court-side device. A new code locks out devices using the old one.</span></div>
     <details id="ci-${s.id}"><summary><b>Check-in list</b> (${S.bookings.filter(b=>b.sessionId===s.id&&ACTIVE.includes(b.status)&&b.checkedIn).length} of ${S.bookings.filter(b=>b.sessionId===s.id&&ACTIVE.includes(b.status)).length} here)</summary><div style="display:grid;gap:10px;margin-top:10px">${checkinList(s)}</div></details>
     <div class="tbl"><table><thead><tr><th>Player</th><th>Ref</th><th>Status</th><th>Court</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
     ${S.bookings.some(b=>b.sessionId===s.id&&b.status==="cancelled")?`<details id="canc-${s.id}"><summary>Cancelled (${S.bookings.filter(b=>b.sessionId===s.id&&b.status==="cancelled").length})</summary><div style="display:grid;gap:6px;margin-top:8px">${S.bookings.filter(b=>b.sessionId===s.id&&b.status==="cancelled").map(b=>`<div class="row" style="justify-content:space-between"><span>${esc(b.name)} · Court ${esc(b.court)}</span><span class="row"><button class="btn small" data-restore="${esc(b.id)}">Restore</button><button class="btn small ghost danger" data-bdel="${esc(b.id)}">Delete</button></span></div>`).join("")}</div></details>`:""}
@@ -1110,19 +1110,19 @@ document.addEventListener("click", async e=>{
     if(code.length<4){ toast("Enter the session code"); return }
     if(Store.mode==="db" && !S.uid){ ls.set("dsf:kcode",code);
       try{ await firebase.auth().signInAnonymously() }   // the page reloads signed in, then the code is checked
-      catch(e){ ls.set("dsf:kcode",null); toast(e?.code==="auth/operation-not-allowed"?"Session view isn't switched on yet. Ask the organiser.":"Couldn't open session view. Check your connection.") }
+      catch(e){ ls.set("dsf:kcode",null); toast(e?.code==="auth/operation-not-allowed"?"Host view isn't switched on yet. Ask the organiser.":"Couldn't open host view. Check your connection.") }
       return }
     tryUnlock(code); return }
   if(ds.kexit){ const sid=S.kiosk; S.kiosk=null; S.unlock=null; ls.set("dsf:kiosk",null);
     if(Store.mode==="db" && S.uid){ try{ await Store.db.collection("unlocks").doc(S.uid).delete() }catch{}
       if(firebase.auth().currentUser?.isAnonymous){ await firebase.auth().signOut(); return } }
-    render(); toast("Session view closed"); return }
+    render(); toast("Host view closed"); return }
   if(ds.newcode){ const sid=ds.newcode, code=newCode();
     if(Store.mode==="db"){ try{ await Store.db.collection("secrets").doc(sid).set({code}); toast(`Code ${code} ready`) }catch{ toast("Couldn't save the code") } }
     else { S.secrets[sid]=code; render() }
     return }
   if(ds.checkin){ const b=S.bookings.find(x=>x.id===ds.checkin); if(!b) return; const s=S.sessions.find(x=>x.id===b.sessionId);
-    if(!canRun(s)){ toast("Open session view to check people in"); return }
+    if(!canRun(s)){ toast("Open host view to check people in"); return }
     const v=ds.v, patch = v==="in" ? {checkedIn:true, absent:false} : v==="out" ? {checkedIn:false, absent:true} : {checkedIn:false, absent:false};
     setBooking(b.id, patch, v==="in"?"Checked in.":v==="out"?"Marked not here.":"Check-in cleared.", v==="in"?`${b.name} is here`:v==="out"?`${b.name} marked not here`:"Cleared"); return }
   if(ds.stdcourts){ const sid=ds.stdcourts; arm(t,"Tap again to reset courts",()=>standardCourts(sid)); return }

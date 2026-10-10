@@ -2,6 +2,9 @@
    Data (Firestore): tourneys/{tid}, tteams, tcontacts/{teamId}, tmatches, tsecrets/{tid}, tunlocks/{uid}. */
 
 const ADMINS = (window.DSF_ADMINS||[]).map(x=>String(x).toLowerCase());
+const WA_GROUP = "https://chat.whatsapp.com/FRZVrxnH0lT6fpqQgjVHVt";
+const waLink = t => /^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]+/.test(t?.wa||"") ? t.wa : WA_GROUP;
+const LEVELS = ["Beginner","Lower intermediate","Intermediate","Upper intermediate","Advanced"];
 const CAT_PRESETS = [["MD","Men's doubles"],["WD","Women's doubles"],["XD","Mixed doubles"]];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -272,18 +275,30 @@ function viewReg(){
       ${mapQ?`<div class="row" style="align-items:flex-start"><a class="btn small" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQ)}" target="_blank" rel="noopener">📍 Directions</a><span style="font-size:.9rem">${esc(mapQ)}${t.directions?`<br><span class="muted">${esc(t.directions).replace(/\n/g,"<br>")}</span>`:""}</span></div>`:""}
     </section>
     <section class="panel"><h2>Register a team</h2>
-    ${t.regOpen ? `<form id="regForm" class="grid2">
-        <label class="f">Category<select id="rg-cat">${cats(t).map(c=>`<option value="${esc(c.id)}" ${full(c.id)?"disabled":""}>${esc(c.name)}${full(c.id)?" (full)":""}</option>`).join("")}</select></label>
-        <label class="f">Team name<input id="rg-name" maxlength="40" required placeholder="e.g. Net Ninjas"></label>
-        <label class="f">Player 1<input id="rg-p1" maxlength="60" required placeholder="Full name"></label>
-        <label class="f">Player 2<input id="rg-p2" maxlength="60" required placeholder="Full name"></label>
-        <label class="f">Contact email<input id="rg-email" type="email" maxlength="120" required placeholder="you@example.com"></label>
-        <label class="f">Contact phone<input id="rg-phone" type="tel" maxlength="30" placeholder="07…"></label>
-        <p class="muted" style="grid-column:1/-1;font-size:.85rem">Only the team name and players are shown publicly. The organiser confirms each team and will contact you about payment.</p>
-        <div style="grid-column:1/-1"><button class="btn primary" type="submit">Register team 🏸</button></div>
+    ${t.regOpen ? `<form id="regForm" class="regform" novalidate>
+        <fieldset><legend>🏸 Team</legend><div class="grid2">
+          <label class="f">Category *<select id="rg-cat">${cats(t).map(c=>`<option value="${esc(c.id)}" ${full(c.id)?"disabled":""}>${esc(c.name)}${full(c.id)?" (full)":""}</option>`).join("")}</select></label>
+          <label class="f">Team name *<input id="rg-name" maxlength="40" required placeholder="e.g. Net Ninjas"></label></div></fieldset>
+        ${[1,2].map(n=>`<fieldset><legend>${n===1?"👤 Player 1 · team captain":"👤 Player 2"}</legend><div class="grid2">
+          <label class="f">Full name *<input id="rg-p${n}" maxlength="60" required autocomplete="${n===1?"name":"off"}" placeholder="First and last name"></label>
+          <label class="f">Mobile (WhatsApp) *<input id="rg-ph${n}" type="tel" maxlength="30" required autocomplete="${n===1?"tel":"off"}" placeholder="07…"></label>
+          <label class="f">Email${n===1?" *":""}<input id="rg-em${n}" type="email" maxlength="120" ${n===1?'required autocomplete="email"':'autocomplete="off"'} placeholder="name@example.com"></label>
+          <label class="f">Playing level *<select id="rg-lv${n}" required><option value="">Choose…</option>${LEVELS.map(l=>`<option>${esc(l)}</option>`).join("")}</select></label>
+          <label class="f">Gender *<select id="rg-g${n}" required><option value="">Choose…</option><option>Male</option><option>Female</option><option>Prefer not to say</option></select></label></div></fieldset>`).join("")}
+        <fieldset><legend>🚑 Emergency contact</legend><div class="grid2">
+          <label class="f">Name *<input id="rg-emname" maxlength="60" required placeholder="Someone not playing"></label>
+          <label class="f">Phone *<input id="rg-emphone" type="tel" maxlength="30" required placeholder="07…"></label>
+          <label class="f" style="grid-column:1/-1">Anything we should know? (optional)<textarea id="rg-notes" rows="2" maxlength="300" placeholder="Injuries, medical info, arrival time…"></textarea></label></div></fieldset>
+        <fieldset class="wabox"><legend>💬 Tournament WhatsApp group (required)</legend>
+          <p>All fixtures, court calls and updates go out in the group, so <b>both players must join</b> before you can register.</p>
+          <div class="row"><a class="btn wa" href="${esc(waLink(t))}" target="_blank" rel="noopener" data-wajoin="1">Join the WhatsApp group</a>${S.waOpened?'<span class="chip st-confirmed">Opened ✓</span>':""}</div>
+          <label class="chk"><input type="checkbox" id="rg-wa" ${S.waOpened?"":"disabled"}> <span>Both players have joined the tournament WhatsApp group *${S.waOpened?"":' <span class="muted">(tap the button above first)</span>'}</span></label>
+          <label class="chk"><input type="checkbox" id="rg-ok"> <span>We're happy for the organiser to contact us about this tournament and payment *</span></label></fieldset>
+        <p class="muted" style="font-size:.85rem">Only the team name and player names are shown publicly. Everything else goes to the organiser only. The organiser confirms each team and will message you about payment.</p>
+        <div><button class="btn primary" type="submit">Register team 🏸</button></div>
       </form>` : `<div class="empty">Registration is closed${teamsOf(t).length?" — see the Teams tab for who's in":""}.</div>`}
     </section>
-    ${mine.length?`<section class="panel"><h2>Your teams</h2><div class="teamlist">${mine.map(x=>`<div class="team"><span class="lbl">${esc(catName(t,x.cat))}</span><b>${esc(x.name)}</b><span>${esc(x.p1)} & ${esc(x.p2)}</span><span>${x.status==="confirmed"?'<span class="chip st-confirmed">Confirmed</span>':'<span class="chip st-awaiting">Waiting for the organiser</span>'}</span><button class="btn small ghost danger" data-withdraw="${esc(x.id)}">Withdraw</button></div>`).join("")}</div></section>`:""}`;
+    ${mine.length?`<section class="panel"><h2>Your teams</h2><p class="muted">Not in the WhatsApp group yet? <a href="${esc(waLink(t))}" target="_blank" rel="noopener">Join it here</a>, as that's where all updates go.</p><div class="teamlist">${mine.map(x=>`<div class="team"><span class="lbl">${esc(catName(t,x.cat))}</span><b>${esc(x.name)}</b><span>${esc(x.p1)} & ${esc(x.p2)}</span><span>${x.status==="confirmed"?'<span class="chip st-confirmed">Confirmed</span>':'<span class="chip st-awaiting">Waiting for the organiser</span>'}</span><button class="btn small ghost danger" data-withdraw="${esc(x.id)}">Withdraw</button></div>`).join("")}</div></section>`:""}`;
 }
 function viewTeams(){
   const t=T(); if(!t) return noTourney();
@@ -381,6 +396,7 @@ function viewOrg(){
   const f=(id,label,val,type="text",extra="")=>`<label class="f">${label}<input id="to-${id}" type="${type}" value="${esc(val??"")}" ${extra}></label>`;
   const form=x=>`<div class="grid2">
       ${f("name","Tournament name",x?.name)}${f("date","Date",x?.date,"date")}${f("venue","Venue",x?.venue)}${f("address","Venue address (for the map)",x?.address,"text",'placeholder="e.g. Lodge Ave, Dagenham RM8 2JR"')}${f("entry","Entry fee (shown to players)",x?.entry)}
+      ${f("wa","WhatsApp group link (players must join to register)",x?.wa||WA_GROUP,"url",'placeholder="https://chat.whatsapp.com/…"')}
       <label class="f" style="grid-column:1/-1">Directions & travel tips<textarea id="to-dirs" rows="2" placeholder="Nearest station, buses, parking, which entrance…">${esc(x?.directions||"")}</textarea></label>
       <div style="grid-column:1/-1;display:grid;gap:6px"><span class="lbl">Poster</span>
         ${(S.posterDraft ?? x?.poster) ? `<img src="${esc(S.posterDraft ?? x.poster)}" alt="Poster preview" style="max-width:220px;border-radius:12px;box-shadow:var(--shadow)">` : `<span class="muted" style="font-size:.85rem">No poster yet.</span>`}
@@ -405,7 +421,7 @@ function viewOrg(){
       <div class="row"><a class="btn small" href="#screen" data-screen="1">📺 Open big screen</a><span class="muted" style="font-size:.85rem">Put it on the projector and press F for full screen.</span></div></section>
     <section class="panel"><h2>Teams</h2>${catBar(t)}
       ${(()=>{ const ts=teamsOf(t,S.cat); return ts.length?`<div class="row"><span class="muted">${ts.length} registered · ${ts.filter(x=>x.status==="confirmed").length} confirmed</span><button class="btn small" data-confirmall="${esc(S.cat)}">Confirm all</button></div>
-        <div class="tbl"><table><thead><tr><th>Team</th><th>Players</th><th>Contact</th><th></th></tr></thead><tbody>${ts.map(x=>{ const c=S.contacts[x.id]||{}; return `<tr><td><b>${esc(x.name)}</b><br>${x.status==="confirmed"?'<span class="chip st-confirmed">Confirmed</span>':'<span class="chip st-awaiting">Pending</span>'}</td><td>${esc(x.p1)}<br>${esc(x.p2)}</td><td style="font-size:.85rem">${esc(c.email||"")}<br>${esc(c.phone||"")}</td>
+        <div class="tbl"><table><thead><tr><th>Team</th><th>Players</th><th>Contact</th><th></th></tr></thead><tbody>${ts.map(x=>{ const c=S.contacts[x.id]||{}; return `<tr><td><b>${esc(x.name)}</b><br>${x.status==="confirmed"?'<span class="chip st-confirmed">Confirmed</span>':'<span class="chip st-awaiting">Pending</span>'}</td><td>${esc(x.p1)}<br>${esc(x.p2)}</td><td style="font-size:.85rem">${esc(c.email||"")}<br>${esc(c.phone||"")}${c.phone2||c.email2?`<br><span class="muted">P2:</span> ${esc(c.phone2||"")} ${esc(c.email2||"")}`:""}${c.lv1?`<br><span class="muted">Levels:</span> ${esc(c.lv1)} / ${esc(c.lv2||"")}`:""}${c.g1?`<br><span class="muted">Gender:</span> ${esc(c.g1)} / ${esc(c.g2||"")}`:""}${c.emName?`<br><span class="muted">Emergency:</span> ${esc(c.emName)} ${esc(c.emPhone||"")}`:""}${c.notes?`<br><span class="muted">Notes:</span> ${esc(c.notes)}`:""}${c.wa?`<br><span class="chip st-confirmed">In WhatsApp group</span>`:""}</td>
           <td class="row">${x.status==="confirmed"?`<button class="btn small ghost" data-tconfirm="${esc(x.id)}" data-v="pending">Unconfirm</button>`:`<button class="btn small primary" data-tconfirm="${esc(x.id)}" data-v="confirmed">Confirm</button>`}<button class="btn small ghost danger" data-tdel="${esc(x.id)}">Delete</button></td></tr>` }).join("")}</tbody></table></div>`:`<div class="empty">No teams in this category yet.</div>` })()}
       <details id="org-add"><summary>Add a team yourself</summary><div class="grid2" style="margin-top:8px">
         <label class="f">Team name<input id="oa-name" maxlength="40"></label><label class="f">Player 1<input id="oa-p1" maxlength="60"></label><label class="f">Player 2<input id="oa-p2" maxlength="60"></label>
@@ -531,6 +547,7 @@ document.addEventListener("click", async e=>{
   if(e.target.closest("select,input,.plan")) return;   // court/time pickers inside a match card
   const t0=e.target.closest("button,a,[data-medit]"); if(!t0) return;
   const ds=t0.dataset, t=T();
+  if(ds.wajoin){ S.waOpened=true; setTimeout(render,300); return }   // let the link open, then unlock the tick box
   if(t0.id==="signOut"){ await auth.signOut(); location.reload(); return }
   if(ds.tab){ S.tab=ds.tab; S.edit=null; ls.set("dsf:ttab",S.tab); if(location.hash) history.replaceState(null,"",location.pathname); render(); scrollTo({top:0}); return }
   if(ds.screen){ e.preventDefault(); location.hash="#screen"; return }
@@ -576,7 +593,7 @@ document.addEventListener("click", async e=>{
     const data={name:g("name").value.trim(), date:g("date").value, venue:g("venue").value.trim(), entry:g("entry").value.trim(), info:g("info").value.trim(), prizes:g("prizes").value.trim(),
       maxTeams:Number(g("max").value)||0, courts:Math.min(12,Math.max(1,Number(g("courts").value)||4)), groupSize:Math.min(8,Math.max(3,Number(g("gsize").value)||4)), advance:Math.min(4,Math.max(1,Number(g("adv").value)||2)),
       pointsTo:Number(g("to").value)||21, deuce:g("deuce").value!=="0", bestOf:Number(g("bo").value)||1, startTime:g("start").value||"10:00", matchMins:Math.min(60,Math.max(5,Number(g("mins").value)||15)),
-      address:g("address").value.trim(), directions:g("dirs").value.trim(), ...(S.posterDraft!==undefined?{poster:S.posterDraft}:{}), regOpen:g("open").checked,
+      address:g("address").value.trim(), directions:g("dirs").value.trim(), wa:/^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]+/.test(g("wa").value.trim())?g("wa").value.trim().split("?")[0]:WA_GROUP, ...(S.posterDraft!==undefined?{poster:S.posterDraft}:{}), regOpen:g("open").checked,
       catIds, cats:CAT_PRESETS.filter(([id])=>catIds.includes(id)).map(([id,name])=>({id,name}))};
     const id = ds.tsave==="new" ? `t${(data.date||nowIso().slice(0,10)).replace(/-/g,"")}-${Date.now().toString(36).slice(-4)}` : ds.tsave;
     await db.collection("tourneys").doc(id).set(data,{merge:true}).then(()=>{ S.tid=id; ls.set("dsf:tid",id); S.posterDraft=undefined; toast("Tournament saved") },()=>toast("Couldn't save")); return }
@@ -615,17 +632,25 @@ document.addEventListener("change", async e=>{
 });
 document.addEventListener("submit", async e=>{
   if(e.target.id!=="regForm") return; e.preventDefault();
-  const t=T(), v=id=>($(`#rg-${id}`)?.value||"").trim(), cat=v("cat");
-  if(!v("name")||!v("p1")||!v("p2")||!v("email")){ toast("Fill in the team name, both players and an email"); return }
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v("email"))){ toast("Check the email address"); return }
+  const t=T(), v=id=>($(`#rg-${id}`)?.value||"").trim(), cat=v("cat"), emailOk=x=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x), phoneOk=x=>(x.match(/\d/g)||[]).length>=10;
+  const miss=[["name","the team name"],["p1","player 1's name"],["ph1","player 1's mobile"],["em1","player 1's email"],["lv1","player 1's level"],["g1","player 1's gender"],
+    ["p2","player 2's name"],["ph2","player 2's mobile"],["lv2","player 2's level"],["g2","player 2's gender"],["emname","the emergency contact name"],["emphone","the emergency contact phone"]].find(([k])=>!v(k));
+  const bad=(id,msg)=>{ toast(msg); const el=$(`#rg-${id}`); el?.focus(); el?.scrollIntoView({block:"center",behavior:"smooth"}); };
+  if(miss) return bad(miss[0],`Please add ${miss[1]}`);
+  if(!emailOk(v("em1"))) return bad("em1","Check player 1's email");
+  if(v("em2") && !emailOk(v("em2"))) return bad("em2","Check player 2's email");
+  for(const k of ["ph1","ph2","emphone"]) if(!phoneOk(v(k))) return bad(k,"Check that phone number. It needs at least 10 digits");
+  if(!$("#rg-wa")?.checked) return bad("wa", S.waOpened?"Tick to confirm both players joined the WhatsApp group":"Join the WhatsApp group first. It's required");
+  if(!$("#rg-ok")?.checked) return bad("ok","Tick the box to say the organiser can contact you");
   const btn=e.target.querySelector("button[type=submit]"); btn.disabled=true;
   try{
     const u=await ensureSignedIn();
     const ref=db.collection("tteams").doc();
     await ref.set({tid:t.id, cat, name:v("name"), p1:v("p1"), p2:v("p2"), createdBy:u.uid, createdAt:nowIso(), status:"pending"});
-    await db.collection("tcontacts").doc(ref.id).set({email:v("email"), phone:v("phone"), createdBy:u.uid});
-    ["name","p1","p2","email","phone"].forEach(k=>{ const el=$(`#rg-${k}`); if(el) el.value="" });
-    toast(`${v("name")||"Team"} registered! 🎉`); burst();
+    await db.collection("tcontacts").doc(ref.id).set({email:v("em1"), phone:v("ph1"), email2:v("em2"), phone2:v("ph2"), lv1:v("lv1"), lv2:v("lv2"), g1:v("g1"), g2:v("g2"),
+      emName:v("emname"), emPhone:v("emphone"), notes:v("notes"), wa:true, createdBy:u.uid});
+    const nm=v("name"); $("#regForm")?.reset(); S.waOpened=false; render();   // the form may have been redrawn while saving
+    toast(`${nm||"Team"} registered! 🎉`); burst();
   }catch(err){ toast(err?.code==="permission-denied"?"Registration is closed or that category is full":err?.code==="auth/operation-not-allowed"?"Registration isn't switched on yet":"Couldn't register. Check your connection.") }
   btn.disabled=false;
 });

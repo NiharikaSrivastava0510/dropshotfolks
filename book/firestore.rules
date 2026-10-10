@@ -163,7 +163,7 @@ service cloud.firestore {
     }
     match /tcontacts/{teamId} {
       allow read: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.keys().hasOnly(['email', 'phone', 'email2', 'phone2', 'lv1', 'lv2', 'g1', 'g2', 'emName', 'emPhone', 'notes', 'wa', 'createdBy'])
+      allow create: if signedIn() && request.resource.data.keys().hasOnly(['email', 'phone', 'email2', 'phone2', 'lv1', 'lv2', 'g1', 'g2', 'emName', 'emPhone', 'notes', 'wa', 'agreed', 'paid', 'payName', 'createdBy'])
         && request.resource.data.createdBy == request.auth.uid
         && shortText(request.resource.data.email, 120) && shortText(request.resource.data.phone, 30)
         && shortText(request.resource.data.get('email2', ''), 120) && shortText(request.resource.data.get('phone2', ''), 30)
@@ -171,6 +171,8 @@ service cloud.firestore {
         && shortText(request.resource.data.get('g1', ''), 30) && shortText(request.resource.data.get('g2', ''), 30)
         && shortText(request.resource.data.get('emName', ''), 60) && shortText(request.resource.data.get('emPhone', ''), 30)
         && shortText(request.resource.data.get('notes', ''), 300) && request.resource.data.get('wa', false) is bool
+        && request.resource.data.get('agreed', false) is bool && request.resource.data.get('paid', false) is bool
+        && shortText(request.resource.data.get('payName', ''), 60)
         && get(/databases/$(database)/documents/tteams/$(teamId)).data.createdBy == request.auth.uid;
       allow update: if isAdmin();
       allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);

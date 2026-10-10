@@ -365,6 +365,22 @@ nav.tabs button[data-tab="court"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='htt
 .chk{display:flex;gap:10px;align-items:flex-start;font-size:.92rem;cursor:pointer}
 .chk input{width:20px;height:20px;margin-top:1px;flex:none;accent-color:var(--accent)}
 .chk input:disabled+span{opacity:.6}
+.feebox{background:color-mix(in srgb,var(--accent) 5%,var(--surface))}
+.feebox p{margin:0}
+.bank{display:grid;gap:6px}
+.bankrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--line)}
+.bankrow span{color:var(--muted);font-size:.85rem;min-width:110px}
+.bankrow b{font-family:var(--mono);letter-spacing:.04em;flex:1}
+.checklist{gap:14px!important}
+.chkstep{display:grid;gap:8px;padding-top:10px;border-top:1px dashed var(--line)}
+.chkstep .btn{justify-self:start}
+.readbox{border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin-top:8px}
+.readbox summary{cursor:pointer;font-weight:700}
+.readbox p{margin:8px 0 0;font-size:.92rem}
+.readmodal{position:fixed;inset:0;z-index:60;background:rgba(30,10,14,.55);display:grid;place-items:center;padding:16px}
+.readcard{background:var(--surface);color:var(--ink);border-radius:20px;padding:20px;max-width:560px;width:100%;max-height:86vh;display:grid;grid-template-rows:auto 1fr auto;gap:12px;box-shadow:var(--shadow)}
+.readcard h2{margin:0}
+.readtxt{overflow:auto;line-height:1.55;font-size:.95rem}
 .empty.loading{color:transparent;position:relative;overflow:hidden;min-height:90px;border-style:solid;background:linear-gradient(100deg,var(--surface) 30%,var(--tint) 50%,var(--surface) 70%) 0 0/200% 100%;animation:shimmer 1.2s linear infinite}
 @keyframes shimmer{to{background-position:-200% 0}}
 .court-live.live{animation:courtGlow 2.6s ease-in-out infinite}
@@ -540,5 +556,5 @@ body.refonly{padding-bottom:24px!important}
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="app.js?v=202610102003"></script>
+<script src="app.js?v=202610102027"></script>
 </body></html>

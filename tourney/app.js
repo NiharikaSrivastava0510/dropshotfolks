@@ -55,6 +55,12 @@ const PRESETS = [
   {key:"teamcup", title:"🏆 Team Cup · Sun 18 Oct", text:"Sets up the Team Cup with its venue, game format, scoring (to 15, max 17) and terms, ready for the teams.", btn:"Set up the Team Cup", find:()=>S.tourneys.find(x=>x.id==="t20261018-teamcup"), create:{id:"t20261018-teamcup", data:()=>TEAM_CUP}},
   {key:"netplay", title:"🏸 Net Play · Sat 21 Nov", text:"Adds the official Net Play format to your Net Play tournament: groups of 3 with winners through, 8-team knockout with a 3rd-place play-off, scoring by round (15 / 21 / best of 3 to 11), 5 courts from 12:30, and the official terms. Name, teams, bank details and registration stay as they are.", btn:"Apply the Net Play details", find:()=>S.tourneys.find(x=>x.date==="2026-11-21"), merge:()=>NET_PLAY},
 ];
+// Team Cup entries from the Google Form (names only: they're public on the Teams tab; contact details stay in the form)
+const TEAM_CUP_TEAMS = [
+  ["Idli n Appam attack","Preshecan Muhunthan"], ["Woking Smashers","Varun KP"], ["East London Smashers","Preeta"], ["Banana Squad","Vicky"],
+  ["The Fourmidables","Matthew","Milan","Bahee","Nikhila"], ["Shuttle Warriors","Ling","Nakorn Pinsiranon","Pawan Gurung","Keerthi Maddineni"],
+  ["BC2","Cameron Sin","Rebecca Yang","Michael Lieu","Anju lama"], ["Net Gains","Imran Hoque","Clare Walsh","Sara Bel Houla","Rahul Singh"],
+  ["GODSHUTTLER","Ayestain","Vinotha","Pooja","Moiz"]];
 const bankOf = t => t?.bank && (t.bank.acct || t.bank.sort) ? t.bank : null;
 const DISC = {MD:"Men's doubles", WD:"Women's doubles", XD:"Mixed doubles"};
 const isTeam = t => t?.mode==="team";
@@ -881,6 +887,32 @@ document.addEventListener("submit", async e=>{
   }catch(err){ toast(err?.code==="permission-denied"?"Registration is closed or that category is full":err?.code==="auth/operation-not-allowed"?"Registration isn't switched on yet":"Couldn't register. Check your connection.") }
   btn.disabled=false;
 });
+/* ---------- first organiser visit: set up the Team Cup (teams + fixtures) and the official Net Play details ---------- */
+async function autoSetup(){
+  if(!S.isAdmin || autoSetup.running || ls.get("dsf:noauto",false)) return; autoSetup.running=true;
+  const wait=async ok=>{ for(let i=0;i<60 && !ok();i++) await new Promise(r=>setTimeout(r,250)) };
+  try{
+    const id="t20261018-teamcup", done=[];
+    if(!S.tourneys.some(x=>x.id===id)){
+      await db.collection("tourneys").doc(id).set({...TEAM_CUP, preset:"teamcup"});
+      const b=db.batch(), base=Date.parse("2026-10-01T00:00:00Z");
+      TEAM_CUP_TEAMS.forEach(([name,...pl],i)=>b.set(db.collection("tteams").doc(`${id}-${i+1}`), {tid:id, cat:"TC", name, p1:pl[0]||"", p2:pl[1]||"", p3:pl[2]||"", p4:pl[3]||"", createdBy:S.uid, createdAt:new Date(base+i*1000).toISOString(), status:"confirmed"}));
+      await b.commit(); done.push(`Team Cup with ${TEAM_CUP_TEAMS.length} teams`);
+    }
+    await wait(()=>S.tourneys.some(x=>x.id===id) && teamsOf(S.tourneys.find(x=>x.id===id),"TC").length>=TEAM_CUP_TEAMS.length);
+    let tc=S.tourneys.find(x=>x.id===id);
+    if(tc && !matchesOf(tc).length && !tc.groups?.TC){
+      await generateGroups(tc,"TC"); await wait(()=>S.tourneys.find(x=>x.id===id)?.groups?.TC && matchesOf(tc).length>0);
+      tc=S.tourneys.find(x=>x.id===id); await generateKnockouts(tc,"TC"); await wait(()=>matchesOf(tc).some(m=>m.stage==="ko"));
+      await scheduleAll(S.tourneys.find(x=>x.id===id)); done.push("its groups, knockouts, courts and times");
+    }
+    const np=S.tourneys.find(x=>x.date==="2026-11-21");
+    if(np && np.preset!=="netplay"){ await db.collection("tourneys").doc(np.id).set({...NET_PLAY, preset:"netplay"},{merge:true}); done.push("the official Net Play details") }
+    if(done.length){ S.tid=id; ls.set("dsf:tid",id); render(); toast(`Set up: ${done.join(", ")} ✓`) }
+  }catch(e){ console.error(e); toast("Couldn't finish setting up. Reload to try again.") }
+  autoSetup.running=false;
+}
+
 /* ---------- import teams from a Google Form spreadsheet (.xlsx or .csv) ---------- */
 async function unzip(buf, want){
   const dv=new DataView(buf.buffer, buf.byteOffset, buf.byteLength); let e=buf.length-22; while(e>=0 && dv.getUint32(e,true)!==0x06054b50) e--; if(e<0) throw new Error("not a zip");
@@ -923,17 +955,22 @@ function teamsFromRows(rows){
 }
 async function importTeams(t, list){
   if(!t) return;
-  const have=new Set(teamsOf(t).map(x=>x.name.trim().toLowerCase())), add=list.filter(o=>!have.has(o.name.trim().toLowerCase()));
-  if(!add.length){ toast("Those teams are already in"); return }
-  if(!confirm(`Add ${add.length} team${add.length>1?"s":""} to ${t.name}?${list.length>add.length?` (${list.length-add.length} already in)`:""}\n\n${add.map(o=>`• ${o.name.trim()}${o.paid?"":"  (payment not ticked, so pending)"}`).join("\n")}`)) return;
-  const cat=isTeam(t)?"TC":(S.cat||cats(t)[0]?.id), cut=(v,k)=>String(v||"").trim().slice(0,k), base=Date.now(); let n=0;
+  const key=x=>String(x||"").trim().toLowerCase(), byName=new Map(teamsOf(t).map(x=>[key(x.name),x]));
+  const add=list.filter(o=>!byName.has(key(o.name))), fill=list.filter(o=>byName.has(key(o.name)) && !S.contacts[byName.get(key(o.name)).id]);
+  if(!add.length && !fill.length){ toast("Those teams and their contact details are already in"); return }
+  if(!confirm(`${add.length?`Add ${add.length} team${add.length>1?"s":""} to ${t.name}:\n${add.map(o=>`• ${o.name.trim()}${o.paid?"":"  (payment not ticked, so pending)"}`).join("\n")}\n\n`:""}${fill.length?`Add contact details to ${fill.length} team${fill.length>1?"s":""} already here.`:""}`)) return;
+  const cat=isTeam(t)?"TC":(S.cat||cats(t)[0]?.id), cut=(v,k)=>String(v||"").trim().slice(0,k), base=Date.now(); let n=0, nf=0;
+  const contact=o=>({email:cut(o.em1,120), phone:cut(o.ph1,30), ...Object.fromEntries([2,3,4].flatMap(k=>[["email"+k,cut(o["em"+k],120)],["phone"+k,cut(o["ph"+k],30)]])),
+    ...Object.fromEntries([1,2,3,4].filter(k=>o["g"+k]).map(k=>["g"+k,cut(o["g"+k],30)])), paid:o.paid, wa:o.wa, agreed:o.agreed, createdBy:S.uid});
+  for(const o of fill){ const x=byName.get(key(o.name));
+    try{ await db.collection("tcontacts").doc(x.id).set(contact(o)); nf++ }catch(err){ console.error(err) } }
   for(const [i,o] of add.entries()){
     try{ const ref=db.collection("tteams").doc();
       await ref.set({tid:t.id, cat, name:cut(o.name,40), ...Object.fromEntries(Array.from({length:nPl(t)},(_,k)=>["p"+(k+1),cut(o["p"+(k+1)],60)])), createdBy:S.uid, createdAt:new Date(base+i).toISOString(), status:o.paid?"confirmed":"pending"});
-      await db.collection("tcontacts").doc(ref.id).set({email:cut(o.em1,120), phone:cut(o.ph1,30), ...Object.fromEntries([2,3,4].flatMap(k=>[["email"+k,cut(o["em"+k],120)],["phone"+k,cut(o["ph"+k],30)]])),
-        ...Object.fromEntries([1,2,3,4].filter(k=>o["g"+k]).map(k=>["g"+k,cut(o["g"+k],30)])), paid:o.paid, wa:o.wa, agreed:o.agreed, createdBy:S.uid});
+      await db.collection("tcontacts").doc(ref.id).set(contact(o));
       n++ }catch(err){ console.error(err) } }
-  toast(n===add.length?`${n} team${n>1?"s":""} added 🎉`:`${n} of ${add.length} added. Check the Firebase rules are published.`);
+  const okAll=n===add.length && nf===fill.length;
+  toast(okAll ? [n?`${n} team${n>1?"s":""} added`:"", nf?`contact details added to ${nf}`:""].filter(Boolean).join(", ")+" 🎉" : "Some details didn't save. Publish the latest Firebase rules, then import again.");
 }
 
 function burst(){
@@ -974,6 +1011,7 @@ setTimeout(checkVersion, 4000); setInterval(checkVersion, 120000);
   listen("tmatches", d=>{ S.matches=d.map(m=>({...m, games:fromDb(m.games)})); once("tmatches") });
   if(S.isAdmin){
     listen("tcontacts", d=>{ S.contacts=Object.fromEntries(d.map(x=>[x.id,x])); render() });
+    const go=()=>{ if(S.loaded) autoSetup(); else setTimeout(go,300) }; setTimeout(go,1200);
     const watchSecret=()=>{ const t=T(); if(t) db.collection("tsecrets").doc(t.id).get().then(d=>{ S.secret=d.exists?d.data().code:null; render() }).catch(()=>{}) };
     setTimeout(watchSecret,800);
   }

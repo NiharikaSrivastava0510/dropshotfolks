@@ -387,6 +387,15 @@ nav.tabs button[data-tab="court"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='htt
 .tie-h span:last-child{text-align:right}
 .tie-h b{font-family:var(--mono);font-size:1.05rem;padding:2px 10px;border-radius:99px;background:var(--surface);border:1px solid var(--line)}
 .tie-h .win{color:var(--accent)}
+.tie-s{font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:0 6px}
+.rb{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:7px 10px;border-radius:10px;background:var(--surface);font-size:.9rem}
+.rb[data-medit]{cursor:pointer}
+.rb[data-medit]:hover{background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+.rb.live{box-shadow:inset 3px 0 0 var(--accent)}
+.rb b{font-family:var(--mono)}
+.rb .wa::before{content:"◀ ";font-size:.7em;color:var(--accent)}
+.rb .wb::after{content:" ▶";font-size:.7em;color:var(--accent)}
+.rb .livebadge{font-size:.72rem}
 .tlist{display:grid;gap:8px}
 .trow{display:flex;gap:8px;align-items:center;border:1px solid var(--line);border-radius:14px;padding:6px 8px 6px 6px;background:var(--surface)}
 .trow.on{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 25%,transparent)}
@@ -568,5 +577,5 @@ body.refonly{padding-bottom:24px!important}
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="app.js?v=202610131929"></script>
+<script src="app.js?v=202610132000"></script>
 </body></html>

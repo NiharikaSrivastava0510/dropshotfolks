@@ -62,7 +62,8 @@ const TEAM_CUP_TEAMS = [
   ["BC2","Cameron Sin","Rebecca Yang","Michael Lieu","Anju lama"], ["Net Gains","Imran Hoque","Clare Walsh","Sara Bel Houla","Rahul Singh"],
   ["GODSHUTTLER","Ayestain","Vinotha","Pooja","Moiz"]];
 const bankOf = t => t?.bank && (t.bank.acct || t.bank.sort) ? t.bank : null;
-const DISC = {MD:"Men's doubles", WD:"Women's doubles", XD:"Mixed doubles"};
+// a Team Cup tie: men's, women's and two mixed doubles (XD = mixed 1: man 1 + woman 1, XD2 = mixed 2: man 2 + woman 2)
+const DISC = {MD:"Men's doubles", WD:"Women's doubles", XD:"Mixed doubles 1", XD2:"Mixed doubles 2"};
 const isTeam = t => t?.mode==="team";
 const nPl = t => isTeam(t)?4:2;
 const playersOf = x => [x?.p1,x?.p2,x?.p3,x?.p4].filter(Boolean);
@@ -70,9 +71,9 @@ function formatTxt(t){
   const r=rules(t);
   if(isTeam(t)){ const adv=Number(t.advance)||2, wild=Number(t.wild)||0;
     return [`Teams of 4: 2 men and 2 women.`,
-      `Every tie between two teams is 3 matches: men's doubles, women's doubles and mixed doubles. Win 2 of the 3 to win the tie.`,
+      `Every tie between two teams is 4 matches: men's doubles, women's doubles and two mixed doubles. Win 3 of the 4 to win the tie; at 2–2 the team with more total points wins.`,
       `Group stage: round robin in groups of about ${Number(t.groupSize)||3}.`,
-      `Group points: win by 6 or more points = 4, win by 4–5 = 3, win by 1–3 = 1, loss = 0. The margin is the total points across the tie's 3 matches. Level teams are split by points difference, then head-to-head.`,
+      `Group points: win by 6 or more points = 4, win by 4–5 = 3, win by 1–3 = 1, loss = 0. The margin is the total points across the tie's 4 matches. Level teams are split by points difference, then head-to-head.`,
       `Knockouts: top ${adv} of each group${wild?` plus the best ${wild} third-placed team${wild>1?"s":""}`:""} go through, ranked by points. The top seeds get a bye if the bracket isn't full.${t.bronze!==false?" The final and the bronze medal match are played at the same time.":""}`,
       `Each match: 1 game, ${ruleTxt(r)}${r.deuce&&r.cap<(CAP_FOR[r.to]||0)?`, at ${r.cap-1}–${r.cap-1} the next point wins`:""}.`].join("\n")+(t.format?`\n\n${t.format}`:"") }
   const adv=Number(t.advance)||2, ko=rules(t,{stage:"ko"}), fin=rules(t,{stage:"ko",roundName:"Final"}), same=(x,y)=>ruleTxt(x)===ruleTxt(y);
@@ -185,7 +186,11 @@ function loserTeam(m){
 function tieResult(tie){
   const rs=S.matches.filter(x=>x.tie===tie); let a=0,b=0,pa=0,pb=0,done=0;
   rs.forEach(x=>{ if(x.status==="done" && x.winner){ done++; x.winner==="a"?a++:b++; const p=pts(x); pa+=p.a; pb+=p.b } });
-  return {a, b, pa, pb, done, n:rs.length, winner:a>=2?"a":b>=2?"b":null, complete:rs.length>0 && done===rs.length};
+  const need=Math.floor(rs.length/2)+1, complete=rs.length>0 && done===rs.length;
+  // most matches won; level (2–2) on matches → more total points; still level → whoever won the last mixed doubles
+  const level=complete && a===b, last=rs.find(x=>x.disc==="XD2")||rs[rs.length-1];
+  const winner = a>=need?"a" : b>=need?"b" : level ? (pa!==pb ? (pa>pb?"a":"b") : last?.winner||null) : null;
+  return {a, b, pa, pb, done, n:rs.length, winner, complete, onPoints:level && !!winner};
 }
 const bronzeOn = t => t?.bronze===true || (isTeam(t) && t?.bronze!==false);
 // how many extra teams (best of the next place down) join the knockouts
@@ -196,7 +201,9 @@ const tiePts = margin => margin>=6?4 : margin>=4?3 : 1;
 // players a match ties up: Team Cup men's and women's doubles can run side by side, mixed needs both
 function resOf(m, a, b){
   const sides=[a,b].filter(Boolean); if(!m.disc) return sides;
-  return sides.flatMap(x=>m.disc==="MD"?[x+"·M"]:m.disc==="WD"?[x+"·W"]:[x+"·M",x+"·W"]);
+  // players each match uses: MD both men, WD both women, mixed 1 man 1 + woman 1, mixed 2 man 2 + woman 2
+  const who={MD:["M1","M2"], WD:["W1","W2"], XD:["M1","W1"], XD2:["M2","W2"]}[m.disc]||[];
+  return sides.flatMap(x=>who.map(p=>x+"·"+p));
 }
 const isBye = m => !!m.bye;
 const PLACE = p => p===1?"Winner":p===2?"Runner-up":p===3?"3rd":`${p}th`;
@@ -256,7 +263,7 @@ function wildTeams(t, cat){
 // one match, or for the Team Cup one tie = 3 matches sharing a tie id
 function addFixture(batch, t, id, data, plan={}){
   if(!isTeam(t) || data.bye){ batch.set(db.collection("tmatches").doc(id), {...data, ...(plan[id]||{})}); return [id] }
-  return Object.keys(DISC).map((d,k)=>{ const mid=`${id}_${d}`; batch.set(db.collection("tmatches").doc(mid), {...data, tie:id, disc:d, order:(data.order??0)*3+k, ...(plan[mid]||{})}); return mid });
+  return Object.keys(DISC).map((d,k)=>{ const mid=`${id}_${d}`; batch.set(db.collection("tmatches").doc(mid), {...data, tie:id, disc:d, order:(data.order??0)*4+k, ...(plan[mid]||{})}); return mid });
 }
 function roundRobin(ids){
   const list=[...ids]; if(list.length%2) list.push(null);
@@ -284,7 +291,7 @@ async function generateGroups(t, cat){
     addFixture(batch, t, id, {tid:t.id, cat, stage:"group", group:G, round:r+1, a:pair[0], b:pair[1], status:"scheduled", games:[], winner:null, court:0, order:order++, updatedAt:nowIso()});
   }));
   batch.set(db.collection("tourneys").doc(t.id), {groups:{...(t.groups||{}), [cat]:groups}}, {merge:true});
-  await batch.commit(); toast(`${catName(t,cat)}: ${ng} group${ng>1?"s":""} and ${order-base} ${isTeam(t)?`ties (${(order-base)*3} matches)`:"matches"} created`);
+  await batch.commit(); toast(`${catName(t,cat)}: ${ng} group${ng>1?"s":""} and ${order-base} ${isTeam(t)?`ties (${(order-base)*4} matches)`:"matches"} created`);
 }
 async function clearMatches(t, cat, stage){
   const ms=matchesOf(t,cat).filter(m=>!stage || m.stage===stage);
@@ -397,8 +404,12 @@ function matchRow(t, m, opts={}){
 function fixList(t, ms, opts={}){
   const seen=new Set();
   return ms.map(m=>{ if(!m.tie) return matchRow(t,m,opts); if(seen.has(m.tie)) return ""; seen.add(m.tie);
-    const r=tieResult(m.tie), rs=ms.filter(x=>x.tie===m.tie), mine=opts.me&&(sideTeam(m,"a")===opts.me||sideTeam(m,"b")===opts.me);
-    return `<div class="tie ${mine?"me":""}"><div class="tie-h"><span class="${r.winner==="a"?"win":""}">${sideName(m,"a")}</span><b>${r.done?`${r.a}–${r.b}`:"vs"}</b><span class="${r.winner==="b"?"win":""}">${sideName(m,"b")}</span></div>${rs.map(x=>matchRow(t,x,opts)).join("")}</div>` }).join("");
+    const r=tieResult(m.tie), rs=S.matches.filter(x=>x.tie===m.tie).sort((x,y)=>Object.keys(DISC).indexOf(x.disc)-Object.keys(DISC).indexOf(y.disc));
+    const mine=opts.me&&(sideTeam(m,"a")===opts.me||sideTeam(m,"b")===opts.me), stage=m.stage==="ko"?(m.roundName||"Knockout"):`Group ${m.group}`;
+    const line=x=>{ const g=(x.games||[]).slice(-1)[0], live=x.status==="live", done=x.status==="done";
+      const right = done ? `<b class="${x.winner==="a"?"wa":"wb"}">${esc(gamesTxt(x))}</b>` : live ? `<span class="livebadge">Court ${esc(x.court)}</span> <b>${g?`${g[0]}–${g[1]}`:"0–0"}</b>` : `<span class="muted">${esc(planTxt(x))}</span>`;
+      return `<div class="rb ${live?"live":""}" ${opts.edit?`data-medit="${esc(x.id)}" role="button" tabindex="0"`:""}><span>${esc(DISC[x.disc]||x.disc)}</span><span>${right}</span></div>` };
+    return `<div class="tie ${mine?"me":""}"><div class="tie-s">${esc(stage)}${r.onPoints?" · won on total points":""}</div><div class="tie-h"><span class="${r.winner==="a"?"win":""}">${sideName(m,"a")}</span><b>${r.done?`${r.a}–${r.b}`:"vs"}</b><span class="${r.winner==="b"?"win":""}">${sideName(m,"b")}</span></div>${rs.map(line).join("")}</div>` }).join("");
 }
 function standTable(t, cat, G){
   const adv=Number(t.advance)||2, rows=standings(t,cat,G);
@@ -918,6 +929,13 @@ async function autoSetup(){
       tc=S.tourneys.find(x=>x.id===id); await generateKnockouts(tc,"TC"); await wait(()=>matchesOf(tc).some(m=>m.stage==="ko"));
       await scheduleAll(S.tourneys.find(x=>x.id===id)); done.push("its groups, knockouts, courts and times");
     }
+    for(const t of S.tourneys.filter(isTeam)){ const ties=[...new Set(matchesOf(t).filter(m=>m.tie).map(m=>m.tie))].filter(tie=>!S.matches.some(m=>m.tie===tie && m.disc==="XD2"));
+      if(!ties.length) continue; const b=db.batch();
+      ties.forEach(tie=>{ const x=S.matches.find(m=>m.tie===tie && m.disc==="XD")||S.matches.find(m=>m.tie===tie); const {id, games, svc, seq, ...rest}=x;
+        b.set(db.collection("tmatches").doc(`${tie}_XD2`), {...rest, disc:"XD2", status:"scheduled", games:[], winner:null, court:0, order:(x.order||0)+0.5, updatedAt:nowIso()}) });
+      await b.commit(); await wait(()=>ties.every(tie=>S.matches.some(m=>m.tie===tie && m.disc==="XD2")));
+      if(!matchesOf(t).some(m=>m.status!=="scheduled" && !m.bye)) await scheduleAll(S.tourneys.find(x=>x.id===t.id));
+      done.push(`second mixed doubles added to ${t.name}`) }
     for(const t of S.tourneys){ const ms=matchesOf(t).filter(m=>m.pcourt && !m.bye && m.pnum==null); if(!ms.length || clockOn(t)) continue;
       const times=[...new Set(matchesOf(t).filter(m=>m.ptime).map(m=>m.ptime))].sort(), per={};
       const b=db.batch(); [...ms].sort((x,y)=>String(x.ptime||"99").localeCompare(String(y.ptime||"99"))||(x.order||0)-(y.order||0)).forEach(m=>{ per[m.pcourt]=(per[m.pcourt]||0)+1;

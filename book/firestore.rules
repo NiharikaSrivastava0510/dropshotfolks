@@ -182,6 +182,11 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
     }
+    // Main website text, links and photos the organiser has changed: public to read, organiser only to change.
+    match /site/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
     // Matches: the organiser makes them; referees with the code can only score.
     match /tmatches/{id} {
       allow read: if true;

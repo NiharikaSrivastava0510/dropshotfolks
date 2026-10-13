@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://js.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com; frame-src https://hcaptcha.com https://*.hcaptcha.com; connect-src 'self' https://firestore.googleapis.com https://api.web3forms.com https://hcaptcha.com https://*.hcaptcha.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://hcaptcha.com https://*.hcaptcha.com; font-src 'self' https://fonts.gstatic.com; media-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self' https://api.web3forms.com; child-src https://hcaptcha.com https://*.hcaptcha.com; upgrade-insecure-requests">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://js.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com; frame-src https://hcaptcha.com https://*.hcaptcha.com https://dropshotfolks.co.uk https://dropshotfolks.firebaseapp.com https://accounts.google.com https://apis.google.com; connect-src 'self' https://*.googleapis.com http://127.0.0.1:9099 http://127.0.0.1:8080 https://api.web3forms.com https://hcaptcha.com https://*.hcaptcha.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://hcaptcha.com https://*.hcaptcha.com; font-src 'self' https://fonts.gstatic.com; media-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self' https://api.web3forms.com; child-src https://hcaptcha.com https://*.hcaptcha.com; upgrade-insecure-requests">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Dropshot Folks — A Badminton Community</title>
@@ -1513,9 +1513,11 @@ footer ul a:hover{color:var(--cream)}
     <div class="footer-bar">
       <span data-edit="founded">© 2026 Dropshot Folks · London</span>
       <span>Made with sweat &amp; shuttlecocks</span>
+      <a href="#edit" data-site-edit data-noedit style="opacity:.7;font-size:.85em">🔑 Organiser: edit website</a>
     </div>
   </div>
 </footer>
+<script src="./site-edit.js"></script>
 
 <script>
 // Reveal on scroll
@@ -1971,9 +1973,9 @@ document.querySelectorAll('.t-card[data-ends]').forEach(c => {
   if (!still && 'IntersectionObserver' in window) {
     const io = new IntersectionObserver(es => es.forEach(e => { if (!e.isIntersecting) return; io.unobserve(e.target);
       const el = e.target, to = +el.dataset.count, suf = el.dataset.suffix || '', t0 = performance.now();
-      const step = t => { const p = Math.min(1, (t - t0) / 1400), v = Math.round(to * (1 - Math.pow(1 - p, 3))); el.textContent = v + (p === 1 ? suf : ''); if (p < 1) requestAnimationFrame(step); };
+      const step = t => { if (document.documentElement.classList.contains('site-editing')) return; const p = Math.min(1, (t - t0) / 1400), v = Math.round(to * (1 - Math.pow(1 - p, 3))); el.textContent = v + (p === 1 ? suf : ''); if (p < 1) requestAnimationFrame(step); };
       requestAnimationFrame(step); }), {threshold:.6});
-    nums.forEach(n => io.observe(n));
+    (window.siteReady || Promise.resolve()).then(() => nums.forEach(n => io.observe(n)));   // after the organiser's edits load
   }
 
   // cards lean towards the pointer (mouse only)

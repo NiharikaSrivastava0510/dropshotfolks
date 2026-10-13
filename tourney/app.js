@@ -30,6 +30,31 @@ const TEAM_CUP = {name:"Badminton Team Cup", date:"2026-10-18", venue:"Westminst
 9. Amendments. The Organizer reserves the right to amend the schedule, format, or venue arrangements as required. Registered teams will be notified of any material changes in a timely manner.
 
 By registering a team and submitting payment for the Event, the team captain confirms on behalf of all listed players that they have read, understood, and agree to be bound by these Terms & Conditions in full.`};
+const NET_PLAY = {address:"Barking Sporthouse and Gym, Mayesbrook Park, Lodge Ave, Dagenham RM8 2JR", entry:"£30 per player · £27 early bird until 30 Oct",
+  info:"Men's, women's and mixed doubles, all levels, 18+. Saturday 21 November, 12:00–18:00.\n12:00 check-in at the Tournament Desk · 12:15 warm-up and briefing · 12:30 group stage · 15:40 quarter-finals · 16:25 semi-finals · 17:00 finals and 3rd-place play-offs · 17:30 prize-giving.\nSpectators £2 on the door. Registration closes 18 November or when a category fills.",
+  maxTeams:24, courts:5, startTime:"12:30", matchMins:12, groupSize:3, advance:1, koSize:8, wild:0, bronze:true, pointsTo:15, deuce:true, cap:17, bestOf:1,
+  stageRules:{ko:{pointsTo:21, cap:23, bestOf:1}, final:{pointsTo:11, cap:15, bestOf:3}},
+  format:`Rally-point scoring. Ends change at 8 in games to 15, 11 in games to 21 and 6 in games to 11. No mid-game interval.
+2 minutes of warm-up before every round. Teams must be on court within 5 minutes of being called, or it's a walkover (15–0).
+Groups are drawn by software. Quarter-finals: A v H, B v G, C v F, D v E.
+Feather shuttles provided. Every match has an umpire. Partner changes allowed until 14 November with the organiser's approval.`,
+  terms:`By registering for Net Play, each player agrees to these terms. "Organiser" means Dropshot Folks, run by Anamika Srivastava as a sole trader.
+1. Entry and eligibility. Entry is open to players aged 18 or over on the day of the event, of any playing level. Each player may enter one category only. A team is confirmed only once both partners have registered and paid. Places are allocated first come, first served, up to 24 teams per category; later entries go on a waiting list. The organiser may refuse an entry without giving a reason, with a full refund.
+2. Fees and payment. Entry is £30 per player, or £27 per player if paid by 30 October 2026. Registration closes on 18 November 2026, or earlier if a category fills. Spectator entry is £2 per person, paid on the door. Fees cover court hire, shuttles, officials and the prize fund.
+3. Withdrawals, refunds and substitutions. Entry fees are non-refundable if a player or team withdraws; instead, the place can be passed to a replacement player or team. A team may replace a partner free of charge up to one week before the event (by 14 November 2026), with the organiser's approval and if the new player meets the eligibility rules. If the organiser cancels the event, all entry fees are refunded in full. If the event is moved, players can transfer to the new date or take a full refund. The organiser is not responsible for travel, accommodation or other costs players incur.
+4. Format and rulings. The competition follows the Net Play Game Format and the BWF Laws of Badminton. The organiser may change the format, schedule, groups or number of teams on the day to keep the event on time; any change is announced at the Tournament Desk and in the WhatsApp group. The Tournament Referee's decision on any match or rules question is final. Free play courts are offered only when time allows and are not guaranteed.
+5. Prizes. Prizes are £200, £150 and £100 per team for 1st, 2nd and 3rd in each category. If a category has fewer than 12 teams, the organiser may reduce that category's prizes in proportion to the teams entered, announced before play starts. Prizes are paid by bank transfer within 7 days. Winners must give bank details within 14 days, or the prize is forfeited. A team disqualified for misconduct forfeits any prize.
+6. Conduct. Players and spectators must treat everyone at the event with respect. Abusive, violent, discriminatory or unsafe behaviour will lead to removal from the venue and disqualification, without a refund. Everyone must follow Barking Sporthouse and Gym's venue rules and staff instructions. Alcohol and drugs are not allowed on court; anyone who appears under the influence may be refused play.
+7. Health, safety and liability. Badminton carries a risk of injury. Players take part at their own risk and should only play if fit to do so. Players must tell the organiser about any condition that may affect their safety on court. The organiser holds public liability insurance; this does not cover personal accident, and players are advised to hold their own sports insurance. The organiser is not liable for injury, loss or damage except where caused by its negligence, or where the law does not allow liability to be limited. The organiser is not responsible for lost or stolen personal belongings. First aid is available at the Tournament Desk.
+8. Spectators and children. Spectators under 16 must be accompanied by a responsible adult at all times. Children must stay off court areas and away from play during matches. The accompanying adult is responsible for the child's safety and behaviour.
+9. Photography and filming. A photographer and videographer will be at the event. Photos and video may be used on Dropshot Folks' Instagram (@dropshotfolks), website, and promotional material. Anyone who does not want to be filmed or photographed should tell the Tournament Desk at check-in and will be given a marker to wear.
+10. Personal data. Registration details (name, email, phone number and category) are used only to run the event and send updates, including via the WhatsApp tournament group. Data is handled under UK GDPR and not shared with third parties or sponsors without consent. Players can ask for their data to be deleted after the event by emailing info@dropshotfolks.co.uk.
+11. General. The organiser may update these terms before the event; registered players will be told of any material change. These terms are governed by the laws of England and Wales. Questions: info@dropshotfolks.co.uk or +44 7824 991029.`};
+// official details the organiser can apply with one tap: create = make a new tournament, otherwise merge into the matching one
+const PRESETS = [
+  {key:"teamcup", title:"🏆 Team Cup · Sun 18 Oct", text:"Sets up the Team Cup with its venue, game format, scoring (to 15, max 17) and terms, ready for the teams.", btn:"Set up the Team Cup", find:()=>S.tourneys.find(x=>x.id==="t20261018-teamcup"), create:{id:"t20261018-teamcup", data:()=>TEAM_CUP}},
+  {key:"netplay", title:"🏸 Net Play · Sat 21 Nov", text:"Adds the official Net Play format to your Net Play tournament: groups of 3 with winners through, 8-team knockout with a 3rd-place play-off, scoring by round (15 / 21 / best of 3 to 11), 5 courts from 12:30, and the official terms. Name, teams, bank details and registration stay as they are.", btn:"Apply the Net Play details", find:()=>S.tourneys.find(x=>x.date==="2026-11-21"), merge:()=>NET_PLAY},
+];
 const bankOf = t => t?.bank && (t.bank.acct || t.bank.sort) ? t.bank : null;
 const DISC = {MD:"Men's doubles", WD:"Women's doubles", XD:"Mixed doubles"};
 const isTeam = t => t?.mode==="team";
@@ -44,11 +69,14 @@ function formatTxt(t){
       `Group points: win by 6 or more points = 4, win by 4–5 = 3, win by 1–3 = 1, loss = 0. The margin is the total points across the tie's 3 matches. Level teams are split by points difference, then head-to-head.`,
       `Knockouts: top ${adv} of each group${wild?` plus the best ${wild} third-placed team${wild>1?"s":""}`:""} go through, ranked by points. The top seeds get a bye if the bracket isn't full.${t.bronze!==false?" The final and the bronze medal match are played at the same time.":""}`,
       `Each match: 1 game, ${ruleTxt(r)}${r.deuce&&r.cap<(CAP_FOR[r.to]||0)?`, at ${r.cap-1}–${r.cap-1} the next point wins`:""}.`].join("\n")+(t.format?`\n\n${t.format}`:"") }
+  const adv=Number(t.advance)||2, ko=rules(t,{stage:"ko"}), fin=rules(t,{stage:"ko",roundName:"Final"}), same=(x,y)=>ruleTxt(x)===ruleTxt(y);
   const lines=[
-    `Group stage: round robin in groups of about ${Number(t.groupSize)||4}. Top ${Number(t.advance)||2} from each group go through to the knockouts.`,
-    `Knockouts: single elimination until the final.`,
-    `Each match: ${r.bestOf===1?"1 game":r.bestOf===2?"2 games. At 1–1, the team with more total points wins":"best of 3 games"}, ${ruleTxt(r)}.`,
-    `Group places are decided by wins, then points difference, then points scored.`];
+    `Group stage: round robin in groups of about ${Number(t.groupSize)||4}. ${adv===1?"The group winner goes":`The top ${adv} from each group go`} through to the knockouts${Number(t.koSize)>0?`, and the best ${adv===1?"runners-up":"teams in the next place"} fill any spare places up to ${Number(t.koSize)}`:""}.`,
+    `Knockouts: single elimination until the final${bronzeOn(t)?", plus a 3rd-place play-off":""}.`,
+    `Group matches: ${r.bestOf===1?"1 game ":r.bestOf===2?"2 games (at 1–1, more total points wins) ":""}${ruleTxt({...r,bestOf:1})}.`,
+    ...(same(ko,r)?[]:[`Quarter- and semi-finals: ${ko.bestOf===1?"1 game ":""}${ruleTxt(ko)}.`]),
+    ...(same(fin,ko)?[]:[`Final${bronzeOn(t)?" and 3rd-place play-off":""}: ${fin.bestOf===1?"1 game ":""}${ruleTxt(fin)}.`]),
+    `Group places are decided by wins, then head-to-head, then points difference, then points scored.`];
   return lines.join("\n")+(t.format?`\n\n${t.format}`:"");
 }
 const CAT_PRESETS = [["MD","Men's doubles"],["WD","Women's doubles"],["XD","Mixed doubles"]];
@@ -66,11 +94,14 @@ const S = {
   tab: /^#(screen|court=\d+)$/.test(location.hash) ? "screen" : location.hash==="#ref" ? "ref" : ls.get("dsf:ttab","reg"),
   refOnly: location.hash==="#ref",
   tourneys:[], teams:[], matches:[], contacts:{}, secret:null, unlock:null,
-  uid:null, isAdmin:false, loaded:false, tid: ls.get("dsf:tid",null),
-  cat: null, toss: {}, myTeam: ls.get("dsf:myteam",null), refCourt: ls.get("dsf:refcourt",1), edit:null, scrIdx:0
+  uid:null, isAdmin:false, loaded:false, tid: new URLSearchParams(location.search).get("t") || ls.get("dsf:tid",null),
+  cat: null, toss: {}, newT:false, myTeam: ls.get("dsf:myteam",null), refCourt: ls.get("dsf:refcourt",1), edit:null, scrIdx:0
 };
 let db=null, auth=null;
-const T = () => S.tourneys.find(t=>t.id===S.tid) || [...S.tourneys].sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")))[0] || null;
+const T = () => S.tourneys.find(t=>t.id===S.tid) || nextTourney() || null;
+// the soonest tournament that hasn't finished yet, else the most recent
+function nextTourney(){ const today=new Date(Date.now()-864e5).toISOString().slice(0,10), by=[...S.tourneys].sort((a,b)=>String(a.date||"9").localeCompare(String(b.date||"9")));
+  return by.find(t=>String(t.date||"9")>=today) || by[by.length-1] }
 const cats = t => (t?.cats||[]).filter(c=>c && c.id);
 const catName = (t,id) => cats(t).find(c=>c.id===id)?.name || id;
 const teamsOf = (t,cat) => S.teams.filter(x=>x.tid===t?.id && (!cat || x.cat===cat)).sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));
@@ -82,10 +113,13 @@ const canRef = t => !!t && (S.isAdmin || (S.unlock?.tid===t.id));
 /* ---------- scoring rules ---------- */
 // points per game 11/15/21; with deuce you must win by 2, up to a cap (11→15, 15→21, 21→30); without deuce first to the target wins
 const CAP_FOR = {11:15, 15:21, 21:30};
-const rules = t => { const to=[11,15,21].includes(Number(t?.pointsTo))?Number(t.pointsTo):21, deuce=t?.deuce!==false;
+// knockout rounds can have their own scoring: t.stageRules = {ko:{pointsTo,cap,bestOf}, final:{…}} (final = final & 3rd-place play-off)
+const isFinalRound = m => m?.roundName==="Final" || m?.roundName==="Bronze medal match";
+const rules = (t, m) => { const st=m?.stage==="ko" ? t?.stageRules?.[isFinalRound(m)?"final":"ko"] : null; if(st) t={...t, ...Object.fromEntries(Object.entries(st).filter(([,v])=>Number(v)>0))};
+  const to=[11,15,21].includes(Number(t?.pointsTo))?Number(t.pointsTo):21, deuce=t?.deuce!==false;
   const cap=Number(t?.cap)>to ? Number(t.cap) : (CAP_FOR[to]||to+9);
   return {to, deuce, cap:deuce?cap:to, bestOf:Number(t?.bestOf)||1} };
-const ruleTxt = r => `to ${r.to}${r.deuce?`, deuce (win by 2, max ${r.cap})`:", no deuce"}`;
+const ruleTxt = r => `${r.bestOf===3?"best of 3 games ":r.bestOf===2?"2 games ":""}to ${r.to}${r.deuce?`, deuce (win by 2, max ${r.cap})`:", no deuce"}`;
 function gameDone(g, r){ const [a,b]=g, hi=Math.max(a,b), lo=Math.min(a,b); return r.deuce ? (hi>=r.cap || (hi>=r.to && hi-lo>=2)) : hi>=r.to }
 function gamesWon(m, r){ let a=0,b=0; (m.games||[]).forEach(g=>{ if(gameDone(g,r)) g[0]>g[1]?a++:b++ }); return {a,b} }
 function matchWinner(m, r){
@@ -124,6 +158,7 @@ function sideTeam(m, side){
   const src=m.src?.[side];
   if(src){ const t=S.tourneys.find(x=>x.id===m.tid); if(!t) return null;
     if(src.seed) return qualifiers(t,m.cat)?.[src.seed-1] || null;
+    if(src.wild) return wildTeams(t,m.cat)?.[src.wild-1] || null;
     return groupDone(t,m.cat,src.g) ? (standings(t,m.cat,src.g)[src.p-1]?.id||null) : null }
   const from=m.from?.[side==="a"?0:1]; if(!from) return null;
   const f=S.matches.find(x=>x.id===from); if(!f) return null;
@@ -146,6 +181,11 @@ function tieResult(tie){
   rs.forEach(x=>{ if(x.status==="done" && x.winner){ done++; x.winner==="a"?a++:b++; const p=pts(x); pa+=p.a; pb+=p.b } });
   return {a, b, pa, pb, done, n:rs.length, winner:a>=2?"a":b>=2?"b":null, complete:rs.length>0 && done===rs.length};
 }
+const bronzeOn = t => t?.bronze===true || (isTeam(t) && t?.bronze!==false);
+// how many extra teams (best of the next place down) join the knockouts
+function nWild(t, groups){ const adv=Math.max(1,Number(t.advance)||2), G=Object.values(groups||{}), spare=G.filter(g=>g.length>adv).length;
+  const w = Number(t.koSize)>0 ? Number(t.koSize)-G.reduce((s,g)=>s+Math.min(adv,g.length),0) : Number(t.wild)||0;
+  return Math.max(0, Math.min(spare, w)) }
 const tiePts = margin => margin>=6?4 : margin>=4?3 : 1;
 // players a match ties up: Team Cup men's and women's doubles can run side by side, mixed needs both
 function resOf(m, a, b){
@@ -154,10 +194,11 @@ function resOf(m, a, b){
 }
 const isBye = m => !!m.bye;
 const PLACE = p => p===1?"Winner":p===2?"Runner-up":p===3?"3rd":`${p}th`;
-const shortRound = n => ({"Final":"Final","Semi-finals":"SF","Quarter-finals":"QF","Bronze medal match":"Bronze"})[n] || (n||"").replace("Round of ","R");
+const shortRound = n => ({"Final":"Final","Semi-finals":"SF","Quarter-finals":"QF","Bronze medal match":"3rd place"})[n] || (n||"").replace("Round of ","R");
 // what to show before a knockout slot is decided: "Winner Group A", "Winner QF 2"
 function sideLabel(m, side){
-  const src=m.src?.[side]; if(src) return src.seed ? `Seed ${src.seed}` : `${PLACE(src.p)} Group ${src.g}`;
+  const src=m.src?.[side]; if(src){ const t=S.tourneys.find(x=>x.id===m.tid), adv=Number(t?.advance)||2;
+    return src.seed ? `Seed ${src.seed}` : src.wild ? `Best ${adv===1?"runner-up":PLACE(adv+1)} ${src.wild}` : `${PLACE(src.p)} Group ${src.g}` }
   const from=m.from?.[side==="a"?0:1], f=from && S.matches.find(x=>x.id===from);
   return f ? `${m.fromLose?"Loser":"Winner"} ${shortRound(f.roundName)} ${f.slot||""}`.trim() : "To be decided";
 }
@@ -174,7 +215,7 @@ function standings(t, cat, group){
     if(m.winner==="a"){ A.w++; B.l++ } else { B.w++; A.l++ }
   });
   const h2h=(x,y)=>{ const m=matchesOf(t,cat).find(m=>m.stage==="group" && m.status==="done" && ((m.a===x&&m.b===y)||(m.a===y&&m.b===x))); if(!m) return 0; return (sideTeam(m,m.winner)===x)?-1:1 };
-  return Object.values(row).sort((x,y)=>y.w-x.w || (y.pf-y.pa)-(x.pf-x.pa) || y.pf-x.pf || h2h(x.id,y.id) || String(tName(x.id)).localeCompare(tName(y.id)));
+  return Object.values(row).sort((x,y)=>y.w-x.w || h2h(x.id,y.id) || (y.pf-y.pa)-(x.pf-x.pa) || y.pf-x.pf || String(tName(x.id)).localeCompare(tName(y.id)));
 }
 
 // Team Cup groups: bonus points by winning margin (total points across the tie)
@@ -193,10 +234,16 @@ const allGroupsDone = (t, cat) => { const g=t.groups?.[cat]; return !!g && Objec
 // everyone through to the knockouts, best first: top places in each group plus the best wildcards
 function qualifiers(t, cat){
   if(!allGroupsDone(t,cat)) return null;
-  const g=t.groups[cat], adv=Math.max(1,Number(t.advance)||2), wild=Math.max(0,Number(t.wild)||0), rank=(x,y)=>(y.pts??y.w)-(x.pts??x.w) || (y.pf-y.pa)-(x.pf-x.pa) || y.pf-x.pf;
+  const g=t.groups[cat], adv=Math.max(1,Number(t.advance)||2), wild=nWild(t,g), rank=(x,y)=>(y.pts??y.w)-(x.pts??x.w) || (y.pf-y.pa)-(x.pf-x.pa) || y.pf-x.pf;
   const tables=Object.keys(g).sort().map(G=>standings(t,cat,G));
   const through=tables.flatMap(tb=>tb.slice(0,adv)), extra=tables.map(tb=>tb[adv]).filter(Boolean).sort(rank).slice(0,wild);
   return [...through, ...extra].sort(rank).map(x=>x.id);
+}
+// doubles events: the best teams in the next place down (e.g. best runners-up), best first
+function wildTeams(t, cat){
+  if(!allGroupsDone(t,cat)) return null;
+  const g=t.groups[cat], adv=Math.max(1,Number(t.advance)||2);
+  return Object.keys(g).sort().map(G=>standings(t,cat,G)[adv]).filter(Boolean).sort((x,y)=>y.w-x.w || (y.pf-y.pa)-(x.pf-x.pa) || y.pf-x.pf).slice(0,nWild(t,g)).map(x=>x.id);
 }
 
 /* ---------- fixture generation (organiser) ---------- */
@@ -244,10 +291,11 @@ async function generateKnockouts(t, cat){
   // slots point at group places (Winner Group A, Runner-up Group B…) and fill in when each group finishes
   const adv=Math.max(1, Number(t.advance)||2), G=Object.keys(groups).sort(), seeds=[];
   if(isTeam(t)){   // Team Cup: everyone through is ranked overall, top seeds get the byes
-    const n=G.reduce((s,g)=>s+Math.min(adv,groups[g].length),0)+Math.min(Math.max(0,Number(t.wild)||0), G.filter(g=>groups[g].length>adv).length);
+    const n=G.reduce((s,g)=>s+Math.min(adv,groups[g].length),0)+nWild(t,groups);
     for(let k=1;k<=n;k++) seeds.push({seed:k});
   } else
-  for(let k=0;k<adv;k++) seeds.push(...G.filter(g=>groups[g].length>k).map(g=>({g, p:k+1})));
+  { for(let k=0;k<adv;k++) seeds.push(...G.filter(g=>groups[g].length>k).map(g=>({g, p:k+1})));
+    for(let k=1;k<=nWild(t,groups);k++) seeds.push({wild:k}) }
   if(seeds.length<2){ toast("Not enough teams go through for a knockout"); return }
   const keepPlan=Object.fromEntries(matchesOf(t,cat).filter(m=>m.stage==="ko" && m.ptime).map(m=>[m.id,{pcourt:m.pcourt, ptime:m.ptime}]));
   await clearMatches(t, cat, "ko");
@@ -270,7 +318,7 @@ async function generateKnockouts(t, cat){
     for(let i=0;i<prev.length;i+=2){ const id=`${t.id}_${cat}_K${rnd}_${i/2+1}`;
       next.push(addFixture(batch, t, id, {tid:t.id, cat, stage:"ko", round:rnd, roundName:roundName(roundSize), slot:i/2+1, a:null, b:null, from:[prev[i],prev[i+1]], status:"scheduled", games:[], winner:null, court:0, order:o++, updatedAt:nowIso()}, keepPlan)[0]) }
     // bronze medal match: the two semi-final losers, alongside the final
-    if(next.length===1 && prev.length===2 && isTeam(t) && t.bronze!==false){ const id=`${t.id}_${cat}_K${rnd}_2`;
+    if(next.length===1 && prev.length===2 && bronzeOn(t)){ const id=`${t.id}_${cat}_K${rnd}_2`;
       addFixture(batch, t, id, {tid:t.id, cat, stage:"ko", round:rnd, roundName:"Bronze medal match", slot:2, a:null, b:null, from:[prev[0],prev[1]], fromLose:true, status:"scheduled", games:[], winner:null, court:0, order:o++, updatedAt:nowIso()}, keepPlan) }
     prev=next;
   }
@@ -285,7 +333,7 @@ async function scheduleAll(t){
   const slotOf={}, teamsIn=m=>m.stage==="group"?resOf(m,m.a,m.b):m.tie?resOf(m,m.tie+"a",m.tie+"b"):[];
   const ready=m=>{
     if(m.stage==="group") return 0;
-    if(m.src){ const seeded=m.src.a?.seed||m.src.b?.seed, gs=[m.src.a?.g, m.src.b?.g].filter(Boolean), gm=ms.filter(x=>x.stage==="group" && x.cat===m.cat && (seeded || gs.includes(x.group)));
+    if(m.src){ const seeded=m.src.a?.seed||m.src.b?.seed||m.src.a?.wild||m.src.b?.wild, gs=[m.src.a?.g, m.src.b?.g].filter(Boolean), gm=ms.filter(x=>x.stage==="group" && x.cat===m.cat && (seeded || gs.includes(x.group)));
       if(gm.some(x=>slotOf[x.id]==null)) return null; return gm.length?Math.max(...gm.map(x=>slotOf[x.id]))+1:0 }
     if(m.from){ let e=0; for(const id of m.from){ const f=S.matches.find(x=>x.id===id); if(!f) continue;
         const fs=f.tie?ms.filter(x=>x.tie===f.tie):[f];
@@ -319,7 +367,7 @@ const liveOn = (t,c) => matchesOf(t).find(m=>m.status==="live" && m.court===c);
 
 /* ---------- small renderers ---------- */
 function matchRow(t, m, opts={}){
-  const a=sideTeam(m,"a"), b=sideTeam(m,"b"), r=rules(t), w=m.status==="done"?m.winner:null;
+  const a=sideTeam(m,"a"), b=sideTeam(m,"b"), r=rules(t,m), w=m.status==="done"?m.winner:null;
   const label = (m.stage==="ko" ? (m.roundName||"Knockout") : `Group ${m.group} · R${m.round}`) + (m.disc?` · ${m.disc}`:"");
   const mid = m.status==="live" ? `<span class="livebadge">Court ${m.court}${m.disc?` · ${m.disc}`:""}</span><span class="sc">${(m.games||[]).map(g=>`${g[0]}–${g[1]}`).slice(-1)[0]||"0–0"}</span>`
     : m.status==="done" ? `<span class="tag">${m.disc?esc(DISC[m.disc]):"Final"}</span><span class="sc">${esc(gamesTxt(m))||(m.bye?"bye":"")}</span>` : `<span class="tag">${esc(label)}</span>${m.ptime?`<span class="when">🕒 ${esc(m.ptime)} · Court ${esc(m.pcourt)}</span>`:"<span>vs</span>"}`;
@@ -353,10 +401,10 @@ function bracket(t, cat){
       const sc=side=>tr ? (tr.done?String(side==="a"?tr.a:tr.b):"") : m.status==="done"&&!m.bye?(m.games||[]).map(g=>side==="a"?g[0]:g[1]).join(" "):"";
       const line=(id,side)=>`<div><span class="${w===side?"win":""} ${id?"":"tbd"}">${id?esc(tName(id)):(m.bye&&!m.src?.[side]&&!m.from?"bye":esc(sideLabel(m,side)))}</span><span>${esc(sc(side))}</span></div>`;
       const live=tr?S.matches.some(x=>x.tie===m.tie&&x.status==="live"):m.status==="live";
-      return `<div class="bm ${live?"live":""}">${m.roundName==="Bronze medal match"?`<div class="bt">🥉 Bronze medal match</div>`:""}${m.ptime&&!m.bye&&m.status!=="done"?`<div class="bt">🕒 ${esc(m.ptime)} · Court ${esc(m.pcourt)}</div>`:""}${line(a,"a")}${line(b,"b")}</div>` }).join("")}</div>` }).join("")}</div>`;
+      return `<div class="bm ${live?"live":""}">${m.roundName==="Bronze medal match"?`<div class="bt">🥉 ${isTeam(t)?"Bronze medal match":"3rd-place play-off"}</div>`:""}${m.ptime&&!m.bye&&m.status!=="done"?`<div class="bt">🕒 ${esc(m.ptime)} · Court ${esc(m.pcourt)}</div>`:""}${line(a,"a")}${line(b,"b")}</div>` }).join("")}</div>` }).join("")}</div>`;
 }
 function courtCard(t, c){
-  const m=liveOn(t,c), r=rules(t);
+  const m=liveOn(t,c), r=rules(t,m);
   const fb=`<a class="focusbtn" href="#court=${c}" target="_blank" rel="noopener" title="Open Court ${c} full screen in a new tab">⛶ Focus</a>`;
   if(!m) return `<div class="ct idle"><div class="cn"><span>Court ${c}</span><span>free ${fb}</span></div><div class="muted">Waiting for the next match</div></div>`;
   const g=(m.games||[]).slice(-1)[0]||[0,0], w=gamesWon(m,r), need=Math.floor(r.bestOf/2)+1, sv=svcState(m,Math.max(0,(m.games||[]).length-1));
@@ -370,7 +418,7 @@ function courtCard(t, c){
 function noTourney(){ return `<section class="panel"><h2>Tournaments</h2><div class="empty">No tournament set up yet.${S.isAdmin?" Create one in the Organiser tab.":" Check back soon."}</div></section>` }
 function pickBar(t){
   if(S.tourneys.length<2) return "";
-  return `<div class="cats">${[...S.tourneys].sort((a,b)=>String(b.date||"").localeCompare(String(a.date||""))).map(x=>`<button data-tid="${esc(x.id)}" aria-pressed="${x.id===t.id}">${esc(x.name||"Tournament")}</button>`).join("")}</div>`;
+  return `<div class="cats tpicker">${[...S.tourneys].sort((a,b)=>String(a.date||"9").localeCompare(String(b.date||"9"))).map(x=>`<button data-tid="${esc(x.id)}" aria-pressed="${x.id===t.id}">${esc(x.name||"Tournament")}<small>${esc(x.date?new Date(x.date+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"}):"")}</small></button>`).join("")}</div>`;
 }
 function catBar(t){
   const cs=cats(t); if(!S.cat || !cs.some(c=>c.id===S.cat)) S.cat=cs[0]?.id||null;
@@ -387,7 +435,7 @@ function viewReg(){
       ${t.info?`<p>${esc(t.info).replace(/\n/g,"<br>")}</p>`:""}
       <div class="row">${cats(t).map(c=>`<span class="chip st-paid">${esc(c.name)} · ${teamsOf(t,c.id).length}${Number(t.maxTeams)?`/${Number(t.maxTeams)}`:""} teams</span>`).join("")}</div>
       ${t.entry?`<p><b>Entry:</b> ${esc(t.entry)}</p>`:""}${t.prizes?`<p><b>Prizes:</b> ${esc(t.prizes)}</p>`:""}
-      <p><b>Scoring:</b> ${r.bestOf===1?"1 game":r.bestOf===2?"2 games (total points decide at 1–1)":"best of 3 games"}, ${esc(ruleTxt(r))}.</p>
+      <p><b>Scoring:</b> ${r.bestOf===1?"1 game ":r.bestOf===2?"2 games (total points decide at 1–1), ":""}${esc(ruleTxt({...r,bestOf:r.bestOf===2?1:r.bestOf}))}${t.stageRules?" in the groups. Knockout rounds are longer: see the game format.":"."}</p>
       <details class="readbox" id="rd-format"><summary>📋 Game format</summary><p>${esc(formatTxt(t)).replace(/\n/g,"<br>")}</p></details>
       <details class="readbox" id="rd-terms"><summary>📜 Terms & conditions</summary><p>${esc(t.terms||DEFAULT_TERMS).replace(/\n/g,"<br>")}</p></details>
       ${mapQ?`<div class="row" style="align-items:flex-start"><a class="btn small" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQ)}" target="_blank" rel="noopener">📍 Directions</a><span style="font-size:.9rem">${esc(mapQ)}${t.directions?`<br><span class="muted">${esc(t.directions).replace(/\n/g,"<br>")}</span>`:""}</span></div>`:""}
@@ -476,7 +524,7 @@ function viewRef(){
   const t=T(); if(!t) return noTourney();
   if(!canRef(t)) return `<section class="panel"><h2>${S.refOnly?"🏸 Referee":"Referee"}</h2><p class="muted">Enter the referee code from the organiser. Once it's open on this phone you can start matches on your court and score them live.</p>
     <div class="row" style="max-width:440px;flex-wrap:nowrap"><input id="ref-code" placeholder="Referee code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" style="text-transform:uppercase;letter-spacing:.2em;font-family:var(--mono)"><button class="btn primary" data-refopen="1">Open</button></div></section>`;
-  const n=Math.max(1,Number(t.courts)||4), c=Math.min(n,Math.max(1,S.refCourt)), m=liveOn(t,c), r=rules(t);
+  const n=Math.max(1,Number(t.courts)||4), c=Math.min(n,Math.max(1,S.refCourt)), m=liveOn(t,c), r=rules(t,m);
   const courtPick=`<div class="cats">${Array.from({length:n},(_,i)=>`<button data-refcourt="${i+1}" aria-pressed="${i+1===c}">Court ${i+1}${liveOn(t,i+1)?" 🔴":""}</button>`).join("")}</div>`;
   if(!m){ const nx=upNext(t,30).sort((x,y)=>(x.pcourt===c?0:1)-(y.pcourt===c?0:1)).slice(0,6);
     return `<section class="panel"><h2>Referee · Court ${c}</h2>${courtPick}
@@ -521,7 +569,11 @@ function viewOrg(){
   if(!S.isAdmin) return `<section class="panel"><h2>Organiser</h2><p class="muted">Sign in with the organiser account to manage tournaments.</p><button class="btn primary" data-signin="1">Sign in with Google</button></section>`;
   const t=T();
   const f=(id,label,val,type="text",extra="")=>`<label class="f">${label}<input id="to-${id}" type="${type}" value="${esc(val??"")}" ${extra}></label>`;
-  const preset = S.tourneys.some(x=>x.id==="t20261018-teamcup") ? "" : `<section class="panel"><div class="row" style="justify-content:space-between"><div><h2>🏆 Team Cup · Sun 18 Oct</h2><p class="muted">Sets up the Team Cup with its venue, game format, scoring (to 15, max 17) and terms, ready for the teams.</p></div><button class="btn primary" data-tcpreset="1">Set up the Team Cup</button></div></section>`;
+  const preset = PRESETS.map(p=>{ const x=p.find(); if(p.create ? x : (!x || x.preset===p.key)) return "";
+    return `<section class="panel"><div class="row" style="justify-content:space-between"><div><h2>${p.title}</h2><p class="muted">${p.text}</p></div><button class="btn primary" data-preset="${p.key}">${p.btn}</button></div></section>` }).join("");
+  const list = `<section class="panel"><div class="row" style="justify-content:space-between"><h2>Tournaments</h2><button class="btn primary small" data-tnew="1">➕ New tournament</button></div>
+    ${S.tourneys.length?`<div class="tlist">${[...S.tourneys].sort((a,b)=>String(a.date||"9").localeCompare(String(b.date||"9"))).map(x=>`<div class="trow ${x.id===t?.id&&!S.newT?"on":""}"><button class="tpick" data-tid="${esc(x.id)}"><b>${esc(x.name||"Tournament")}</b><span>${esc(fmtDate(x.date))} · ${isTeam(x)?"Team Cup":esc(cats(x).map(c=>c.name).join(", "))} · ${teamsOf(x).length} teams · registration ${x.regOpen?"open":"closed"}</span></button><button class="btn small ghost danger" data-tdelt="${esc(x.id)}">Delete</button></div>`).join("")}</div>
+      <p class="muted" style="font-size:.85rem">Tap a tournament to manage it. Players see every tournament and can switch between them; the next one coming up opens first.</p>`:`<div class="empty">No tournaments yet.</div>`}</section>`;
   const form=x=>`<div class="grid2">
       ${f("name","Tournament name",x?.name)}${f("date","Date",x?.date,"date")}${f("venue","Venue",x?.venue)}${f("address","Venue address (for the map)",x?.address,"text",'placeholder="e.g. Lodge Ave, Dagenham RM8 2JR"')}${f("entry","Entry fee (shown to players)",x?.entry)}
       ${f("wa","WhatsApp group link (players must join to register)",x?.wa||WA_GROUP,"url",'placeholder="https://chat.whatsapp.com/…"')}
@@ -543,13 +595,19 @@ function viewOrg(){
       <label class="f">Tournament type<select id="to-mode"><option value="pairs" ${!isTeam(x)?"selected":""}>Doubles pairs</option><option value="team" ${isTeam(x)?"selected":""}>Team Cup: teams of 4, ties of MD + WD + XD</option></select></label>
       ${f("cap","Deuce max points (0 = standard)",x?.cap??0,"number",'min="0" max="40"')}
       ${f("wild","Team Cup: best 3rd-placed teams also through",x?.wild??0,"number",'min="0" max="8"')}
-      <label class="row" style="gap:6px;align-self:end"><input type="checkbox" style="width:auto" id="to-bronze" ${x?.bronze!==false?"checked":""}> Team Cup: bronze medal match</label>
+      ${f("kosize","Knockout size, filled with best runners-up (0 = off)",x?.koSize??0,"number",'min="0" max="64"')}
+      ${[["k","Quarter- & semi-finals"],["f","Final & 3rd place"]].map(([k,l])=>{ const sr=x?.stageRules?.[k==="k"?"ko":"final"]||{};
+        return `<div class="grid2" style="grid-column:1/-1;grid-template-columns:repeat(auto-fit,minmax(140px,1fr))"><span class="lbl" style="grid-column:1/-1">${l} scoring</span>
+          <label class="f">Points<select id="to-${k}to"><option value="0">Same as groups</option>${[11,15,21].map(n=>`<option value="${n}" ${Number(sr.pointsTo)===n?"selected":""}>${n}</option>`).join("")}</select></label>
+          ${f(k+"cap","Deuce max (0 = standard)",sr.cap??0,"number",'min="0" max="40"')}
+          <label class="f">Games<select id="to-${k}bo"><option value="0">Same as groups</option>${[[1,"1 game"],[3,"Best of 3"]].map(([n,lb])=>`<option value="${n}" ${Number(sr.bestOf)===n?"selected":""}>${lb}</option>`).join("")}</select></label></div>` }).join("")}
+      <label class="row" style="gap:6px;align-self:end;flex-wrap:nowrap"><input type="checkbox" style="width:auto" id="to-bronze" ${bronzeOn(x||{})?"checked":""}> 3rd-place play-off / bronze medal match</label>
       <div style="grid-column:1/-1"><span class="lbl">Categories (doubles pairs only)</span><div class="row">${CAT_PRESETS.map(([id,nm])=>`<label class="row" style="gap:6px"><input type="checkbox" style="width:auto" id="to-cat-${id}" ${!x||x.catIds?.includes(id)?"checked":""}> ${nm}</label>`).join("")}</div></div>
       <label class="row" style="gap:6px;grid-column:1/-1"><input type="checkbox" style="width:auto" id="to-open" ${x?.regOpen?"checked":""}> Registration open</label>
     </div>`;
-  if(!t) return `${preset}<section class="panel"><h2>Create a tournament</h2>${form(null)}<div><button class="btn primary" data-tsave="new">Create tournament</button></div></section>`;
+  if(!t || S.newT) return `${list}${preset}<section class="panel" id="newt"><h2>New tournament</h2>${form(null)}<div class="row"><button class="btn primary" data-tsave="new">Create tournament</button>${t?`<button class="btn small ghost" data-tnewx="1">Cancel</button>`:""}</div></section>`;
   const tc=teamsOf(t);
-  return `${pickBar(t)}${preset}<section class="panel"><details id="org-edit"><summary><b>Tournament details</b> · ${esc(t.name)} · registration ${t.regOpen?"open":"closed"}</summary><div style="display:grid;gap:12px;margin-top:10px">${form(t)}<div class="row"><button class="btn primary" data-tsave="${esc(t.id)}">Save</button><button class="btn small" data-tsave="new">Save as a new tournament</button></div></div></details></section>
+  return `${list}${preset}<section class="panel"><details id="org-edit"><summary><b>Tournament details</b> · ${esc(t.name)} · registration ${t.regOpen?"open":"closed"}</summary><div style="display:grid;gap:12px;margin-top:10px">${form(t)}<div class="row"><button class="btn primary" data-tsave="${esc(t.id)}">Save</button><button class="btn small" data-tsave="new">Save as a new tournament</button></div></div></details></section>
     <section class="panel"><h2>Referees & big screen</h2>
       <div class="row code-row"><span class="lbl">Referee code</span>${S.secret?`<b class="code">${esc(S.secret)}</b><button class="btn small" data-copy="${esc(S.secret)}">Copy</button><button class="btn small ghost" data-tcode="1">New code</button>`:`<button class="btn small primary" data-tcode="1">Create code</button>`}</div>
       ${(()=>{ const link="https://dropshotfolks.co.uk/tourney/#ref", msg=`🏸 Referee for ${t.name||"the tournament"}\nOpen: ${link}\n${S.secret?`Code: ${S.secret}\n`:""}Pick your court, tap Start, do the toss, then tap a team for each point.`;
@@ -582,7 +640,7 @@ function viewOrg(){
 /* score editor (organiser or referee) */
 function editPanel(){
   const t=T(), m=S.matches.find(x=>x.id===S.edit); if(!t||!m) return "";
-  const r=rules(t), games=(m.games?.length?m.games:[[0,0]]).concat(r.bestOf>1&&(m.games||[]).length<r.bestOf?[[0,0]]:[]).slice(0,r.bestOf);
+  const r=rules(t,m), games=(m.games?.length?m.games:[[0,0]]).concat(r.bestOf>1&&(m.games||[]).length<r.bestOf?[[0,0]]:[]).slice(0,r.bestOf);
   return `<section class="panel" id="editbox"><h2>${S.isAdmin?"Edit match":"Edit result"}</h2>${matchRow(t,m)}
     <div class="grid2">${games.map((g,i)=>`<div class="scorein"><span class="lbl">Game ${i+1}</span><input type="number" min="0" max="40" id="eg-${i}-a" value="${g[0]}"><span>–</span><input type="number" min="0" max="40" id="eg-${i}-b" value="${g[1]}"></div>`).join("")}</div>
     ${S.isAdmin?`<div class="row"><label class="f" style="width:120px">Court<input id="ep-court" type="number" min="1" max="20" value="${esc(m.pcourt||"")}"></label><label class="f" style="width:140px">Time<input id="ep-time" type="time" value="${esc(m.ptime||"")}"></label><button class="btn small" data-eplan="${esc(m.id)}" style="align-self:end">Save court & time</button></div>`:""}
@@ -592,7 +650,7 @@ function editPanel(){
 /* one court, big: for a laptop or TV beside each court (#court=N) */
 function viewFocus(c){
   const t=T(); if(!t) return `<div class="scr"><div class="scr-h"><h1>No tournament yet</h1></div></div>`;
-  const m=liveOn(t,c), r=rules(t);
+  const m=liveOn(t,c), r=rules(t,m);
   const nextHere = upNext(t,40).find(x=>x.pcourt===c) || upNext(t,1)[0];
   const head=`<div class="scr-h"><img src="../images/logo-mark.png" alt=""><h1>${esc(t.name||"Tournament")}</h1><span class="fc-court">Court ${c}</span><span class="clock" id="clock"></span></div>`;
   const foot=`<div class="scr-f">${nextHere?`<b>Next on Court ${c}:</b> ${nextHere.ptime?`<b>${esc(nextHere.ptime)}</b> `:""}${esc(tName(sideTeam(nextHere,"a")))} vs ${esc(tName(sideTeam(nextHere,"b")))} <span>(${esc(catName(t,nextHere.cat))})</span>`:"<b>dropshotfolks.co.uk/tourney</b> · live scores on your phone"}</div>`;
@@ -666,7 +724,7 @@ const toDb = g => (g||[]).map(x=>({a:x[0]||0, b:x[1]||0}));
 const fromDb = g => (g||[]).map(x=>Array.isArray(x)?x:[x?.a||0, x?.b||0]);
 const upd = (id, data) => db.collection("tmatches").doc(id).update({...data, ...(data.games?{games:toDb(data.games)}:{}), updatedAt:nowIso()}).catch(e=>toast(e?.code==="permission-denied"?(data.svc?"Couldn't start: the latest Firebase rules aren't published yet. Ask the organiser to publish them.":"Not allowed. Is referee mode still on?"):"Couldn't save. Check your connection."));
 async function point(m, side, delta){
-  const t=T(), r=rules(t); let games=(m.games?.length?m.games:[[0,0]]).map(g=>[...g]);
+  const t=T(), r=rules(t,m); let games=(m.games?.length?m.games:[[0,0]]).map(g=>[...g]);
   const seq=(m.seq||[]).map(String); while(seq.length<games.length) seq.push("");
   let gi=games.length-1, g=games[gi];
   if(delta<0){
@@ -694,7 +752,7 @@ document.addEventListener("click", async e=>{
   if(t0.id==="signOut"){ await auth.signOut(); location.reload(); return }
   if(ds.tab){ S.tab=ds.tab; S.edit=null; ls.set("dsf:ttab",S.tab); if(location.hash) history.replaceState(null,"",location.pathname); render(); scrollTo({top:0}); return }
   if(ds.screen){ e.preventDefault(); location.hash="#screen"; return }
-  if(ds.tid){ S.tid=ds.tid; ls.set("dsf:tid",S.tid); render(); return }
+  if(ds.tid){ S.tid=ds.tid; S.newT=false; S.cat=null; ls.set("dsf:tid",S.tid); render(); return }
   if(ds.cat){ S.cat=ds.cat; render(); return }
   if(ds.copy){ try{ await navigator.clipboard.writeText(ds.copy); toast("Copied") }catch{ toast(ds.copy) } return }
   if(ds.signin){ try{ await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); ls.set("dsf:ttab","org"); location.reload() }catch{ toast("Sign-in didn't finish") } return }
@@ -718,14 +776,14 @@ document.addEventListener("click", async e=>{
     if(ds.svcgo){ const sv=svcState({svc, seq},gi), tid=x=>x==="a"?sideTeam(m,"a"):sideTeam(m,"b"); toast(`${pName(tid(sv.serving),sv.server)} to serve. Play!`) } return }
   if(ds.pt){ const m=liveOn(t,Math.min(Math.max(1,Number(t.courts)||4),S.refCourt)); if(m) point(m, ds.pt, 1); return }
   if(ds.undo){ const m=liveOn(t,Math.min(Math.max(1,Number(t.courts)||4),S.refCourt)); if(m) point(m, ds.undo, -1); return }
-  if(ds.finish){ const m=S.matches.find(x=>x.id===ds.finish), w=matchWinner(m,rules(t)); if(!w) return;
+  if(ds.finish){ const m=S.matches.find(x=>x.id===ds.finish), w=matchWinner(m,rules(t,m)); if(!w) return;
     await upd(m.id,{status:"done", winner:w, games:(m.games||[]).filter(g=>g[0]||g[1])}); toast(`Result saved: ${tName(sideTeam(m,w))} win`); return }
   if(ds.stop){ if(!confirm("Stop this match and put it back in the queue? The score so far is kept.")) return; await upd(ds.stop,{status:"scheduled", court:0}); return }
   if(ds.medit){ if(!canRef(t)) return; S.edit=ds.medit; render(); scrollTo({top:0,behavior:"smooth"}); return }
   if(ds.eclose){ S.edit=null; render(); return }
-  if(ds.esave){ const m=S.matches.find(x=>x.id===ds.esave), r=rules(t), games=[];
+  if(ds.esave){ const m=S.matches.find(x=>x.id===ds.esave), r=rules(t,m), games=[];
     for(let i=0;i<r.bestOf;i++){ const a=$(`#eg-${i}-a`), b=$(`#eg-${i}-b`); if(!a) break; const g=[Number(a.value)||0, Number(b.value)||0]; if(g[0]||g[1]) games.push(g) }
-    const w=matchWinner({games},r); if(!w){ toast(`That isn't a finished match yet (${r.bestOf===2?"2 games, ":""}games ${ruleTxt(r)})`); return }
+    const w=matchWinner({games},r); if(!w){ toast(`That isn't a finished match yet (${ruleTxt(r)})`); return }
     await upd(m.id,{games, winner:w, status:"done", court:0}); S.edit=null; toast("Result saved"); render(); return }
   if(ds.ereset){ await upd(ds.ereset,{games:[], winner:null, status:"scheduled", court:0}); S.edit=null; render(); return }
   // organiser
@@ -738,18 +796,31 @@ document.addEventListener("click", async e=>{
       pointsTo:Number(g("to").value)||21, deuce:g("deuce").value!=="0", bestOf:Number(g("bo").value)||1, startTime:g("start").value||"10:00", matchMins:Math.min(60,Math.max(5,Number(g("mins").value)||15)),
       address:g("address").value.trim(), directions:g("dirs").value.trim(), format:g("format").value.trim().slice(0,2000), terms:(g("terms").value.trim()||DEFAULT_TERMS).slice(0,5000),
       bank:{name:g("bname").value.trim().slice(0,60), sort:g("bsort").value.trim().slice(0,12), acct:g("bacct").value.trim().slice(0,20), note:g("bnote").value.trim().slice(0,200)}, wa:/^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]+/.test(g("wa").value.trim())?g("wa").value.trim().split("?")[0]:WA_GROUP, ...(S.posterDraft!==undefined?{poster:S.posterDraft}:{}), regOpen:g("open").checked,
+      koSize:Math.min(64,Math.max(0,Number(g("kosize").value)||0)),
+      stageRules:Object.fromEntries([["ko","k"],["final","f"]].map(([key,k])=>[key,{pointsTo:Number(g(k+"to").value)||0, cap:Math.min(40,Math.max(0,Number(g(k+"cap").value)||0)), bestOf:Number(g(k+"bo").value)||0}])),
       mode:team?"team":"pairs", cap:Math.min(40,Math.max(0,Number(g("cap").value)||0)), wild:Math.min(8,Math.max(0,Number(g("wild").value)||0)), bronze:g("bronze").checked,
       catIds, cats:team?[{id:"TC",name:"Team Cup"}]:CAT_PRESETS.filter(([id])=>catIds.includes(id)).map(([id,name])=>({id,name}))};
     const id = ds.tsave==="new" ? `t${(data.date||nowIso().slice(0,10)).replace(/-/g,"")}-${Date.now().toString(36).slice(-4)}` : ds.tsave;
-    await db.collection("tourneys").doc(id).set(data,{merge:true}).then(()=>{ S.tid=id; ls.set("dsf:tid",id); S.posterDraft=undefined; toast("Tournament saved") },()=>toast("Couldn't save")); return }
+    await db.collection("tourneys").doc(id).set(data,{merge:true}).then(()=>{ S.tid=id; S.newT=false; ls.set("dsf:tid",id); S.posterDraft=undefined; render(); toast("Tournament saved") },()=>toast("Couldn't save")); return }
   if(ds.tcode){ const code=newCode(); await db.collection("tsecrets").doc(t.id).set({code}).then(()=>{ S.secret=code; render(); toast(`Referee code ${code}`) },()=>toast("Couldn't save the code")); return }
   if(ds.tconfirm){ await db.collection("tteams").doc(ds.tconfirm).update({status:ds.v}).catch(()=>toast("Couldn't update")); return }
   if(ds.confirmall){ const b=db.batch(); teamsOf(t,ds.confirmall).filter(x=>x.status!=="confirmed").forEach(x=>b.update(db.collection("tteams").doc(x.id),{status:"confirmed"})); await b.commit(); toast("All confirmed"); return }
   if(ds.tdel){ const x=teamById(ds.tdel); if(!x||!confirm(`Delete ${x.name}?`)) return; await db.collection("tcontacts").doc(x.id).delete().catch(()=>{}); await db.collection("tteams").doc(x.id).delete(); return }
   if(ds.oadd){ const v=id=>($(`#oa-${id}`)?.value||"").trim(), ks=Array.from({length:nPl(t)},(_,i)=>"p"+(i+1)); if(!v("name")||ks.some(k=>!v(k))){ toast(`Add a team name and all ${ks.length} players`); return }
     await db.collection("tteams").add({tid:t.id, cat:ds.oadd, name:v("name"), ...Object.fromEntries(ks.map(k=>[k,v(k)])), createdBy:S.uid, createdAt:nowIso(), status:"confirmed"}); ["name",...ks].forEach(k=>$(`#oa-${k}`).value=""); toast("Team added"); return }
-  if(ds.tcpreset){ const id="t20261018-teamcup"; if(S.tourneys.some(x=>x.id===id)){ S.tid=id; ls.set("dsf:tid",id); render(); toast("The Team Cup is already set up"); return }
-    await db.collection("tourneys").doc(id).set(TEAM_CUP).then(()=>{ S.tid=id; ls.set("dsf:tid",id); toast("Team Cup set up. Now import the teams.") },()=>toast("Couldn't save")); return }
+  if(ds.preset){ const p=PRESETS.find(x=>x.key===ds.preset); if(!p) return; const x=p.find();
+    if(p.create){ if(x){ S.tid=x.id; render(); return }
+      await db.collection("tourneys").doc(p.create.id).set({...p.create.data(), preset:p.key}).then(()=>{ S.tid=p.create.id; S.newT=false; ls.set("dsf:tid",S.tid); toast("Tournament set up. Now add the teams.") },()=>toast("Couldn't save")); return }
+    if(!x){ toast("Create that tournament first"); return }
+    if(!confirm(`Apply the official details to ${x.name}? Its format, scoring, courts, times and terms are replaced. Name, date, teams, bank details and registration stay the same.`)) return;
+    await db.collection("tourneys").doc(x.id).set({...p.merge(), preset:p.key},{merge:true}).then(()=>{ S.tid=x.id; ls.set("dsf:tid",x.id); toast("Details applied") },()=>toast("Couldn't save")); return }
+  if(ds.tnew){ S.newT=true; render(); $("#newt")?.scrollIntoView({behavior:"smooth"}); return }
+  if(ds.tnewx){ S.newT=false; render(); return }
+  if(ds.tdelt){ const x=S.tourneys.find(y=>y.id===ds.tdelt); if(!x) return;
+    const typed=prompt(`This deletes ${x.name} with all ${teamsOf(x).length} teams, fixtures and results. It can't be undone.\n\nType DELETE to confirm.`); if(typed!=="DELETE") return;
+    try{ const docs=[...matchesOf(x).map(m=>db.collection("tmatches").doc(m.id)), ...teamsOf(x).flatMap(tm=>[db.collection("tcontacts").doc(tm.id), db.collection("tteams").doc(tm.id)]), db.collection("tsecrets").doc(x.id), db.collection("tourneys").doc(x.id)];
+      for(let i=0;i<docs.length;i+=400){ const b=db.batch(); docs.slice(i,i+400).forEach(d=>b.delete(d)); await b.commit() }
+      if(S.tid===x.id){ S.tid=null; ls.set("dsf:tid",null) } toast(`${x.name} deleted`) }catch{ toast("Couldn't delete it all. Try again.") } return }
   if(ds.gen){ if(matchesOf(t,ds.gen).length && !confirm("This replaces all fixtures and results for this category. Carry on?")) return; await generateGroups(t, ds.gen); return }
   if(ds.fxsched){ const start=$("#fx-start").value||"10:00", mins=Math.min(60,Math.max(5,Number($("#fx-mins").value)||15)), courts=Math.min(12,Math.max(1,Number($("#fx-courts").value)||4));
     if(matchesOf(t).some(m=>m.ptime) && !confirm("Re-do the courts and times for every match?")) return;

@@ -1073,7 +1073,7 @@ document.addEventListener("click", async e=>{
   if(t.id==="addGuest"){
     const name=$("#g-name").value.trim(), level=levelFrom(S.gq);
     if(!name){ toast("Add your guest's name"); return }
-    if(!level){ toast("Answer all five questions for your guest"); return }
+    if(!level){ toast("Answer all the questions for your guest"); return }
     S.guests.push({name, level, ans:{...S.gq}}); S.gq={}; $("#g-name").value=""; render(); toast(`${name} added`); return }
   if(ds.rmguest!=null){ S.guests.splice(Number(ds.rmguest),1); render(); return }
   if(ds.copy!=null){ copyText(ds.copy); return }

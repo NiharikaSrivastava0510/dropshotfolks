@@ -102,7 +102,7 @@ const S = {
   refOnly: location.hash==="#ref",
   tourneys:[], teams:[], matches:[], contacts:{}, secret:null, unlock:null,
   uid:null, isAdmin:false, loaded:false, tid: new URLSearchParams(location.search).get("t") || ls.get("dsf:tid",null),
-  cat: null, toss: {}, newT:false, myTeam: ls.get("dsf:myteam",null), refCourt: ls.get("dsf:refcourt",1), edit:null, scrIdx:0
+  cat: null, toss: {}, newT:false, otab: ls.get("dsf:otab","details"), editTeam:null, addTeam:false, myTeam: ls.get("dsf:myteam",null), refCourt: ls.get("dsf:refcourt",1), edit:null, scrIdx:0
 };
 let db=null, auth=null;
 const T = () => S.tourneys.find(t=>t.id===S.tid) || nextTourney() || null;
@@ -457,7 +457,7 @@ function viewReg(){
   const full=c=>Number(t.maxTeams)>0 && teamsOf(t,c).length>=Number(t.maxTeams);
   const mapQ=[t.venue,t.address].filter(Boolean).join(", "), r=rules(t);
   return `${pickBar(t)}${t.poster?`<section class="panel" style="padding:10px"><img src="${esc(t.poster)}" alt="${esc(t.name||"Tournament")} poster" style="width:100%;max-height:80vh;object-fit:contain;border-radius:16px;display:block"></section>`:""}<section class="panel tinfo">
-      <span class="lbl">${esc(fmtDate(t.date))}${t.venue?` · ${esc(t.venue)}`:""}</span>
+      ${S.isAdmin?`<button class="btn small editbtn" data-goorg="details">✏️ Edit details</button>`:""}<span class="lbl">${esc(fmtDate(t.date))}${t.venue?` · ${esc(t.venue)}`:""}</span>
       <div class="big">${esc(t.name||"Tournament")}</div>
       ${t.info?`<p>${esc(t.info).replace(/\n/g,"<br>")}</p>`:""}
       <div class="row">${cats(t).map(c=>`<span class="chip st-paid">${esc(c.name)} · ${teamsOf(t,c.id).length}${Number(t.maxTeams)?`/${Number(t.maxTeams)}`:""} teams</span>`).join("")}</div>
@@ -504,7 +504,7 @@ function viewReg(){
 }
 function viewTeams(){
   const t=T(); if(!t) return noTourney();
-  return `${pickBar(t)}<section class="panel"><h2>Teams</h2>${catBar(t)}
+  return `${pickBar(t)}<section class="panel">${S.isAdmin?`<button class="btn small editbtn" data-goorg="teams">✏️ Manage teams</button>`:""}<h2>Teams</h2>${catBar(t)}
     ${(()=>{ const ts=teamsOf(t,S.cat); return ts.length?`<p class="muted">${ts.length} team${ts.length>1?"s":""} registered${Number(t.maxTeams)?` of ${Number(t.maxTeams)}`:""} · ${ts.filter(x=>x.status==="confirmed").length} confirmed</p>
       <div class="teamlist">${ts.map((x,i)=>`<div class="team"><span class="lbl">#${i+1}</span><b>${esc(x.name)}</b><span>${esc(playersOf(x).join(x.p3?", ":" & "))}</span><span>${x.status==="confirmed"?'<span class="chip st-confirmed">Confirmed</span>':'<span class="chip st-awaiting">Pending</span>'}</span></div>`).join("")}</div>`:`<div class="empty">No teams yet. Be the first!</div>` })()}
   </section>`;
@@ -513,7 +513,7 @@ function viewFix(){
   const t=T(); if(!t) return noTourney();
   const all=teamsOf(t).sort((a,b)=>a.name.localeCompare(b.name)), me=S.myTeam && all.find(x=>x.id===S.myTeam);
   const mine = me ? matchesOf(t).filter(m=>!m.bye && (sideTeam(m,"a")===me.id || sideTeam(m,"b")===me.id)).sort(byPlan) : [];
-  const head=`${pickBar(t)}<section class="panel"><h2>Fixtures & results</h2>
+  const head=`${pickBar(t)}<section class="panel">${S.isAdmin?`<button class="btn small editbtn" data-goorg="fixtures">✏️ Fixture settings</button>`:""}<h2>Fixtures & results</h2>${S.isAdmin&&matchesOf(t).length?`<p class="orghint">✏️ Organiser: tap any match below to change its score, court or order.</p>`:""}
     <label class="f" style="max-width:420px">🔎 Find my team<select id="myTeam" data-myteam="1"><option value="">Choose your team…</option>${all.map(x=>`<option value="${esc(x.id)}" ${x.id===S.myTeam?"selected":""}>${esc(x.name)} · ${esc(catName(t,x.cat))}</option>`).join("")}</select></label>
     ${me?`<div class="mlist">${mine.length?fixList(t,mine,{me:me.id,cat:!isTeam(t)}):`<div class="empty">No matches for ${esc(me.name)} yet.</div>`}</div>`:""}
     ${catBar(t)}</section>${S.isAdmin && matchesOf(t).length ? schedPanel(t) : ""}`;
@@ -597,72 +597,91 @@ function viewOrg(){
   if(!S.isAdmin) return `<section class="panel"><h2>Organiser</h2><p class="muted">Sign in with the organiser account to manage tournaments.</p><button class="btn primary" data-signin="1">Sign in with Google</button></section>`;
   const t=T();
   const f=(id,label,val,type="text",extra="")=>`<label class="f">${label}<input id="to-${id}" type="${type}" value="${esc(val??"")}" ${extra}></label>`;
+  const ta=(id,label,val,rows=3,ph="")=>`<label class="f" style="grid-column:1/-1">${label}<textarea id="to-${id}" rows="${rows}" placeholder="${esc(ph)}">${esc(val||"")}</textarea></label>`;
   const preset = PRESETS.map(p=>{ const x=p.find(); if(p.create ? x : (!x || x.preset===p.key)) return "";
     return `<section class="panel"><div class="row" style="justify-content:space-between"><div><h2>${p.title}</h2><p class="muted">${p.text}</p></div><button class="btn primary" data-preset="${p.key}">${p.btn}</button></div></section>` }).join("");
-  const list = `<section class="panel"><div class="row" style="justify-content:space-between"><h2>Tournaments</h2><button class="btn primary small" data-tnew="1">➕ New tournament</button></div>
-    ${S.tourneys.length?`<div class="tlist">${[...S.tourneys].sort((a,b)=>String(a.date||"9").localeCompare(String(b.date||"9"))).map(x=>`<div class="trow ${x.id===t?.id&&!S.newT?"on":""}"><button class="tpick" data-tid="${esc(x.id)}"><b>${esc(x.name||"Tournament")}</b><span>${esc(fmtDate(x.date))} · ${isTeam(x)?"Team Cup":esc(cats(x).map(c=>c.name).join(", "))} · ${teamsOf(x).length} teams · registration ${x.regOpen?"open":"closed"}</span></button><button class="btn small ghost danger" data-tdelt="${esc(x.id)}">Delete</button></div>`).join("")}</div>
-      <p class="muted" style="font-size:.85rem">Tap a tournament to manage it. Players see every tournament and can switch between them; the next one coming up opens first.</p>`:`<div class="empty">No tournaments yet.</div>`}</section>`;
-  const form=x=>`<div class="grid2">
-      ${f("name","Tournament name",x?.name)}${f("date","Date",x?.date,"date")}${f("venue","Venue",x?.venue)}${f("address","Venue address (for the map)",x?.address,"text",'placeholder="e.g. Lodge Ave, Dagenham RM8 2JR"')}${f("entry","Entry fee (shown to players)",x?.entry)}
-      ${f("wa","WhatsApp group link (players must join to register)",x?.wa||WA_GROUP,"url",'placeholder="https://chat.whatsapp.com/…"')}
-      <div style="grid-column:1/-1;display:grid;gap:8px"><span class="lbl">💷 Bank details for entry fees (shown on the registration page; teams must pay before registering)</span><div class="grid2">
-        ${f("bname","Account name",x?.bank?.name)}${f("bsort","Sort code",x?.bank?.sort,"text",'placeholder="00-00-00" inputmode="numeric"')}${f("bacct","Account number",x?.bank?.acct,"text",'placeholder="12345678" inputmode="numeric"')}${f("bnote","Payment note (optional)",x?.bank?.note,"text",'placeholder="e.g. £40 per team. Use your team name as the reference"')}</div>
-        <span class="muted" style="font-size:.82rem">Leave the sort code and account number empty to switch payment off.</span></div>
-      <label class="f" style="grid-column:1/-1">Extra game format notes (added under the automatic format)<textarea id="to-format" rows="3" placeholder="e.g. Warm-up 2 minutes, change ends at 11 in the 3rd game…">${esc(x?.format||"")}</textarea></label>
-      <label class="f" style="grid-column:1/-1">Terms & conditions (players must agree)<textarea id="to-terms" rows="8">${esc(x?.terms||DEFAULT_TERMS)}</textarea></label>
-      <label class="f" style="grid-column:1/-1">Directions & travel tips<textarea id="to-dirs" rows="2" placeholder="Nearest station, buses, parking, which entrance…">${esc(x?.directions||"")}</textarea></label>
+  const list = `<section class="panel"><div class="row" style="justify-content:space-between"><h2>Your tournaments</h2><button class="btn primary small" data-tnew="1">➕ New tournament</button></div>
+    ${S.tourneys.length?`<div class="tlist">${[...S.tourneys].sort((a,b)=>String(a.date||"9").localeCompare(String(b.date||"9"))).map(x=>`<div class="trow ${x.id===t?.id&&!S.newT?"on":""}"><button class="tpick" data-tid="${esc(x.id)}"><b>${esc(x.name||"Tournament")}</b><span>${esc(fmtDate(x.date))} · ${isTeam(x)?"Team Cup":esc(cats(x).map(c=>c.name).join(", "))} · ${teamsOf(x).length} teams · registration ${x.regOpen?"open":"closed"}</span></button><button class="btn small ghost danger" data-tdelt="${esc(x.id)}" title="Delete tournament">🗑</button></div>`).join("")}</div>`:`<div class="empty">No tournaments yet.</div>`}</section>`;
+  // tournament details, in plain groups; rarely-needed settings tucked under "More options"
+  const form=x=>`<div class="ogrp"><h3>📝 The basics</h3><div class="grid2">
+      ${f("name","Tournament name",x?.name)}${f("date","Date",x?.date,"date")}${f("venue","Venue",x?.venue)}${f("address","Address (for the map)",x?.address,"text",'placeholder="e.g. Lodge Ave, Dagenham RM8 2JR"')}
+      ${f("entry","Entry fee",x?.entry,"text",'placeholder="e.g. £25 per player"')}${f("prizes","Prizes",x?.prizes)}
+      ${ta("info","About (shown at the top of the Register tab)",x?.info,4)}
+      ${ta("dirs","Directions & travel tips",x?.directions,2,"Nearest station, buses, parking, which entrance…")}
       <div style="grid-column:1/-1;display:grid;gap:6px"><span class="lbl">Poster</span>
         ${(S.posterDraft ?? x?.poster) ? `<img src="${esc(S.posterDraft ?? x.poster)}" alt="Poster preview" style="max-width:220px;border-radius:12px;box-shadow:var(--shadow)">` : `<span class="muted" style="font-size:.85rem">No poster yet.</span>`}
-        <div class="row"><label class="btn small" for="to-poster">${(S.posterDraft ?? x?.poster)?"Change poster":"Upload poster"}</label><input id="to-poster" type="file" accept="image/*" hidden>${(S.posterDraft ?? x?.poster)?`<button class="btn small ghost danger" data-noposter="1" type="button">Remove</button>`:""}<span class="muted" style="font-size:.82rem">Shrunk automatically. Press Save to publish it.</span></div></div>
-      <label class="f" style="grid-column:1/-1">About (shown on the Register tab)<textarea id="to-info" rows="3">${esc(x?.info||"")}</textarea></label>
-      ${f("prizes","Prizes",x?.prizes)}${f("max","Max teams per category (0 = no limit)",x?.maxTeams??0,"number",'min="0" max="128"')}
-      ${f("courts","Courts",x?.courts??4,"number",'min="1" max="12"')}${f("start","First match starts",x?.startTime||"10:00","time")}${f("mins","Minutes per match (incl. changeover)",x?.matchMins??15,"number",'min="5" max="60"')}${f("gsize","Teams per group",x?.groupSize??4,"number",'min="3" max="8"')}
-      ${f("adv","Teams through per group",x?.advance??2,"number",'min="1" max="4"')}<label class="f">Points per game<select id="to-to">${[11,15,21].map(n=>`<option value="${n}" ${Number(x?.pointsTo||21)===n?"selected":""}>${n} points</option>`).join("")}</select></label>
-      <label class="f">Deuce<select id="to-deuce"><option value="1" ${x?.deuce!==false?"selected":""}>Deuce on: win by 2 (max 15 / 21 / 30)</option><option value="0" ${x?.deuce===false?"selected":""}>No deuce: first to the points wins</option></select></label>
+        <div class="row"><label class="btn small" for="to-poster">${(S.posterDraft ?? x?.poster)?"Change poster":"Upload poster"}</label><input id="to-poster" type="file" accept="image/*" hidden>${(S.posterDraft ?? x?.poster)?`<button class="btn small ghost danger" data-noposter="1" type="button">Remove</button>`:""}</div></div></div></div>
+    <div class="ogrp"><h3>✍️ Registration</h3>
+      <label class="switch"><input type="checkbox" id="to-open" ${x?.regOpen?"checked":""}><span>Registration open</span></label>
+      <div class="grid2">${f("max","Max teams per category (0 = no limit)",x?.maxTeams??0,"number",'min="0" max="128"')}${f("wa","WhatsApp group link",x?.wa||WA_GROUP,"url",'placeholder="https://chat.whatsapp.com/…"')}</div>
+      <span class="lbl">💷 Bank details for entry fees · leave empty to switch payment off</span>
+      <div class="grid2">${f("bname","Account name",x?.bank?.name)}${f("bsort","Sort code",x?.bank?.sort,"text",'placeholder="00-00-00" inputmode="numeric"')}${f("bacct","Account number",x?.bank?.acct,"text",'placeholder="12345678" inputmode="numeric"')}${f("bnote","Payment note (optional)",x?.bank?.note,"text",'placeholder="e.g. Use your team name as the reference"')}</div>
+      <div class="grid2">${ta("terms","Terms & conditions (players must agree)",x?.terms||DEFAULT_TERMS,6)}</div></div>
+    <div class="ogrp"><h3>🏸 Format & scoring</h3><div class="grid2">
+      <label class="f">Tournament type<select id="to-mode"><option value="pairs" ${!isTeam(x)?"selected":""}>Doubles pairs</option><option value="team" ${isTeam(x)?"selected":""}>Team Cup: teams of 4 (MD, WD, 2 × XD)</option></select></label>
+      ${f("gsize","Teams per group",x?.groupSize??(isTeam(x)?3:4),"number",'min="3" max="8"')}${f("adv","Teams through per group",x?.advance??2,"number",'min="1" max="4"')}
+      <label class="f">Points per game<select id="to-to">${[11,15,21].map(n=>`<option value="${n}" ${Number(x?.pointsTo||21)===n?"selected":""}>${n} points</option>`).join("")}</select></label>
+      <label class="f">Deuce<select id="to-deuce"><option value="1" ${x?.deuce!==false?"selected":""}>On: win by 2</option><option value="0" ${x?.deuce===false?"selected":""}>Off: first to the points wins</option></select></label>
       <label class="f">Games per match<select id="to-bo">${[[1,"1 game"],[2,"2 games (total points if 1–1)"],[3,"Best of 3"]].map(([n,l])=>`<option value="${n}" ${Number(x?.bestOf||1)===n?"selected":""}>${l}</option>`).join("")}</select></label>
-      <label class="f">Tournament type<select id="to-mode"><option value="pairs" ${!isTeam(x)?"selected":""}>Doubles pairs</option><option value="team" ${isTeam(x)?"selected":""}>Team Cup: teams of 4, ties of MD + WD + XD</option></select></label>
-      ${f("cap","Deuce max points (0 = standard)",x?.cap??0,"number",'min="0" max="40"')}
-      ${f("wild","Team Cup: best 3rd-placed teams also through",x?.wild??0,"number",'min="0" max="8"')}
-      ${f("kosize","Knockout size, filled with best runners-up (0 = off)",x?.koSize??0,"number",'min="0" max="64"')}
-      ${[["k","Quarter- & semi-finals"],["f","Final & 3rd place"]].map(([k,l])=>{ const sr=x?.stageRules?.[k==="k"?"ko":"final"]||{};
-        return `<div class="grid2" style="grid-column:1/-1;grid-template-columns:repeat(auto-fit,minmax(140px,1fr))"><span class="lbl" style="grid-column:1/-1">${l} scoring</span>
-          <label class="f">Points<select id="to-${k}to"><option value="0">Same as groups</option>${[11,15,21].map(n=>`<option value="${n}" ${Number(sr.pointsTo)===n?"selected":""}>${n}</option>`).join("")}</select></label>
-          ${f(k+"cap","Deuce max (0 = standard)",sr.cap??0,"number",'min="0" max="40"')}
-          <label class="f">Games<select id="to-${k}bo"><option value="0">Same as groups</option>${[[1,"1 game"],[3,"Best of 3"]].map(([n,lb])=>`<option value="${n}" ${Number(sr.bestOf)===n?"selected":""}>${lb}</option>`).join("")}</select></label></div>` }).join("")}
-      <label class="row" style="gap:6px;align-self:end;flex-wrap:nowrap"><input type="checkbox" style="width:auto" id="to-bronze" ${bronzeOn(x||{})?"checked":""}> 3rd-place play-off / bronze medal match</label>
-      <div style="grid-column:1/-1"><span class="lbl">Categories (doubles pairs only)</span><div class="row">${CAT_PRESETS.map(([id,nm])=>`<label class="row" style="gap:6px"><input type="checkbox" style="width:auto" id="to-cat-${id}" ${!x||x.catIds?.includes(id)?"checked":""}> ${nm}</label>`).join("")}</div></div>
-      <label class="row" style="gap:6px;grid-column:1/-1"><input type="checkbox" style="width:auto" id="to-open" ${x?.regOpen?"checked":""}> Registration open</label>
-    </div>`;
-  if(!t || S.newT) return `${list}${preset}<section class="panel" id="newt"><h2>New tournament</h2>${form(null)}<div class="row"><button class="btn primary" data-tsave="new">Create tournament</button>${t?`<button class="btn small ghost" data-tnewx="1">Cancel</button>`:""}</div></section>`;
-  const tc=teamsOf(t);
-  return `${list}${preset}<section class="panel"><details id="org-edit"><summary><b>Tournament details</b> · ${esc(t.name)} · registration ${t.regOpen?"open":"closed"}</summary><div style="display:grid;gap:12px;margin-top:10px">${form(t)}<div class="row"><button class="btn primary" data-tsave="${esc(t.id)}">Save</button><button class="btn small" data-tsave="new">Save as a new tournament</button></div></div></details></section>
+      ${f("courts","Courts",x?.courts??4,"number",'min="1" max="12"')}
+      <div style="grid-column:1/-1"><span class="lbl">Categories (doubles pairs only)</span><div class="row">${CAT_PRESETS.map(([id,nm])=>`<label class="row" style="gap:6px"><input type="checkbox" style="width:auto" id="to-cat-${id}" ${!x||x.catIds?.includes(id)?"checked":""}> ${nm}</label>`).join("")}</div></div></div>
+      <details class="more"><summary>More options: knockout scoring, deuce limits, 3rd place, extra format notes</summary><div class="grid2" style="margin-top:10px">
+        ${f("cap","Deuce max points (0 = standard)",x?.cap??0,"number",'min="0" max="40"')}
+        ${f("kosize","Knockout size, filled with best runners-up (0 = off)",x?.koSize??0,"number",'min="0" max="64"')}
+        ${f("wild","Team Cup: best 3rd-placed teams also through",x?.wild??0,"number",'min="0" max="8"')}
+        <label class="row" style="gap:6px;align-self:end;flex-wrap:nowrap"><input type="checkbox" style="width:auto" id="to-bronze" ${bronzeOn(x||{})?"checked":""}> 3rd-place play-off / bronze match</label>
+        ${[["k","Quarter- & semi-finals"],["f","Final & 3rd place"]].map(([k,l])=>{ const sr=x?.stageRules?.[k==="k"?"ko":"final"]||{};
+          return `<div class="grid2" style="grid-column:1/-1;grid-template-columns:repeat(auto-fit,minmax(140px,1fr))"><span class="lbl" style="grid-column:1/-1">${l} scoring</span>
+            <label class="f">Points<select id="to-${k}to"><option value="0">Same as groups</option>${[11,15,21].map(n=>`<option value="${n}" ${Number(sr.pointsTo)===n?"selected":""}>${n}</option>`).join("")}</select></label>
+            ${f(k+"cap","Deuce max (0 = standard)",sr.cap??0,"number",'min="0" max="40"')}
+            <label class="f">Games<select id="to-${k}bo"><option value="0">Same as groups</option>${[[1,"1 game"],[3,"Best of 3"]].map(([n,lb])=>`<option value="${n}" ${Number(sr.bestOf)===n?"selected":""}>${lb}</option>`).join("")}</select></label></div>` }).join("")}
+        ${f("start","First match (only if clock times are on)",x?.startTime||"10:00","time")}${f("mins","Minutes per match (only if clock times are on)",x?.matchMins??15,"number",'min="5" max="60"')}
+        ${ta("format","Extra game format notes (added under the automatic format)",x?.format,3,"e.g. Warm-up 2 minutes, change ends at 8…")}</div></details></div>`;
+  if(!t || S.newT) return `${list}${preset}<section class="panel" id="newt"><h2>New tournament</h2>${form(null)}<div class="savebar"><button class="btn primary" data-tsave="new">Create tournament</button>${t?`<button class="btn small ghost" data-tnewx="1">Cancel</button>`:""}</div></section>`;
+
+  const ot=S.otab||"details", nTeams=teamsOf(t).length;
+  const sub=`<div class="osub">${[["details","📝 Details"],["teams",`👥 Teams · ${nTeams}`],["fixtures","🗓 Fixtures"],["refs","📣 Referees & screen"]].map(([k,l])=>`<button data-otab="${k}" aria-pressed="${ot===k}">${l}</button>`).join("")}</div>`;
+  const head=`<section class="panel ohead"><div><span class="lbl">Managing</span><h2>${esc(t.name||"Tournament")}</h2><span class="muted">${esc(fmtDate(t.date))} · registration ${t.regOpen?"open":"closed"}</span></div>${sub}</section>`;
+  let body="";
+  if(ot==="details") body=`<section class="panel">${form(t)}<div class="savebar"><button class="btn primary" data-tsave="${esc(t.id)}">💾 Save changes</button><button class="btn small ghost" data-tsave="new">Save as a new tournament</button></div></section>`;
+  if(ot==="refs") body=`
     <section class="panel"><h2>Referees & big screen</h2>
       <div class="row code-row"><span class="lbl">Referee code</span>${S.secret?`<b class="code">${esc(S.secret)}</b><button class="btn small" data-copy="${esc(S.secret)}">Copy</button><button class="btn small ghost" data-tcode="1">New code</button>`:`<button class="btn small primary" data-tcode="1">Create code</button>`}</div>
       ${(()=>{ const link="https://dropshotfolks.co.uk/tourney/#ref", msg=`🏸 Referee for ${t.name||"the tournament"}\nOpen: ${link}\n${S.secret?`Code: ${S.secret}\n`:""}Pick your court, tap Start, do the toss, then tap a team for each point.`;
         return `<div class="row"><span class="lbl">Referee link</span><b class="code" style="font-size:.95rem;letter-spacing:0">${esc(link.replace("https://",""))}</b><button class="btn small" data-copy="${esc(link)}">Copy link</button>${S.secret?`<a class="btn small primary" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">Send link & code on WhatsApp</a>`:""}</div>` })()}
       <p class="muted" style="font-size:.85rem">Referees open the link on their phone and enter the code. They only see the scoring screen, nothing else. A new code locks out phones using the old one.</p>
-      <div class="row"><a class="btn small" href="#screen" data-screen="1">📺 Open big screen</a><span class="muted" style="font-size:.85rem">Put it on the projector and press F for full screen.</span></div></section>
-    <section class="panel"><h2>Teams</h2>${catBar(t)}
-      ${(()=>{ const ts=teamsOf(t,S.cat); return ts.length?`<div class="row"><span class="muted">${ts.length} registered · ${ts.filter(x=>x.status==="confirmed").length} confirmed</span><button class="btn small" data-confirmall="${esc(S.cat)}">Confirm all</button></div>
-        <div class="tbl"><table><thead><tr><th>Team</th><th>Players</th><th>Contact</th><th></th></tr></thead><tbody>${ts.map(x=>{ const c=S.contacts[x.id]||{}; return `<tr><td><b>${esc(x.name)}</b><br>${x.status==="confirmed"?'<span class="chip st-confirmed">Confirmed</span>':'<span class="chip st-awaiting">Pending</span>'}</td><td>${playersOf(x).map(esc).join("<br>")}</td><td style="font-size:.85rem">${esc(c.email||"")}<br>${esc(c.phone||"")}${[2,3,4].map(k=>c["phone"+k]||c["email"+k]?`<br><span class="muted">P${k}:</span> ${esc(c["phone"+k]||"")} ${esc(c["email"+k]||"")}`:"").join("")}${c.lv1?`<br><span class="muted">Levels:</span> ${esc([c.lv1,c.lv2,c.lv3,c.lv4].filter(Boolean).join(" / "))}`:""}${c.g1?`<br><span class="muted">Gender:</span> ${esc([c.g1,c.g2,c.g3,c.g4].filter(Boolean).join(" / "))}`:""}${c.emName?`<br><span class="muted">Emergency:</span> ${esc(c.emName)} ${esc(c.emPhone||"")}`:""}${c.notes?`<br><span class="muted">Notes:</span> ${esc(c.notes)}`:""}${c.paid?`<br>${c.payName?`<span class="muted">Paid as:</span> <b>${esc(c.payName)}</b>`:`<span class="muted">Paid (ticked on the form)</span>`} <span class="chip st-awaiting">Check bank</span>`:""}${c.wa?`<br><span class="chip st-confirmed">In WhatsApp group</span>`:""}</td>
-          <td class="row">${x.status==="confirmed"?`<button class="btn small ghost" data-tconfirm="${esc(x.id)}" data-v="pending">Unconfirm</button>`:`<button class="btn small primary" data-tconfirm="${esc(x.id)}" data-v="confirmed">Confirm</button>`}<button class="btn small ghost danger" data-tdel="${esc(x.id)}">Delete</button></td></tr>` }).join("")}</tbody></table></div>`:`<div class="empty">No teams in this category yet.</div>` })()}
-      <details id="org-add"><summary>Add a team yourself</summary><div class="grid2" style="margin-top:8px">
-        <label class="f">Team name<input id="oa-name" maxlength="40"></label>${Array.from({length:nPl(t)},(_,i)=>`<label class="f">Player ${i+1}<input id="oa-p${i+1}" maxlength="60"></label>`).join("")}
-        <div style="align-self:end"><button class="btn small primary" data-oadd="${esc(S.cat||"")}">Add to ${esc(catName(t,S.cat))}</button></div></div></details>
-      <div class="row"><label class="btn small" for="imp-file">📥 Import teams from a spreadsheet</label><input id="imp-file" type="file" accept=".xlsx,.csv" hidden>
-        <span class="muted" style="font-size:.82rem">Google Form responses (.xlsx or .csv): team name, captain / player names, numbers and emails. Teams marked as paid come in confirmed, the rest as pending. Teams already here are skipped.</span></div>
-    </section>
-    <section class="panel"><h2>Fixtures · ${esc(catName(t,S.cat))}</h2>
-      <p class="muted">${isTeam(t)?`Groups of about ${Number(t.groupSize)||3}. Every tie is men's, women's and mixed doubles. Top ${Number(t.advance)||2} per group${Number(t.wild)?` plus the best ${Number(t.wild)} third-placed`:""} go through, ranked by points, with byes for the top seeds.`:`Groups of about ${Number(t.groupSize)||4}, everyone plays everyone in their group, then the top ${Number(t.advance)||2} of each group go into the knockouts.`} Only confirmed teams are included.</p>
-      <div class="row"><button class="btn primary" data-gen="${esc(S.cat||"")}">${t.groups?.[S.cat]?"Re-make groups & round robin":"Make groups & round robin"}</button>
-        <button class="btn" data-genko="${esc(S.cat||"")}">${matchesOf(t,S.cat).some(m=>m.stage==="ko")?"Re-make knockout bracket":"Make knockout bracket"}</button>
-        ${matchesOf(t,S.cat).length?`<button class="btn small ghost danger" data-clearfix="${esc(S.cat||"")}">Clear fixtures</button>`:""}</div>
-      <p class="muted" style="font-size:.85rem">${(()=>{ const g=matchesOf(t,S.cat).filter(m=>m.stage==="group"); return g.length?`Group matches: ${g.filter(m=>m.status==="done").length} of ${g.length} played.`:"" })()} The knockout bracket can be made straight away: its places read "Winner Group A", "Runner-up Group B"… and fill in by themselves when each group finishes. Tap any match in Fixtures to fix its score, court or time.</p>
-    </section>
-    <section class="panel"><h2>Courts & order of play · all categories</h2>
-      <p class="muted">${clockOn(t)?`Gives every match a court and a start time, from ${esc(t.startTime||"10:00")}, ${Number(t.matchMins)||15} minutes per match,`:"Matches run on points, not the clock. Gives every match a court and its place in that court's queue,"} on ${Number(t.courts)||4} court${(Number(t.courts)||4)>1?"s":""}. Nobody plays twice at the same time, teams get a rest between matches where possible, and knockouts come after their groups. Clock times can be switched on in the Fixtures tab.</p>
-      <div class="row"><button class="btn primary" data-sched="1">${matchesOf(t).some(m=>m.pcourt)?"Re-do courts & order":"Assign courts & order"}</button></div>
-    </section>`;
+      <div class="row"><a class="btn small" href="#screen" data-screen="1">📺 Open big screen</a><span class="muted" style="font-size:.85rem">Put it on the projector and press F for full screen.</span></div></section>`;
+  if(ot==="teams") body=`<section class="panel"><div class="row" style="justify-content:space-between"><h2>Teams</h2><div class="row"><label class="btn small" for="imp-file">📥 Import spreadsheet</label><input id="imp-file" type="file" accept=".xlsx,.csv" hidden><button class="btn small primary" data-oaddopen="1">➕ Add a team</button></div></div>${catBar(t)}
+      ${S.addTeam?`<div class="ogrp"><h3>New team · ${esc(catName(t,S.cat))}</h3><div class="grid2"><label class="f">Team name<input id="oa-name" maxlength="40"></label>${Array.from({length:nPl(t)},(_,i)=>`<label class="f">Player ${i+1}<input id="oa-p${i+1}" maxlength="60"></label>`).join("")}</div>
+        <div class="row"><button class="btn primary small" data-oadd="${esc(S.cat||"")}">Add team</button><button class="btn small ghost" data-oaddopen="0">Cancel</button></div></div>`:""}
+      ${(()=>{ const ts=teamsOf(t,S.cat); if(!ts.length) return `<div class="empty">No teams in this category yet.</div>`;
+        return `<div class="row"><span class="muted">${ts.length} teams · ${ts.filter(x=>x.status==="confirmed").length} confirmed</span>${ts.some(x=>x.status!=="confirmed")?`<button class="btn small" data-confirmall="${esc(S.cat)}">Confirm all</button>`:""}</div>
+        <div class="otl">${ts.map(x=>teamCard(t,x)).join("")}</div>` })()}
+      <p class="muted" style="font-size:.82rem">📥 Import takes Google Form responses (.xlsx or .csv): teams already here get their contact details filled in, new teams are added.</p></section>`;
+  if(ot==="fixtures") body=`<section class="panel"><h2>1 · Groups</h2>${catBar(t)}
+      <p class="muted">${isTeam(t)?`Groups of about ${Number(t.groupSize)||3}; every tie is men's, women's and two mixed doubles. Top ${Number(t.advance)||2} per group go through.`:`Groups of about ${Number(t.groupSize)||4}; everyone plays everyone in their group. ${Number(t.advance)===1?"The winner":`The top ${Number(t.advance)||2}`} of each group go${Number(t.advance)===1?"es":""} through.`} Only confirmed teams are included. Change group sizes in 📝 Details.</p>
+      <div class="row"><button class="btn primary" data-gen="${esc(S.cat||"")}">${t.groups?.[S.cat]?"Re-make groups":"Make groups"}</button>${matchesOf(t,S.cat).length?`<button class="btn small ghost danger" data-clearfix="${esc(S.cat||"")}">Clear all fixtures</button>`:""}</div>
+      <p class="muted" style="font-size:.85rem">${(()=>{ const g=matchesOf(t,S.cat).filter(m=>m.stage==="group"); return g.length?`${g.filter(m=>m.status==="done").length} of ${g.length} group matches played.`:"No groups yet." })()}</p></section>
+    <section class="panel"><h2>2 · Knockouts</h2><p class="muted">Make it any time: the places read "Winner Group A" and so on, and fill in by themselves as groups finish.</p>
+      <button class="btn primary" data-genko="${esc(S.cat||"")}">${matchesOf(t,S.cat).some(m=>m.stage==="ko")?"Re-make knockout bracket":"Make knockout bracket"}</button></section>
+    ${schedPanel(t).replace("🏸 Courts & order of play","3 · Courts & order of play")}
+    <section class="panel"><h2>4 · Scores & changes</h2><p class="muted">Open the <b>Fixtures</b> tab and tap any match to fix its score, court or order. Referees score live from their phones.</p><button class="btn small" data-tab="fix">Open Fixtures</button></section>`;
+  return `${list}${preset}${head}${body}`;
+}
+// organiser: one team, with an inline editor
+function teamCard(t, x){
+  const c=S.contacts[x.id]||{}, n=nPl(t);
+  if(S.editTeam===x.id) return `<div class="otc editing"><div class="grid2">
+      <label class="f">Team name<input id="et-name" maxlength="40" value="${esc(x.name)}"></label>
+      ${cats(t).length>1?`<label class="f">Category<select id="et-cat">${cats(t).map(k=>`<option value="${esc(k.id)}" ${k.id===x.cat?"selected":""}>${esc(k.name)}</option>`).join("")}</select></label>`:""}
+      ${Array.from({length:n},(_,i)=>`<label class="f">Player ${i+1}${i===0?" (captain)":""}<input id="et-p${i+1}" maxlength="60" value="${esc(x["p"+(i+1)]||"")}"></label>`).join("")}
+      <label class="f">Captain's email<input id="et-email" type="email" maxlength="120" value="${esc(c.email||"")}"></label><label class="f">Captain's phone<input id="et-phone" type="tel" maxlength="30" value="${esc(c.phone||"")}"></label></div>
+    <div class="row"><button class="btn primary small" data-tsaveteam="${esc(x.id)}">💾 Save</button><button class="btn small ghost" data-tedit="">Cancel</button></div></div>`;
+  const more=[...[2,3,4].map(k=>c["phone"+k]||c["email"+k]?`P${k}: ${c["phone"+k]||""} ${c["email"+k]||""}`:""), c.emName?`Emergency: ${c.emName} ${c.emPhone||""}`:"", c.notes?`Notes: ${c.notes}`:""].filter(Boolean);
+  return `<div class="otc"><div class="otc-h"><b>${esc(x.name)}</b>${x.status==="confirmed"?'<span class="chip st-confirmed">Confirmed</span>':'<span class="chip st-awaiting">Pending</span>'}${c.paid?`<span class="chip st-awaiting">${c.payName?`Paid as ${esc(c.payName)}`:"Says paid"} · check bank</span>`:""}${c.wa?'<span class="chip st-confirmed">WhatsApp ✓</span>':""}</div>
+    <div class="muted">${esc(playersOf(x).join(" · "))}</div>
+    ${c.email||c.phone?`<div class="otc-c">${esc([c.email,c.phone].filter(Boolean).join(" · "))}</div>`:""}${more.length?`<details class="otc-m"><summary>More details</summary><div>${more.map(esc).join("<br>")}</div></details>`:""}
+    <div class="row"><button class="btn small" data-tedit="${esc(x.id)}">✏️ Edit</button>${x.status==="confirmed"?`<button class="btn small ghost" data-tconfirm="${esc(x.id)}" data-v="pending">Unconfirm</button>`:`<button class="btn small primary" data-tconfirm="${esc(x.id)}" data-v="confirmed">Confirm</button>`}<button class="btn small ghost danger" data-tdel="${esc(x.id)}">Delete</button></div></div>`;
 }
 
 /* score editor (organiser or referee) */
@@ -778,6 +797,7 @@ document.addEventListener("click", async e=>{
   if(ds.readdone){ (S.read||={})[ds.readdone]=true; t0.closest(".readmodal")?.remove(); render(); return }
   if(ds.wajoin){ S.waOpened=true; setTimeout(render,300); return }   // let the link open, then unlock the tick box
   if(t0.id==="signOut"){ await auth.signOut(); location.reload(); return }
+  if(ds.goorg){ S.tab="org"; S.otab=ds.goorg; ls.set("dsf:ttab","org"); ls.set("dsf:otab",S.otab); render(); scrollTo({top:0}); return }
   if(ds.tab){ S.tab=ds.tab; S.edit=null; ls.set("dsf:ttab",S.tab); if(location.hash) history.replaceState(null,"",location.pathname); render(); scrollTo({top:0}); return }
   if(ds.screen){ e.preventDefault(); location.hash="#screen"; return }
   if(ds.tid){ S.tid=ds.tid; S.newT=false; S.cat=null; ls.set("dsf:tid",S.tid); render(); return }
@@ -842,6 +862,16 @@ document.addEventListener("click", async e=>{
     if(!x){ toast("Create that tournament first"); return }
     if(!confirm(`Apply the official details to ${x.name}? Its format, scoring, courts, times and terms are replaced. Name, date, teams, bank details and registration stay the same.`)) return;
     await db.collection("tourneys").doc(x.id).set({...p.merge(), preset:p.key},{merge:true}).then(()=>{ S.tid=x.id; ls.set("dsf:tid",x.id); toast("Details applied") },()=>toast("Couldn't save")); return }
+  if(ds.otab){ S.otab=ds.otab; S.editTeam=null; ls.set("dsf:otab",S.otab); render(); return }
+  if(ds.oaddopen!=null){ S.addTeam=ds.oaddopen==="1"; render(); if(S.addTeam) $("#oa-name")?.focus(); return }
+  if(ds.tedit!=null){ S.editTeam=ds.tedit||null; render(); return }
+  if(ds.tsaveteam){ const x=teamById(ds.tsaveteam); if(!x) return; const v=id=>($(`#et-${id}`)?.value||"").trim();
+    if(!v("name")||!v("p1")){ toast("The team needs a name and player 1"); return }
+    const data={name:v("name").slice(0,40), ...Object.fromEntries(Array.from({length:nPl(t)},(_,i)=>["p"+(i+1),v("p"+(i+1)).slice(0,60)])), ...($("#et-cat")?{cat:v("cat")}:{})};
+    try{ await db.collection("tteams").doc(x.id).update(data);
+      const c=S.contacts[x.id], cd={email:v("email").slice(0,120), phone:v("phone").slice(0,30)};
+      if(c) await db.collection("tcontacts").doc(x.id).update(cd); else if(cd.email||cd.phone) await db.collection("tcontacts").doc(x.id).set({...cd, createdBy:S.uid}).catch(()=>{});
+      S.editTeam=null; render(); toast("Team saved ✓") }catch{ toast("Couldn't save the team") } return }
   if(ds.tnew){ S.newT=true; render(); $("#newt")?.scrollIntoView({behavior:"smooth"}); return }
   if(ds.tnewx){ S.newT=false; render(); return }
   if(ds.tdelt){ const x=S.tourneys.find(y=>y.id===ds.tdelt); if(!x) return;

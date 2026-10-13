@@ -396,6 +396,28 @@ nav.tabs button[data-tab="court"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='htt
 .rb .wa::before{content:"◀ ";font-size:.7em;color:var(--accent)}
 .rb .wb::after{content:" ▶";font-size:.7em;color:var(--accent)}
 .rb .livebadge{font-size:.72rem}
+.editbtn{float:right;margin-left:10px}
+.orghint{margin:6px 0 0;font-size:.85rem;color:var(--accent);font-weight:600}
+.ohead{display:grid;gap:12px}
+.ohead h2{margin:2px 0}
+.osub{display:flex;gap:6px;flex-wrap:wrap}
+.osub button{font:inherit;font-weight:600;padding:9px 14px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.osub button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.ogrp{display:grid;gap:12px;padding:14px 0;border-top:1px solid var(--line)}
+.ogrp:first-child{border-top:0;padding-top:0}
+.ogrp h3{margin:0;font-size:1.05rem}
+.more{border:1px dashed var(--line);border-radius:12px;padding:10px 12px}
+.more summary{cursor:pointer;font-weight:600;color:var(--muted)}
+.switch{display:inline-flex;gap:10px;align-items:center;font-weight:700;cursor:pointer}
+.switch input{width:22px;height:22px;accent-color:var(--accent)}
+.savebar{position:sticky;bottom:96px;z-index:5;display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px;margin-top:12px;border-radius:16px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow)}
+.otl{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.otc{display:grid;gap:6px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.otc.editing{grid-column:1/-1;border-color:var(--accent)}
+.otc-h{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.otc-c{font-size:.85rem;overflow-wrap:anywhere}
+.otc-m summary{cursor:pointer;font-size:.82rem;color:var(--muted)}
+.otc-m div{font-size:.82rem;overflow-wrap:anywhere;margin-top:4px}
 .tlist{display:grid;gap:8px}
 .trow{display:flex;gap:8px;align-items:center;border:1px solid var(--line);border-radius:14px;padding:6px 8px 6px 6px;background:var(--surface)}
 .trow.on{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 25%,transparent)}
@@ -577,5 +599,5 @@ body.refonly{padding-bottom:24px!important}
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="app.js?v=202610132000"></script>
+<script src="app.js?v=202610132023"></script>
 </body></html>

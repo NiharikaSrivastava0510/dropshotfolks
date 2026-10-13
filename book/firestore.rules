@@ -207,6 +207,16 @@ service cloud.firestore {
     }
 
     // Small profile photos shown on the live courts.
+    // Who each player wants to partner. Public so every device works out the same court rotation.
+    match /partners/{uid} {
+      allow read: if true;
+      allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow create, update: if isAdmin() || (signedIn() && request.auth.uid == uid
+        && exists(/databases/$(database)/documents/players/$(request.auth.uid))
+        && request.resource.data.keys().hasOnly(['ids', 'updatedAt'])
+        && request.resource.data.ids is list && request.resource.data.ids.size() <= 3
+        && request.resource.data.updatedAt is string);
+    }
     match /photos/{uid} {
       allow read: if true;
       allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);

@@ -141,7 +141,8 @@ service cloud.firestore {
         && get(u).data.code == get(/databases/$(database)/documents/tsecrets/$(tid)).data.code;
     }
     function validTeam(d) {
-      return d.keys().hasOnly(['tid', 'cat', 'name', 'p1', 'p2', 'createdBy', 'createdAt', 'status'])
+      return d.keys().hasOnly(['tid', 'cat', 'name', 'p1', 'p2', 'p3', 'p4', 'createdBy', 'createdAt', 'status'])
+        && shortText(d.get('p3', ''), 60) && shortText(d.get('p4', ''), 60)
         && d.tid is string && d.cat is string
         && shortText(d.name, 40) && d.name.size() > 0
         && shortText(d.p1, 60) && d.p1.size() > 0 && shortText(d.p2, 60) && d.p2.size() > 0
@@ -163,12 +164,16 @@ service cloud.firestore {
     }
     match /tcontacts/{teamId} {
       allow read: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.keys().hasOnly(['email', 'phone', 'email2', 'phone2', 'lv1', 'lv2', 'g1', 'g2', 'emName', 'emPhone', 'notes', 'wa', 'agreed', 'paid', 'payName', 'createdBy'])
+      allow create: if signedIn() && request.resource.data.keys().hasOnly(['email', 'phone', 'email2', 'phone2', 'email3', 'phone3', 'email4', 'phone4', 'lv1', 'lv2', 'lv3', 'lv4', 'g1', 'g2', 'g3', 'g4', 'emName', 'emPhone', 'notes', 'wa', 'agreed', 'paid', 'payName', 'createdBy'])
         && request.resource.data.createdBy == request.auth.uid
         && shortText(request.resource.data.email, 120) && shortText(request.resource.data.phone, 30)
         && shortText(request.resource.data.get('email2', ''), 120) && shortText(request.resource.data.get('phone2', ''), 30)
         && shortText(request.resource.data.get('lv1', ''), 30) && shortText(request.resource.data.get('lv2', ''), 30)
         && shortText(request.resource.data.get('g1', ''), 30) && shortText(request.resource.data.get('g2', ''), 30)
+        && shortText(request.resource.data.get('email3', ''), 120) && shortText(request.resource.data.get('phone3', ''), 30)
+        && shortText(request.resource.data.get('email4', ''), 120) && shortText(request.resource.data.get('phone4', ''), 30)
+        && shortText(request.resource.data.get('lv3', ''), 30) && shortText(request.resource.data.get('lv4', ''), 30)
+        && shortText(request.resource.data.get('g3', ''), 30) && shortText(request.resource.data.get('g4', ''), 30)
         && shortText(request.resource.data.get('emName', ''), 60) && shortText(request.resource.data.get('emPhone', ''), 30)
         && shortText(request.resource.data.get('notes', ''), 300) && request.resource.data.get('wa', false) is bool
         && request.resource.data.get('agreed', false) is bool && request.resource.data.get('paid', false) is bool

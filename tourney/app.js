@@ -341,13 +341,14 @@ async function generateKnockouts(t, cat){
 
 /* ---------- courts & order of play (organiser) ---------- */
 // matches run on points, not the clock: each gets a court and a place in that court's queue (pnum); clock times only if switched on
-const clockOn = t => t?.timed===true;
+const clockOn = t => t?.timed!==false;
 const ordinal = n => n+(["th","st","nd","rd"][(n%100-20)%10]||["th","st","nd","rd"][n%100]||"th");
 const planOrder = m => [Number(m.pnum)||999, Number(m.pslot)||999, String(m.ptime||"99")];
 const byPlan = (x,y) => { const a=planOrder(x), b=planOrder(y); return a[0]-b[0] || a[1]-b[1] || a[2].localeCompare(b[2]) || (x.order||0)-(y.order||0) };
 function planTxt(m, short){
   const t=S.tourneys.find(x=>x.id===m.tid); if(!m.pcourt) return "";
   if(clockOn(t) && m.ptime) return short ? `${m.ptime} C${m.pcourt}` : `🕒 ${m.ptime} · Court ${m.pcourt}`;
+  if(clockOn(t) && m.pnum) return short ? `C${m.pcourt}` : `Court ${m.pcourt}`;
   return short ? `C${m.pcourt}${m.pnum?` #${m.pnum}`:""}` : `Court ${m.pcourt}${m.pnum?` · ${ordinal(Number(m.pnum))} on court`:""}`;
 }
 const hm = (start, mins) => { const [h,m]=String(start||"10:00").split(":").map(Number), x=h*60+m+mins; return `${String(Math.floor(x/60)%24).padStart(2,"0")}:${String(x%60).padStart(2,"0")}` };
@@ -399,8 +400,10 @@ function matchRow(t, m, opts={}){
     <span class="tn ${w==="a"?"win":""} ${opts.me&&a===opts.me?"me":""}">${sideName(m,"a")}</span>
     <span class="mid">${mid}${opts.cat?`<span>${esc(catName(t,m.cat))}</span>`:""}</span>
     <span class="tn r ${w==="b"?"win":""} ${opts.me&&b===opts.me?"me":""}">${sideName(m,"b")}</span>
-    ${opts.plan && S.isAdmin && m.status!=="done" && !m.bye ? `<div class="plan"><label>Court <select data-plcourt="${esc(m.id)}" aria-label="Court"><option value="">–</option>${Array.from({length:10},(_,i)=>`<option value="${i+1}" ${Number(m.pcourt)===i+1?"selected":""}>${i+1}</option>`).join("")}</select></label>${clockOn(t)?`<label>Time <input type="time" data-pltime="${esc(m.id)}" value="${esc(m.ptime||"")}" aria-label="Time"></label>`:`<label>Order <input type="number" min="1" max="99" data-plnum="${esc(m.id)}" value="${esc(m.pnum||"")}" aria-label="Order on court" style="width:4.2em"></label>`}</div>` : ""}</div>`;
+    ${opts.plan && S.isAdmin && m.status!=="done" && !m.bye ? `<div class="plan">${planPick(t,m)}</div>` : ""}</div>`;
 }
+// organiser: court and start time (or order) right on a match
+const planPick = (t, m) => `<span class="plan"><label>Court <select data-plcourt="${esc(m.id)}" aria-label="Court">${Array.from({length:Math.max(10,Number(t.courts)||4)},(_,i)=>`<option value="${i+1}" ${Number(m.pcourt)===i+1?"selected":""}>${i+1}</option>`).join("")}<option value="" ${m.pcourt?"":"selected"}>–</option></select></label>${clockOn(t)?`<label>🕒 <input type="time" data-pltime="${esc(m.id)}" value="${esc(m.ptime||"")}" aria-label="Start time"></label>`:`<label># <input type="number" min="1" max="99" data-plnum="${esc(m.id)}" value="${esc(m.pnum||"")}" aria-label="Order on court" style="width:4.2em"></label>`}</span>`;
 // a list of matches; Team Cup matches sit under their tie with the tie score
 function fixList(t, ms, opts={}){
   const seen=new Set();
@@ -408,7 +411,8 @@ function fixList(t, ms, opts={}){
     const r=tieResult(m.tie), rs=S.matches.filter(x=>x.tie===m.tie).sort((x,y)=>Object.keys(DISC).indexOf(x.disc)-Object.keys(DISC).indexOf(y.disc));
     const mine=opts.me&&(sideTeam(m,"a")===opts.me||sideTeam(m,"b")===opts.me), stage=m.stage==="ko"?(m.roundName||"Knockout"):`Group ${m.group}`;
     const line=x=>{ const g=(x.games||[]).slice(-1)[0], live=x.status==="live", done=x.status==="done";
-      const right = done ? `<b class="${x.winner==="a"?"wa":"wb"}">${esc(gamesTxt(x))}</b>` : live ? `<span class="livebadge">Court ${esc(x.court)}</span> <b>${g?`${g[0]}–${g[1]}`:"0–0"}</b>` : `<span class="muted">${esc(planTxt(x))}</span>`;
+      const right = done ? `<b class="${x.winner==="a"?"wa":"wb"}">${esc(gamesTxt(x))}</b>` : live ? `<span class="livebadge">Court ${esc(x.court)}</span> <b>${g?`${g[0]}–${g[1]}`:"0–0"}</b>`
+        : opts.plan && S.isAdmin ? planPick(t,x) : `<span class="muted">${esc(planTxt(x))}</span>`;
       return `<div class="rb ${live?"live":""}" ${opts.edit?`data-medit="${esc(x.id)}" role="button" tabindex="0"`:""}><span>${esc(DISC[x.disc]||x.disc)}</span><span>${right}</span></div>` };
     return `<div class="tie ${mine?"me":""}"><div class="tie-s">${esc(stage)}${r.onPoints?" · won on total points":""}</div><div class="tie-h"><span class="${r.winner==="a"?"win":""}">${sideName(m,"a")}</span><b>${r.done?`${r.a}–${r.b}`:"vs"}</b><span class="${r.winner==="b"?"win":""}">${sideName(m,"b")}</span></div>${rs.map(line).join("")}</div>` }).join("");
 }
@@ -430,7 +434,8 @@ function bracket(t, cat){
     const line=(id,side)=>`<div class="bl ${w===side?"win":w?"lose":""}"><span class="${id?"":"tbd"}">${id?esc(tName(id)):esc(sideLabel(m,side))}</span><b>${esc(sc(side))}</b></div>`;
     const bronze=m.roundName==="Bronze medal match", top=bronze?`🥉 ${isTeam(t)?"Bronze medal":"3rd place"}`:"";
     const when=live?`<span class="livebadge">Live</span>`:w?`<span class="bdone">Final score</span>`:m.pcourt?`<span>${esc(planTxt(m))}</span>`:"";
-    return `<div class="bm ${live?"live":""} ${bronze?"bronze":""}">${top||when?`<div class="bt">${top?`<b>${top}</b>`:""}${when}</div>`:""}${line(a,"a")}${line(b,"b")}</div>` };
+    const pick = S.isAdmin && !live && !w && !m.bye ? (m.tie ? `<div class="bpick"><button class="btn small ghost" data-openko="${esc(m.tie)}">✏️ Courts & times</button></div>` : `<div class="bpick">${planPick(t,m)}</div>`) : "";
+    return `<div class="bm ${live?"live":""} ${bronze?"bronze":""}">${top||when?`<div class="bt">${top?`<b>${top}</b>`:""}${when}</div>`:""}${line(a,"a")}${line(b,"b")}${pick}</div>` };
   return `<div class="bracket">${rounds.map(rn=>{ const ms=ko.filter(m=>m.round===rn).sort((a,b)=>a.slot-b.slot), real=ms.filter(m=>!m.bye);
     const show=real.length?real:ms, name=(ms.find(m=>m.roundName!=="Bronze medal match")||ms[0])?.roundName||"";
     return `<div class="bround"><h4>${esc(name==="Final"?"🏆 Final":name)}</h4><div class="bcol">${show.map(card).join("")}</div></div>` }).join("")}</div>`;
@@ -551,11 +556,11 @@ function schedPanel(t){
   return `<section class="panel"><h2>🏸 Courts & order of play</h2>
     <div class="row" style="align-items:flex-end">
       <label class="f" style="width:110px">Courts<input id="fx-courts" type="number" min="1" max="12" value="${esc(t.courts||4)}"></label>
-      <label class="row" style="gap:6px;align-self:end;flex-wrap:nowrap"><input type="checkbox" style="width:auto" id="fx-timed" ${on?"checked":""}> Show clock times</label>
+      <label class="row" style="gap:6px;align-self:end;flex-wrap:nowrap"><input type="checkbox" style="width:auto" id="fx-timed" ${on?"checked":""}> Show start times</label>
       ${on?`<label class="f" style="width:140px">First match<input id="fx-start" type="time" value="${esc(t.startTime||"10:00")}"></label>
       <label class="f" style="width:150px">Minutes per match<input id="fx-mins" type="number" min="5" max="60" value="${esc(t.matchMins||15)}"></label>`:""}
-      <button class="btn primary" data-fxsched="1">${has?"Update courts & order":"Assign courts & order"}</button></div>
-    <p class="muted" style="font-size:.85rem">${on?"Each match gets a court and a start time.":"Matches run on points, not the clock: each match gets a court and its place in that court's queue (1st, 2nd, 3rd…). When a court's match finishes, the next one for that court starts."} Covers every category. Nobody plays twice at once, and knockouts come after their groups${matchesOf(t).some(m=>m.stage==="ko")?"":" (make the knockout bracket first in Organiser → Fixtures so it's included)"}. ${last?`Last match at <b>${esc(last)}</b>. `:""}To move one match, change its court or order below.</p></section>`;
+      <button class="btn primary" data-fxsched="1">${has?`Update courts & ${on?"times":"order"}`:`Assign courts & ${on?"times":"order"}`}</button></div>
+    <p class="muted" style="font-size:.85rem">${on?"Each match gets a court and a start time.":"Matches run on points, not the clock: each match gets a court and its place in that court's queue (1st, 2nd, 3rd…). When a court's match finishes, the next one for that court starts."} Covers every category. Nobody plays twice at once, and knockouts come after their groups${matchesOf(t).some(m=>m.stage==="ko")?"":" (make the knockout bracket first in Organiser → Fixtures so it's included)"}. ${last?`Last match at <b>${esc(last)}</b>. `:""}To move one match, change its court or ${on?"time":"order"} right on the match below.</p></section>`;
 }
 
 /* referee */
@@ -814,6 +819,7 @@ document.addEventListener("click", async e=>{
   if(ds.tid){ S.tid=ds.tid; S.newT=false; S.cat=null; ls.set("dsf:tid",S.tid); render(); return }
   if(ds.cat){ S.cat=ds.cat; render(); return }
   if(ds.fxtab){ S.fxTab=ds.fxtab; render(); return }
+  if(ds.openko){ const d=document.querySelector("details.vm[id$='-ko']"); if(d){ d.open=true; const el=document.querySelector(`[data-medit="${ds.openko}_MD"]`)?.closest(".tie")||d; el.scrollIntoView({behavior:"smooth",block:"center"}); el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"),1600) } return }
   if(ds.copy){ try{ await navigator.clipboard.writeText(ds.copy); toast("Copied") }catch{ toast(ds.copy) } return }
   if(ds.signin){ try{ await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); ls.set("dsf:ttab","org"); location.reload() }catch{ toast("Sign-in didn't finish") } return }
   if(ds.withdraw){ const x=teamById(ds.withdraw); if(!x||!confirm(`Withdraw ${x.name}?`)) return;
@@ -978,7 +984,9 @@ async function autoSetup(){
       await b.commit(); await wait(()=>ties.every(tie=>S.matches.some(m=>m.tie===tie && m.disc==="XD2")));
       if(!matchesOf(t).some(m=>m.status!=="scheduled" && !m.bye)) await scheduleAll(S.tourneys.find(x=>x.id===t.id));
       done.push(`second mixed doubles added to ${t.name}`) }
-    for(const t of S.tourneys){ const ms=matchesOf(t).filter(m=>m.pcourt && !m.bye && m.pnum==null); if(!ms.length || clockOn(t)) continue;
+    for(const t0 of S.tourneys){ const ms=matchesOf(t0).filter(m=>!m.bye);
+      if(clockOn(t0) && ms.length && ms.some(m=>m.pcourt) && !ms.some(m=>m.ptime) && !ms.some(m=>m.status!=="scheduled")){ await scheduleAll(t0); done.push(`start times for ${t0.name}`) } }
+    for(const t of S.tourneys){ const ms=matchesOf(t).filter(m=>m.pcourt && !m.bye && m.pnum==null); if(!ms.length) continue;
       const times=[...new Set(matchesOf(t).filter(m=>m.ptime).map(m=>m.ptime))].sort(), per={};
       const b=db.batch(); [...ms].sort((x,y)=>String(x.ptime||"99").localeCompare(String(y.ptime||"99"))||(x.order||0)-(y.order||0)).forEach(m=>{ per[m.pcourt]=(per[m.pcourt]||0)+1;
         b.update(db.collection("tmatches").doc(m.id),{pnum:per[m.pcourt], pslot:Math.max(0,times.indexOf(m.ptime))}) }); await b.commit() }

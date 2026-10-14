@@ -509,6 +509,13 @@ nav.tabs button[data-tab="org"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='http:
 .m .plan{grid-column:1/-1;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;padding-top:6px;border-top:1px dashed var(--line);font-size:.8rem;font-weight:600;color:var(--muted)}
 .m .plan label{display:inline-flex;align-items:center;gap:6px}
 .m .plan select,.m .plan input{width:auto;padding:5px 8px;border-radius:9px;font-size:.85rem}
+.plan .plan{display:contents}
+.rb .plan,.bpick .plan{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.8rem;font-weight:600;color:var(--muted)}
+.rb .plan label,.bpick .plan label{display:inline-flex;align-items:center;gap:4px}
+.rb .plan select,.rb .plan input,.bpick .plan select,.bpick .plan input{width:auto;padding:4px 6px;border-radius:8px;font-size:.82rem}
+.bpick{display:flex;justify-content:center;padding:7px 10px;border-top:1px dashed var(--line);background:color-mix(in srgb,var(--accent) 3%,transparent)}
+.tie.flash{animation:tieFlash 1.6s}
+@keyframes tieFlash{0%,60%{box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 35%,transparent)}}
 .m .when{font-weight:700;color:var(--accent);font-size:.8rem;white-space:nowrap}
 .m .tn.me{text-decoration:underline;text-decoration-color:var(--ball);text-decoration-thickness:3px;text-underline-offset:4px}
 .scr .bm .bt{background:rgba(255,255,255,.08);color:#F2C14E}
@@ -615,5 +622,5 @@ body.refonly{padding-bottom:24px!important}
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="app.js?v=202610140055"></script>
+<script src="app.js?v=202610140113"></script>
 </body></html>

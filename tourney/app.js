@@ -82,6 +82,25 @@ function glance(t){
 }
 const glanceLine = t => { const g=glance(t); if(!g.nT) return "";
   return `<p class="glance">${g.nT} teams${g.nG?` · ${g.nG} groups`:""} · every team plays at least <b>${g.team?`${g.ties} ties (${g.matches} matches)`:`${g.ties} matches`}</b>${g.total?` · ${g.total} matches in total`:""}</p>` };
+// organiser: format & scoring form shown in place of the picture
+function formatForm(t){
+  const sel=(id,val,opts)=>`<select id="fe-${id}">${opts.map(([v,l])=>`<option value="${v}" ${String(val)===String(v)?"selected":""}>${l}</option>`).join("")}</select>`;
+  const num=(id,val,min,max)=>`<input id="fe-${id}" type="number" min="${min}" max="${max}" value="${esc(val??"")}">`;
+  const row=(label,k,src)=>`<div class="fe-row"><b>${label}</b>
+    <label class="f">Points ${sel(k+"to",src.pointsTo??(k?"0":21),[...(k?[["0",k==="f"?"Same as knockouts":"Same as round robin"]]:[]),["11","11"],["15","15"],["21","21"]])}</label>
+    <label class="f">Deuce max (0 = standard) ${num(k+"cap",src.cap??0,0,40)}</label>
+    <label class="f">Games ${sel(k+"bo",src.bestOf??(k?"0":1),[...(k?[["0",k==="f"?"Same as knockouts":"Same as round robin"]]:[]),["1","1 game"],...(k?[]:[["2","2 games (total points at 1–1)"]]),["3","Best of 3"]])}</label></div>`;
+  return `<div class="fmtform">
+    <div class="fv-box"><h4>🔁 Round robin & who goes through</h4><div class="grid2">
+      <label class="f">Teams per group ${num("gsize",t.groupSize??(isTeam(t)?3:4),3,8)}</label>
+      <label class="f">Teams through per group ${num("adv",t.advance??2,1,4)}</label>
+      <label class="f">Knockout size, filled with best runners-up (0 = off) ${num("kosize",t.koSize??0,0,64)}</label>
+      <label class="f">Deuce ${sel("deuce",t.deuce===false?0:1,[["1","On: win by 2"],["0","Off: first to the points"]])}</label>
+      <label class="row" style="gap:6px;align-self:end"><input type="checkbox" id="fe-bronze" style="width:auto" ${bronzeOn(t)?"checked":""}> 🥉 3rd-place match</label></div></div>
+    <div class="fv-box"><h4>🏸 Scoring</h4>${row("🔁 Round robin","",{pointsTo:t.pointsTo,cap:t.cap,bestOf:t.bestOf})}${row("⚔️ Quarter & semi-finals","k",t.stageRules?.ko||{})}${row("🏆 Final & 3rd place","f",t.stageRules?.final||{})}</div>
+    <div class="fv-box"><h4>📝 Good to know</h4><textarea id="fe-format" rows="4" placeholder="e.g. 2 minutes warm-up, 20 seconds between games…">${esc(t.format||"")}</textarea></div>
+    <div class="row"><button class="btn primary" data-savefmt="1">💾 Save format & scoring</button><button class="btn small ghost" data-editfmt="0">Cancel</button></div></div>`;
+}
 // the game format as a picture: numbers, how a tie works, the route to the final, points and scoring
 function formatVisual(t){
   const g=glance(t), r=rules(t), ko=rules(t,{stage:"ko"}), fin=rules(t,{stage:"ko",roundName:"Final"}), adv=Number(t.advance)||2, wild=Number(t.koSize)>0||Number(t.wild)>0;
@@ -98,7 +117,7 @@ function formatVisual(t){
       <div><i>3</i><b>Knockouts</b><span>Quarter-finals → semi-finals → 🏆 final${bronzeOn(t)?" (+ 🥉 match for 3rd)":""}.</span></div></div></div>
     ${g.team?`<div class="fv-box"><h4>📊 Group points</h4><div class="fv-pts"><div><b>4</b><span>win by 6+</span></div><div><b>3</b><span>win by 4–5</span></div><div><b>1</b><span>win by 1–3</span></div><div><b>0</b><span>loss</span></div></div><p class="muted">Margin = total points across the tie. Level on points → points difference, then head-to-head.</p></div>`
       :`<div class="fv-box"><h4>📊 Group places</h4><p>Most wins first. Level → head-to-head, then points difference, then points scored.</p></div>`}
-    <div class="fv-box"><h4>🏸 Scoring</h4><div class="fv-score"><div><span>Groups</span><b>${rl(r)}</b></div>${ruleTxt(ko)!==ruleTxt(r)?`<div><span>Quarter & semi-finals</span><b>${rl(ko)}</b></div>`:""}${ruleTxt(fin)!==ruleTxt(ko)?`<div><span>Final${bronzeOn(t)?" & 3rd place":""}</span><b>${rl(fin)}</b></div>`:""}</div></div>
+    <div class="fv-box"><h4>🏸 Scoring</h4><div class="fv-score"><div><span>🔁 Round robin (groups)</span><b>${rl(r)}</b></div><div><span>⚔️ Knockouts${ruleTxt(fin)!==ruleTxt(ko)?" (quarter & semi-finals)":""}</span><b>${rl(ko)}</b></div>${ruleTxt(fin)!==ruleTxt(ko)?`<div><span>🏆 Final${bronzeOn(t)?" & 3rd place":""}</span><b>${rl(fin)}</b></div>`:""}</div></div>
     ${t.format?`<div class="fv-box"><h4>📝 Good to know</h4>${richTxt(t.format)}</div>`:""}
   </div>`;
 }
@@ -168,7 +187,9 @@ const canRef = t => !!t && (S.isAdmin || (S.unlock?.tid===t.id));
 const CAP_FOR = {11:15, 15:21, 21:30};
 // knockout rounds can have their own scoring: t.stageRules = {ko:{pointsTo,cap,bestOf}, final:{…}} (final = final & 3rd-place play-off)
 const isFinalRound = m => m?.roundName==="Final" || m?.roundName==="Bronze medal match";
-const rules = (t, m) => { const st=m?.stage==="ko" ? t?.stageRules?.[isFinalRound(m)?"final":"ko"] : null; if(st) t={...t, ...Object.fromEntries(Object.entries(st).filter(([,v])=>Number(v)>0))};
+const rules = (t, m) => {   // the final & 3rd place follow the knockout scoring unless they have their own
+  const pick=st=>Object.fromEntries(Object.entries(st||{}).filter(([,v])=>Number(v)>0));
+  if(m?.stage==="ko") t={...t, ...pick(t?.stageRules?.ko), ...(isFinalRound(m)?pick(t?.stageRules?.final):{})};
   const to=[11,15,21].includes(Number(t?.pointsTo))?Number(t.pointsTo):21, deuce=t?.deuce!==false;
   const cap=Number(t?.cap)>to ? Number(t.cap) : (CAP_FOR[to]||to+9);
   return {to, deuce, cap:deuce?cap:to, bestOf:Number(t?.bestOf)||1} };
@@ -523,7 +544,7 @@ function viewReg(){
       ${glanceLine(t)}
       ${mapQ?`<div class="row" style="align-items:flex-start"><a class="btn small" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQ)}" target="_blank" rel="noopener">📍 Directions</a><span style="font-size:.9rem">${esc(mapQ)}${t.directions?`<br><span class="muted">${esc(t.directions).replace(/\n/g,"<br>")}</span>`:""}</span></div>`:""}
     </div></section>
-    <section class="panel"><h2>📋 Game format</h2>${formatVisual(t)}</section>
+    <section class="panel">${S.isAdmin?`<button class="btn small editbtn" data-editfmt="${S.editFmt?0:1}">${S.editFmt?"Close":"✏️ Edit format & scoring"}</button>`:""}<h2>📋 Game format</h2>${S.isAdmin&&S.editFmt?formatForm(t):formatVisual(t)}</section>
     <section class="panel"><h2>Register a team</h2>
     ${t.regOpen ? `<form id="regForm" class="regform" novalidate>
         <fieldset><legend>🏸 Team</legend><div class="grid2">
@@ -877,6 +898,12 @@ document.addEventListener("click", async e=>{
   if(ds.wajoin){ S.waOpened=true; setTimeout(render,300); return }   // let the link open, then unlock the tick box
   if(t0.id==="signOut"){ await auth.signOut(); location.reload(); return }
   if(ds.goorg){ const k=ds.goorg; S.tab={details:"reg",teams:"teams",fixtures:"fix",refs:"ref"}[k]||"reg"; if(k==="details") S.editDetails=true; if(k==="fixtures") S.fxTools=true; ls.set("dsf:ttab",S.tab); render(); scrollTo({top:0}); return }
+  if(ds.editfmt!=null){ S.editFmt=ds.editfmt==="1"; render(); return }
+  if(ds.savefmt && S.isAdmin){ const g=id=>$(`#fe-${id}`), n=(id,min,max,d)=>Math.min(max,Math.max(min,Number(g(id)?.value)||d));
+    const data={groupSize:n("gsize",3,8,3), advance:n("adv",1,4,2), koSize:Math.min(64,Math.max(0,Number(g("kosize").value)||0)), deuce:g("deuce").value!=="0", bronze:g("bronze").checked,
+      pointsTo:Number(g("to").value)||21, cap:Math.min(40,Math.max(0,Number(g("cap").value)||0)), bestOf:Number(g("bo").value)||1, format:g("format").value.trim().slice(0,2000),
+      stageRules:Object.fromEntries([["ko","k"],["final","f"]].map(([key,k])=>[key,{pointsTo:Number(g(k+"to").value)||0, cap:Math.min(40,Math.max(0,Number(g(k+"cap").value)||0)), bestOf:Number(g(k+"bo").value)||0}]))};
+    await db.collection("tourneys").doc(T().id).set(data,{merge:true}).then(()=>{ S.editFmt=false; render(); toast("Format & scoring saved ✓") },()=>toast("Couldn't save")); return }
   if(ds.editdetails!=null){ S.editDetails=ds.editdetails==="1"; S.newT=false; render(); scrollTo({top:0,behavior:"smooth"}); return }
   if(ds.fxtools!=null){ S.fxTools=!S.fxTools; render(); return }
   if(ds.tab){ S.tab=ds.tab; S.edit=null; ls.set("dsf:ttab",S.tab); if(location.hash) history.replaceState(null,"",location.pathname); render(); scrollTo({top:0}); return }

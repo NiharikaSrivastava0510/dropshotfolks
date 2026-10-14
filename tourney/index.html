@@ -520,6 +520,11 @@ nav.tabs button[data-tab="org"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='http:
 .fv-score{display:grid;gap:6px}
 .fv-score div{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:9px 12px;border-radius:10px;background:var(--tint)}
 .fv-score span{color:var(--muted)}
+.fmtform{display:grid;gap:14px}
+.fe-row{display:grid;grid-template-columns:minmax(150px,1.2fr) repeat(3,minmax(120px,1fr));gap:10px;align-items:end;padding:10px 0;border-top:1px dashed var(--line)}
+.fe-row:first-of-type{border-top:0}
+.fe-row b{align-self:center}
+@media (max-width:700px){.fe-row{grid-template-columns:1fr 1fr}.fe-row b{grid-column:1/-1}}
 .tinfo .big{font-family:var(--display);font-size:1.8rem;font-weight:700;line-height:1.1}
 .cats{display:flex;gap:8px;flex-wrap:wrap}
 .cats button{all:unset;cursor:pointer;padding:8px 14px;border-radius:99px;background:var(--tint);font-weight:600;font-size:.9rem}
@@ -684,5 +689,5 @@ body.refonly{padding-bottom:24px!important}
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="app.js?v=202610140156"></script>
+<script src="app.js?v=202610140219"></script>
 </body></html>

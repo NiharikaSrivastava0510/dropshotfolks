@@ -9,6 +9,11 @@
 const ORGANISER = 'info@dropshotfolks.co.uk';
 const FIREBASE_KEY = 'AIzaSyAP7O7DMk-sJFCqICW2dPZar53TlVi9jaA'; // the public web key from book/firebase-config.js
 
+// Open the Web app URL in a browser: if it says "working", the page can reach it.
+function doGet() {
+  return ContentService.createTextOutput('Dropshot Folks email script is working ✓  Daily emails left: ' + MailApp.getRemainingDailyQuota());
+}
+
 function doPost(e) {
   try {
     const d = JSON.parse(e.postData.contents);

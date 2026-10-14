@@ -783,7 +783,7 @@ function teamCard(t, x){
     ${c.email||c.phone?`<div class="otc-c">${esc([c.email,c.phone].filter(Boolean).join(" · "))}</div>`:""}${more.length?`<details class="otc-m"><summary>More details</summary><div>${more.map(esc).join("<br>")}</div></details>`:""}
     ${x.status==="confirmed"&&S.codes[x.id]?(()=>{ const code=S.codes[x.id].code, msg=confirmMsg(t,x), ph=ukPhone(c.phone);
       return `<div class="otc-code"><span>🎟 Code <b class="code">${esc(code)}</b>${x.checkedIn?' <span class="chip st-confirmed">✅ Checked in</span>':""}</span>
-        <div class="row">${c.email?`<a class="btn small" href="mailto:${esc(c.email)}?subject=${encodeURIComponent(`${x.name} is confirmed · ${t.name||"Tournament"}`)}&body=${encodeURIComponent(msg)}">📧 Email</a>`:""}${ph?`<a class="btn small" href="https://wa.me/${esc(ph)}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">💬 WhatsApp</a>`:""}<button class="btn small ghost" data-copy="${esc(msg)}">Copy message</button><a class="btn small ghost" href="${esc(passUrl(t,code))}" target="_blank" rel="noopener">🎫 Pass</a></div></div>` })():""}
+        <div class="row">${c.email?`<a class="btn small" href="mailto:${esc(c.email)}?subject=${encodeURIComponent(`${x.name} is confirmed · ${t.name||"Tournament"}`)}&body=${encodeURIComponent(msg)}">📧 Email</a>`:""}<button class="btn small primary" data-sendqr="${esc(x.id)}">📲 Send QR</button><a class="btn small" href="https://wa.me/${ph?esc(ph):""}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener" title="${ph?"Opens a chat with the captain":"No phone saved: pick the chat in WhatsApp"}">💬 WhatsApp</a><button class="btn small ghost" data-copy="${esc(msg)}">Copy message</button><a class="btn small ghost" href="${esc(passUrl(t,code))}" target="_blank" rel="noopener">🎫 Pass</a></div></div>` })():""}
     <div class="row"><button class="btn small" data-tedit="${esc(x.id)}">✏️ Edit</button>${x.status==="confirmed"?`<button class="btn small ghost" data-tconfirm="${esc(x.id)}" data-v="pending">Unconfirm</button>`:`<button class="btn small primary" data-tconfirm="${esc(x.id)}" data-v="confirmed">Confirm</button>`}<button class="btn small ghost danger" data-tdel="${esc(x.id)}">Delete</button></div></div>`;
 }
 
@@ -924,6 +924,7 @@ document.addEventListener("click", async e=>{
   if(ds.cat){ S.cat=ds.cat; render(); return }
   if(ds.fxtab){ S.fxTab=ds.fxtab; render(); return }
   if(ds.openko){ const d=document.querySelector("details.vm[id$='-ko']"); if(d){ d.open=true; const el=document.querySelector(`[data-medit="${ds.openko}_MD"]`)?.closest(".tie")||d; el.scrollIntoView({behavior:"smooth",block:"center"}); el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"),1600) } return }
+  if(ds.sendqr){ const x=teamById(ds.sendqr), t=S.tourneys.find(y=>y.id===x?.tid); if(x&&t) await sendQr(t,x); return }
   if(ds.copy){ try{ await navigator.clipboard.writeText(ds.copy); toast("Copied") }catch{ toast(ds.copy) } return }
   if(ds.psignin==="google"){ try{ const c=await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
       if(ADMINS.includes(String(c.user.email||"").toLowerCase())) return location.reload();
@@ -1149,6 +1150,33 @@ function passCard(t, p){
   return `<section class="panel pass"><div class="pass-qr">${qrSvg(url)}</div><div class="pass-info"><span class="lbl">🎫 Team pass · ${esc(t.name||"")}</span><h2>${esc(x?.name||p.name||"Your team")}</h2>
     ${x?`<p class="muted">${esc(playersOf(x).join(" · "))}</p>`:""}<p>Team code <b class="code">${esc(p.code)}</b></p><p class="muted" style="font-size:.88rem">Show this QR code at the Tournament Desk to check in. Screenshot it to keep it handy.</p>
     ${x?.checkedIn?`<span class="chip st-confirmed">✅ Checked in</span>`:""}</div></section>`;
+}
+// organiser: the team pass as a picture (QR + team + code), shared to WhatsApp with the confirmation message
+async function passPng(t, x, code){
+  const q=qrcode(0,"M"); q.addData(passUrl(t,code)); q.make(); const n=q.getModuleCount();
+  const W=1080, H=1400, c=document.createElement("canvas"); c.width=W; c.height=H; const g=c.getContext("2d"), F="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif";
+  g.fillStyle="#F3E9D9"; g.fillRect(0,0,W,H); g.fillStyle="#7A2331"; g.fillRect(0,0,W,250);
+  g.textAlign="center"; g.fillStyle="#FFFFFF"; g.font=`800 64px ${F}`; g.fillText("DROPSHOT FOLKS",W/2,110);
+  g.fillStyle="#EBD9BA"; g.font=`500 38px ${F}`; g.fillText(`${t.name||"Tournament"} · ${fmtDate(t.date)}`.slice(0,60),W/2,180);
+  const box=640, x0=(W-box)/2, y0=310, cell=Math.floor((box-60)/n), qs=cell*n, qx=(W-qs)/2, qy=y0+(box-qs)/2;
+  g.fillStyle="#FFFFFF"; g.beginPath(); g.roundRect?g.roundRect(x0,y0,box,box,36):g.rect(x0,y0,box,box); g.fill();
+  g.fillStyle="#000000"; for(let r=0;r<n;r++) for(let k=0;k<n;k++) if(q.isDark(r,k)) g.fillRect(qx+k*cell,qy+r*cell,cell,cell);
+  g.fillStyle="#24100F"; g.font=`800 60px ${F}`; g.fillText(String(x.name).slice(0,28),W/2,1050);
+  g.fillStyle="#715250"; g.font=`500 34px ${F}`; g.fillText(playersOf(x).join(" · ").slice(0,60),W/2,1105);
+  g.fillStyle="#EFE3CE"; g.beginPath(); g.roundRect?g.roundRect(W/2-260,1150,520,110,24):g.rect(W/2-260,1150,520,110); g.fill();
+  g.fillStyle="#7A2331"; g.font=`800 64px ui-monospace,Menlo,monospace`; g.fillText(code.split("").join(" "),W/2,1228);
+  g.fillStyle="#715250"; g.font=`500 32px ${F}`; g.fillText("Team code · show this QR at the Tournament Desk",W/2,1320);
+  return await new Promise(r=>c.toBlob(r,"image/png"));
+}
+async function sendQr(t, x){
+  const code=S.codes[x.id]?.code; if(!code){ toast("No team code yet"); return }
+  const msg=confirmMsg(t,x), blob=await passPng(t,x,code), file=new File([blob],`${x.name.replace(/[^\w]+/g,"-")}-team-pass.png`,{type:"image/png"});
+  try{ await navigator.clipboard.writeText(msg) }catch{}
+  if(navigator.canShare?.({files:[file]})){
+    try{ await navigator.share({files:[file], text:msg, title:`${x.name} · team pass`}); toast("Sent ✓ If WhatsApp dropped the words, paste them: the message is copied."); return }
+    catch(e){ if(e?.name==="AbortError") return } }
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=file.name; document.body.append(a); a.click(); a.remove();
+  toast("Pass picture saved and message copied. Attach the picture in WhatsApp and paste the message.");
 }
 // organiser: what a scanned team code shows
 function scanCard(){

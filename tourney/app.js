@@ -163,11 +163,11 @@ function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; cle
 
 /* ---------- state ---------- */
 const S = {
-  tab: /^#(screen|court=\d+)$/.test(location.hash) ? "screen" : location.hash==="#ref" ? "ref" : ls.get("dsf:ttab","reg"),
+  tab: /^#(screen|court=\d+)$/.test(location.hash) ? "screen" : location.hash==="#ref" ? "ref" : location.hash==="#checkin" ? "checkin" : ls.get("dsf:ttab","reg"),
   refOnly: location.hash==="#ref",
   tourneys:[], teams:[], matches:[], contacts:{}, secret:null, unlock:null,
   uid:null, isAdmin:false, loaded:false, tid: new URLSearchParams(location.search).get("t") || ls.get("dsf:tid",null),
-  cat: null, toss: {}, newT:false, codes:{}, codesLoaded:false, mail:null, mailing:false, scan:null, otab: ls.get("dsf:otab","details"), editTeam:null, addTeam:false, myTeam: ls.get("dsf:myteam",null), refCourt: ls.get("dsf:refcourt",1), edit:null, scrIdx:0
+  cat: null, toss: {}, newT:false, codes:{}, codesLoaded:false, desk:null, deskCode:null, mail:null, mailing:false, scan:null, otab: ls.get("dsf:otab","details"), editTeam:null, addTeam:false, myTeam: ls.get("dsf:myteam",null), refCourt: ls.get("dsf:refcourt",1), edit:null, scrIdx:0
 };
 let db=null, auth=null;
 const T = () => S.tourneys.find(t=>t.id===S.tid) || nextTourney() || null;
@@ -180,6 +180,7 @@ const teamsOf = (t,cat) => S.teams.filter(x=>x.tid===t?.id && (!cat || x.cat===c
 const teamById = id => S.teams.find(x=>x.id===id);
 const tName = id => id ? (teamById(id)?.name || "Team") : null;
 const matchesOf = (t,cat) => S.matches.filter(m=>m.tid===t?.id && (!cat || m.cat===cat)).sort((a,b)=>(a.order??0)-(b.order??0));
+const canDesk = t => !!t && (S.isAdmin || (S.desk?.tid===t.id));
 const canRef = t => !!t && (S.isAdmin || (S.unlock?.tid===t.id));
 
 /* ---------- scoring rules ---------- */
@@ -842,7 +843,7 @@ function viewScreen(){
 }
 
 /* ---------- render ---------- */
-const TABS = () => [["reg","Register"],["teams","Teams"],["fix","Fixtures"],["live","Live"],...(S.isAdmin||S.unlock||S.refOnly?[["ref","Referee"]]:[])];
+const TABS = () => [["reg","Register"],["teams","Teams"],["fix","Fixtures"],["live","Live"],...(S.isAdmin||S.unlock||S.refOnly?[["ref","Referee"]]:[]),...(S.isAdmin||S.desk||location.hash==="#checkin"?[["checkin","Check-in"]]:[])];
 const playerIn = () => !!auth?.currentUser && !auth.currentUser.isAnonymous;
 function render(){
   if(document.activeElement?.dataset?.prize){ render.later=true; return }   // don't wipe a prize while it's being typed
@@ -859,7 +860,7 @@ function render(){
   const tf=$("#tfoot"); if(tf) tf.innerHTML=S.isAdmin?"":`<button class="btn small ghost" data-signin="1" type="button">🔑 Organiser login</button>`;
   $("#who").innerHTML=(S.isAdmin?`<span class="org-flag">Organiser</span>`:location.hash==="#login"?`<button class="btn small" data-signin="1" type="button">🔑 Organiser sign in</button>`:"")+(S.uid && !auth?.currentUser?.isAnonymous?` <button class="btn small" id="signOut" type="button">Sign out</button>`:"");
   const tn=$("#tname"); tn.innerHTML=t?`🏆 <b>${esc(t.name||"Tournament")}</b> · ${esc(fmtDate(t.date))}`:""; tn.hidden=!t;
-  const views={reg:viewReg, teams:viewTeams, fix:viewFix, live:viewLive, ref:viewRef, org:viewOrg};
+  const views={reg:viewReg, teams:viewTeams, fix:viewFix, live:viewLive, ref:viewRef, org:viewOrg, checkin:viewCheckin};
   $("#main").innerHTML = !S.loaded ? `<section class="panel"><div class="empty loading">Loading…</div></section>` : scanCard() + (S.edit?editPanel():"") + views[S.tab]();
   Object.entries(keep).forEach(([id,k])=>{ const el=document.getElementById(id); if(!el) return; if("c" in k) el.checked=k.c; else el.value=k.v });
   document.querySelectorAll("#main details[id]").forEach(d=>{ if(openD.has(d.id)) d.open=true });
@@ -868,7 +869,7 @@ function tickClock(){ const c=$("#clock"); if(c) c.textContent=new Date().toLoca
 setInterval(()=>{ if(S.tab==="screen"){ tickClock() } },15000);
 setInterval(()=>{ if(S.tab==="screen"){ S.scrIdx++; render() } },12000);
 addEventListener("hashchange",()=>{ S.refOnly = location.hash==="#ref";
-  S.tab = /^#(screen|court=\d+)$/.test(location.hash) ? "screen" : S.refOnly ? "ref" : (S.tab==="screen"?"live":S.tab); render() });
+  S.tab = /^#(screen|court=\d+)$/.test(location.hash) ? "screen" : S.refOnly ? "ref" : location.hash==="#checkin" ? "checkin" : (S.tab==="screen"?"live":S.tab); render() });
 document.addEventListener("keydown",e=>{ if(S.tab!=="screen") return;
   if(e.key==="f"||e.key==="F") document.documentElement.requestFullscreen?.().catch(()=>{});
   if(e.key==="Escape" && !document.fullscreenElement) location.hash="" });
@@ -917,6 +918,11 @@ document.addEventListener("click", async e=>{
   if(t0.id==="signOut"){ await auth.signOut(); location.reload(); return }
   if(ds.goorg){ const k=ds.goorg; S.tab={details:"reg",teams:"teams",fixtures:"fix",refs:"ref"}[k]||"reg"; if(k==="details") S.editDetails=true; if(k==="fixtures") S.fxTools=true; ls.set("dsf:ttab",S.tab); render(); scrollTo({top:0}); return }
   if(ds.scanqr){ scanQr(); return }
+  if(ds.deskopen){ const code=($("#desk-code")?.value||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,""); if(code.length<4){ toast("Enter the check-in code"); return } tryDeskUnlock(code); return }
+  if(ds.deskexit){ try{ await db.collection("tdesk").doc(auth.currentUser.uid).delete() }catch{} S.desk=null; render(); return }
+  if(ds.cicode){ const c=($("#ci-code")?.value||"").trim(); if(c.length<4){ toast("Type the team code"); return } await openScan(c); return }
+  if(ds.checkin){ const x=teamById(ds.checkin), tt=S.tourneys.find(y=>y.id===x?.tid); if(!canDesk(tt)) return; const on=ds.v==="1";
+    await db.collection("tteams").doc(ds.checkin).update({checkedIn:on, checkedInAt:on?nowIso():null}).then(()=>toast(on?`${x.name} checked in ✅`:"Check-in undone"),e=>toast(e?.code==="permission-denied"?"Not allowed: ask the organiser to publish the latest Firebase rules":"Couldn't save")); return }
   if(ds.scanstop){ scanQr.stop?.(); return }
   if(ds.scanx){ S.scan=null; history.replaceState(null,"",location.pathname+(T()?`?t=${T().id}`:"")); render(); return }
   if(ds.fxcode){ const p=await useCode($("#fx-code")?.value); if(p){ render(); toast(`Welcome, ${teamById(p.team)?.name||p.name}! 🏸`) } return }
@@ -999,12 +1005,12 @@ document.addEventListener("click", async e=>{
       catIds, cats:team?[{id:"TC",name:"Team Cup"}]:CAT_PRESETS.filter(([id])=>catIds.includes(id)).map(([id,name])=>({id,name}))};
     const id = ds.tsave==="new" ? `t${(data.date||nowIso().slice(0,10)).replace(/-/g,"")}-${Date.now().toString(36).slice(-4)}` : ds.tsave;
     await db.collection("tourneys").doc(id).set(data,{merge:true}).then(()=>{ S.tid=id; S.newT=false; S.editDetails=false; ls.set("dsf:tid",id); S.posterDraft=undefined; render(); scrollTo({top:0,behavior:"smooth"}); toast("Tournament saved ✓") },()=>toast("Couldn't save")); return }
-  if(ds.tcode){ const code=newCode(); await db.collection("tsecrets").doc(t.id).set({code}).then(()=>{ S.secret=code; render(); toast(`Referee code ${code}`) },()=>toast("Couldn't save the code")); return }
+  if(ds.deskcode){ const desk=newCode(); await db.collection("tsecrets").doc(t.id).set({desk},{merge:true}).then(()=>{ S.deskCode=desk; render(); toast(`Check-in code ${desk}`) },()=>toast("Couldn't save the code")); return }
+  if(ds.tcode){ const code=newCode(); await db.collection("tsecrets").doc(t.id).set({code},{merge:true}).then(()=>{ S.secret=code; render(); toast(`Referee code ${code}`) },()=>toast("Couldn't save the code")); return }
   if(ds.tconfirm){ await db.collection("tteams").doc(ds.tconfirm).update({status:ds.v}).catch(()=>toast("Couldn't update"));
     if(ds.v==="confirmed"){ const x=teamById(ds.tconfirm); if(x) x.status="confirmed"; const made=await ensureCodes(t,[ds.tconfirm]); if(S.mail?.url && x && S.contacts[x.id]?.email && !S.codes[x.id]?.mailedAt) await mailTeam(t,x); else if(made) toast("Confirmed ✓ Team code made. Send it with 📧 Email or 💬 WhatsApp.") } return }
   if(ds.confirmall){ const b=db.batch(), ids=teamsOf(t,ds.confirmall).filter(x=>x.status!=="confirmed").map(x=>x.id); ids.forEach(id=>b.update(db.collection("tteams").doc(id),{status:"confirmed"})); await b.commit();
     ids.forEach(id=>{ const x=teamById(id); if(x) x.status="confirmed" }); await ensureCodes(t); toast("All confirmed, team codes made"); if(S.mail?.url) await mailAll(t); return }
-  if(ds.checkin){ const on=ds.v==="1"; await db.collection("tteams").doc(ds.checkin).update({checkedIn:on, checkedInAt:on?nowIso():null}).then(()=>toast(on?"Checked in ✅":"Check-in undone"),()=>toast("Couldn't save")); return }
   if(ds.tdel){ const x=teamById(ds.tdel); if(!x||!confirm(`Delete ${x.name}?`)) return; await db.collection("tcontacts").doc(x.id).delete().catch(()=>{}); await db.collection("tteams").doc(x.id).delete(); return }
   if(ds.oadd){ const v=id=>($(`#oa-${id}`)?.value||"").trim(), ks=Array.from({length:nPl(t)},(_,i)=>"p"+(i+1)); if(!v("name")||ks.some(k=>!v(k))){ toast(`Add a team name and all ${ks.length} players`); return }
     await db.collection("tteams").add({tid:t.id, cat:ds.oadd, name:v("name"), ...Object.fromEntries(ks.map(k=>[k,v(k)])), createdBy:S.uid, createdAt:nowIso(), status:"confirmed"}); ["name",...ks].forEach(k=>$(`#oa-${k}`).value=""); toast("Team added"); return }
@@ -1050,6 +1056,8 @@ function shrinkImage(file, max=1400){
     c.width=Math.round(img.width*k); c.height=Math.round(img.height*k); c.getContext("2d").drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(img.src);
     let q=.85, out=c.toDataURL("image/jpeg",q); while(out.length>700000 && q>.4){ q-=.1; out=c.toDataURL("image/jpeg",q) } res(out) }; img.onerror=rej; img.src=URL.createObjectURL(file) });
 }
+document.addEventListener("input", e=>{ if(e.target.id!=="ci-find") return; S.ciFilter=e.target.value; const q=S.ciFilter.toLowerCase();
+  document.querySelectorAll(".ci-row").forEach(r=>{ r.hidden=!!q && !r.textContent.toLowerCase().includes(q) }) });
 document.addEventListener("change", async e=>{
   if(e.target.dataset?.numgroups && S.isAdmin){ const t=T(); if(t) await db.collection("tourneys").doc(t.id).set({numGroups:Number(e.target.value)||0},{merge:true}).then(()=>toast("Saved. Press Re-make groups to use it."),()=>toast("Couldn't save")); return }
   const pc=e.target.dataset?.plcourt, pt=e.target.dataset?.pltime, pn=e.target.dataset?.plnum;
@@ -1259,27 +1267,60 @@ async function mailAll(t){
 }
 // organiser: what a scanned team code shows
 function scanCard(){
-  if(!S.isAdmin || !S.scan) return ""; const p=S.scan, x=teamById(p.team), t=S.tourneys.find(y=>y.id===p.tid);
-  if(!x) return `<section class="panel scancard"><h2>📷 Scanned code ${esc(p.code||"")}</h2><p>No team found for this code.</p><button class="btn small ghost" data-scanx="1">Close</button></section>`;
+  if(!S.scan || !(S.isAdmin || S.desk)) return ""; const p=S.scan, x=teamById(p.team), t=S.tourneys.find(y=>y.id===p.tid);
+  if(!x) return `<section class="panel scancard"><h2>📷 Scanned code ${esc(p.code||"")}</h2><p>${p.err==="rules"?"Couldn't look the code up: the latest Firebase rules aren't published yet.":p.err==="net"?"Couldn't look the code up. Check the internet connection.":"No team found for this code. Check it was typed right, or find the team in the list below."}</p><button class="btn small ghost" data-scanx="1">Close</button></section>`;
   return `<section class="panel scancard ${x.checkedIn?"in":""}"><span class="lbl">📷 Scanned · ${esc(t?.name||"")}</span><h2>${esc(x.name)}</h2><p>${esc(playersOf(x).join(" · "))}</p>
     <div class="row">${x.status==="confirmed"?'<span class="chip st-confirmed">Confirmed</span>':'<span class="chip st-awaiting">Not confirmed</span>'}${x.checkedIn?`<span class="chip st-confirmed">✅ Checked in ${x.checkedInAt?esc(new Date(x.checkedInAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})):""}</span>`:""}</div>
-    <div class="row">${x.checkedIn?`<button class="btn small ghost" data-checkin="${esc(x.id)}" data-v="0">Undo check-in</button>`:`<button class="btn primary" data-checkin="${esc(x.id)}" data-v="1">✅ Check in</button>`}${"BarcodeDetector" in window?`<button class="btn small" data-scanqr="1">📷 Scan next</button>`:""}<button class="btn small ghost" data-scanx="1">Close</button></div></section>`;
+    <div class="row">${x.checkedIn?`<button class="btn small ghost" data-checkin="${esc(x.id)}" data-v="0">Undo check-in</button>`:`<button class="btn primary" data-checkin="${esc(x.id)}" data-v="1">✅ Check in</button>`}${`<button class="btn small" data-scanqr="1">📷 Scan next</button>`}<button class="btn small ghost" data-scanx="1">Close</button></div></section>`;
 }
 // organiser: scan a team's QR code inside the app (Chrome / Android); on iPhone the camera app opens the link instead
 async function scanQr(){
-  if(!("BarcodeDetector" in window)){ toast("Use your phone's camera app to scan the QR code. It opens the check-in screen here."); return }
-  const box=document.createElement("div"); box.className="readmodal"; box.innerHTML=`<div class="readcard scanbox"><h2>📷 Scan a team QR code</h2><video playsinline muted></video><button type="button" class="btn" data-scanstop="1">Cancel</button></div>`; document.body.append(box);
-  let stream; try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}) }catch{ box.remove(); toast("Camera not available"); return }
-  const v=box.querySelector("video"); v.srcObject=stream; await v.play(); const det=new BarcodeDetector({formats:["qr_code"]});
+  const box=document.createElement("div"); box.className="readmodal"; box.innerHTML=`<div class="readcard scanbox"><h2>📷 Scan a team QR code</h2><p class="muted">Point the camera at the QR code on the team's phone or email.</p><video playsinline muted></video><button type="button" class="btn" data-scanstop="1">Cancel</button></div>`; document.body.append(box);
+  let stream; try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}) }catch{ box.remove(); toast("Camera not available. Allow camera access, or type the team code instead."); return }
+  const v=box.querySelector("video"); v.srcObject=stream; await v.play().catch(()=>{});
+  let det=null; if("BarcodeDetector" in window){ try{ det=new BarcodeDetector({formats:["qr_code"]}) }catch{} }
+  if(!det && !window.jsQR) await new Promise(r=>{ const sc=document.createElement("script"); sc.src="jsqr.js?v=1"; sc.onload=r; sc.onerror=r; document.head.append(sc) });
+  const cv=document.createElement("canvas"), cx=cv.getContext("2d",{willReadFrequently:true});
   const stop=()=>{ stream.getTracks().forEach(k=>k.stop()); box.remove() }; scanQr.stop=stop;
+  const read=async()=>{ if(det){ const r=await det.detect(v); return r[0]?.rawValue }
+    if(!window.jsQR || !v.videoWidth) return null; const k=Math.min(1,640/v.videoWidth); cv.width=Math.round(v.videoWidth*k); cv.height=Math.round(v.videoHeight*k);
+    cx.drawImage(v,0,0,cv.width,cv.height); return window.jsQR(cx.getImageData(0,0,cv.width,cv.height).data,cv.width,cv.height,{inversionAttempts:"dontInvert"})?.data };
   (async function loop(){ if(!document.body.contains(box)) return;
-    try{ const r=await det.detect(v); const raw=r[0]?.rawValue; if(raw){ const code=(/[?&]code=([A-Z0-9]+)/i.exec(raw)||[])[1]||raw; stop(); await openScan(code); return } }catch{}
-    requestAnimationFrame(loop) })();
+    try{ const raw=await read(); if(raw){ const code=(/[?&]code=([A-Z0-9]+)/i.exec(raw)||[])[1]||raw; stop(); navigator.vibrate?.(80); await openScan(code); return } }catch{}
+    setTimeout(loop,120) })();
 }
 async function openScan(code){
   code=String(code||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
-  const d=await db.collection("tpasses").doc(code).get().catch(()=>null);
-  S.scan = d?.exists ? {...d.data(), code} : {code}; if(d?.exists){ S.tid=d.data().tid } render(); scrollTo({top:0,behavior:"smooth"});
+  let err=null; const d=await db.collection("tpasses").doc(code).get().catch(e=>{ err=e; return null });
+  S.scan = d?.exists ? {...d.data(), code} : {code, err:err?.code==="permission-denied"?"rules":err?"net":null}; if(d?.exists){ S.tid=d.data().tid } render(); scrollTo({top:0,behavior:"smooth"});
+}
+
+/* ---------- check-in desk: organiser or volunteers with the check-in code scan team QR codes ---------- */
+function viewCheckin(){
+  const t=T(); if(!t) return noTourney();
+  const head=S.isAdmin?`${orgBar(t)}${pickBar(t)}`:"";
+  if(!canDesk(t)) return `${head}<section class="panel signgate"><div class="sg-ico">🎟</div><h2>Check-in desk</h2><p class="muted">Enter the check-in code from the organiser to check teams in on this phone.</p>
+    <div class="row sg-mail"><input id="desk-code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" placeholder="Check-in code" style="text-transform:uppercase;letter-spacing:.2em;font-family:var(--mono)"><button class="btn primary" data-deskopen="1">Open</button></div></section>`;
+  const ts=teamsOf(t).filter(x=>x.status==="confirmed"), done=ts.filter(x=>x.checkedIn).length, q=(S.ciFilter||"").toLowerCase();
+  const list=ts.filter(x=>!q || [x.name,...playersOf(x)].join(" ").toLowerCase().includes(q)).sort((a,b)=>(a.checkedIn?1:0)-(b.checkedIn?1:0) || a.name.localeCompare(b.name));
+  const access=S.isAdmin?(()=>{ const link=`https://dropshotfolks.co.uk/tourney/?t=${t.id}#checkin`, msg=`🎟 Check-in volunteer for ${t.name||"the tournament"}\nOpen: ${link}\n${S.deskCode?`Code: ${S.deskCode}\n`:""}Tap 📷 Scan team QR and point it at each team's QR code.`;
+    return `<section class="panel"><h2>🙋 Volunteer access</h2><div class="row code-row"><span class="lbl">Check-in code</span>${S.deskCode?`<b class="code">${esc(S.deskCode)}</b><button class="btn small" data-copy="${esc(S.deskCode)}">Copy</button><button class="btn small ghost" data-deskcode="1">New code</button>`:`<button class="btn small primary" data-deskcode="1">Create code</button>`}</div>
+      ${S.deskCode?`<div class="row"><button class="btn small" data-copy="${esc(link)}">Copy link</button><a class="btn small primary" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">Send link & code on WhatsApp</a></div>`:""}
+      <p class="muted" style="font-size:.85rem">Volunteers open the link and enter the code. They can only check teams in: no editing, no contact details. A new code locks out phones using the old one.</p></section>` })():"";
+  return `${head}<section class="panel ci-top"><div class="row" style="justify-content:space-between"><div><span class="lbl">Check-in · ${esc(t.name||"")}</span><h2>${done} of ${ts.length} teams checked in</h2></div></div>
+      <div class="ci-bar"><i style="width:${ts.length?Math.round(done*100/ts.length):0}%"></i></div>
+      <button class="btn primary ci-scan" data-scanqr="1">📷 Scan team QR</button>
+      <div class="row"><input id="ci-code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" placeholder="Or type the team code" style="flex:1;text-transform:uppercase;letter-spacing:.15em;font-family:var(--mono)"><button class="btn" data-cicode="1">Find</button></div></section>
+    <section class="panel"><div class="row" style="justify-content:space-between"><h2>Teams</h2><input id="ci-find" placeholder="Search team or player" value="${esc(S.ciFilter||"")}" style="max-width:240px"></div>
+      <div class="ci-list">${list.map(x=>`<div class="ci-row ${x.checkedIn?"in":""}"><div><b>${esc(x.name)}</b><span class="muted">${esc(playersOf(x).join(" · "))}</span></div>
+        ${x.checkedIn?`<span class="chip st-confirmed">✅ ${x.checkedInAt?esc(new Date(x.checkedInAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})):"In"}</span><button class="btn small ghost" data-checkin="${esc(x.id)}" data-v="0">Undo</button>`:`<button class="btn small primary" data-checkin="${esc(x.id)}" data-v="1">Check in</button>`}</div>`).join("")||`<div class="empty">No confirmed teams yet.</div>`}</div>
+      ${S.desk&&!S.isAdmin?`<div class="row"><button class="btn small ghost" data-deskexit="1">Close check-in on this phone</button></div>`:""}</section>${access}`;
+}
+async function tryDeskUnlock(code){
+  const t=T(); if(!t) return;
+  try{ await ensureSignedIn(); await db.collection("tdesk").doc(auth.currentUser.uid).set({tid:t.id, code, at:nowIso()});
+    S.desk={tid:t.id, code}; render(); toast("Check-in is open on this phone ✓") }
+  catch(e){ toast(e?.code==="permission-denied"?"That code doesn't match":"Couldn't check the code") }
 }
 
 /* ---------- import teams from a Google Form spreadsheet (.xlsx or .csv) ---------- */
@@ -1387,12 +1428,15 @@ setTimeout(checkVersion, 4000); setInterval(checkVersion, 120000);
     db.collection("tcodes").onSnapshot(sn=>{ S.codes=Object.fromEntries(sn.docs.map(d=>[d.id,d.data()])); const first=!S.codesLoaded; S.codesLoaded=true; render();
       if(first) setTimeout(async()=>{ for(const t of S.tourneys) await ensureCodes(t) },2500) },()=>{});
     const go=()=>{ if(S.loaded) autoSetup(); else setTimeout(go,300) }; setTimeout(go,1200);
-    const watchSecret=()=>{ const t=T(); if(t) db.collection("tsecrets").doc(t.id).get().then(d=>{ S.secret=d.exists?d.data().code:null; render() }).catch(()=>{}) };
+    const watchSecret=()=>{ const t=T(); if(t) db.collection("tsecrets").doc(t.id).get().then(d=>{ S.secret=d.exists?d.data().code||null:null; S.deskCode=d.exists?d.data().desk||null:null; render() }).catch(()=>{}) };
     setTimeout(watchSecret,800);
   }
   const qcode=new URLSearchParams(location.search).get("code");
   if(qcode){ const wait=()=>new Promise(r=>{ const k=()=>S.loaded?r():setTimeout(k,200); k() }); await wait();
-    if(S.isAdmin) openScan(qcode);
+    const u=await new Promise(r=>{ const off=auth.onAuthStateChanged(x=>{ off(); r(x) }) });
+    if(!S.isAdmin && u){ const d=await db.collection("tdesk").doc(u.uid).get().catch(()=>null); if(d?.exists) S.desk=d.data() }
+    if(S.isAdmin || S.desk){ S.tab="checkin"; openScan(qcode) }
     else { const p=await useCode(qcode,true); S.tab="fix"; render(); if(p) toast(`Welcome, ${teamById(p.team)?.name||p.name}! 🏸`); else toast("That team code isn't right") ; history.replaceState(null,"",location.pathname+(p?`?t=${p.tid}`:"")) } }
-  auth.onAuthStateChanged(u=>{ if(u) db.collection("tunlocks").doc(u.uid).onSnapshot(d=>{ S.unlock=d.exists?d.data():null; render() },()=>{}) });
+  auth.onAuthStateChanged(u=>{ if(u){ db.collection("tunlocks").doc(u.uid).onSnapshot(d=>{ S.unlock=d.exists?d.data():null; render() },()=>{});
+    db.collection("tdesk").doc(u.uid).onSnapshot(d=>{ S.desk=d.exists?d.data():null; render() },()=>{}) } });
 })();

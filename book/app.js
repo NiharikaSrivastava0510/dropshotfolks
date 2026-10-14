@@ -75,10 +75,10 @@ function levelFrom(ans){
   // C+ players play graded tournaments
   const g = qv(ans,"tgrade"), r = qv(ans,"tres");
   if(g<=1) i = Math.min(i,4);
-  // tournament results are hard evidence: they set a floor (C grade = C-, B grade or higher = C+, a step lower unless you reached the semis),
-  // but lift you at most one level above what your shots say
-  const floor = g===4 ? (r>=3?5:4) : g===3 ? (r>=3?4:3) : g===2 && r>=3 ? 3 : 0;
-  return LV_ORDER[Math.max(i, Math.min(floor, i+1))];
+  // tournament results are hard evidence and count more than how you rate your own shots: they set a floor
+  // (B grade or higher = C-, C grade = D+, E/D grade = D-; one level higher if you reached the semis)
+  const floor = g===4 ? (r>=3?5:4) : g===3 ? (r>=3?4:3) : g===2 ? (r>=3?3:2) : 0;
+  return LV_ORDER[Math.max(i, floor)];
 }
 const STATUS = {
   awaiting:{label:"Awaiting payment", cls:"st-awaiting"},

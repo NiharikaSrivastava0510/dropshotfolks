@@ -139,7 +139,7 @@ function formatTxt(t){
       `Every tie between two teams is 4 matches: men's doubles, women's doubles and two mixed doubles. Win 3 of the 4 to win the tie; at 2–2 the team with more total points wins.`,
       `Group stage: round robin in groups of about ${Number(t.groupSize)||3}.`,
       `Group points: win by 6 or more points = 4, win by 4–5 = 3, win by 1–3 = 1, loss = 0. The margin is the total points across the tie's 4 matches. Level teams are split by points difference, then head-to-head.`,
-      `Knockouts: top ${adv} of each group${wild?` plus the best ${wild} third-placed team${wild>1?"s":""}`:""} go through, ranked by points. The top seeds get a bye if the bracket isn't full.${t.bronze!==false?" The final and the bronze medal match are played at the same time.":""}`,
+      crossPairs(t,t.groups?.TC)?`Knockouts: the top ${adv} of each group go through. ${adv===2?"Quarter-finals cross the groups: Winner A v Runner-up C, Winner B v Runner-up D, Winner C v Runner-up A, Winner D v Runner-up B.":"Semi-finals: Winner A v Winner C, Winner B v Winner D."}`:`Knockouts: top ${adv} of each group${wild?` plus the best ${wild} third-placed team${wild>1?"s":""}`:""} go through, ranked by points. The top seeds get a bye if the bracket isn't full.${t.bronze!==false?" The final and the bronze medal match are played at the same time.":""}`,
       `Each match: ${r.bestOf===1?"1 game ":""}${ruleTxt(r)}${r.deuce&&r.cap<(CAP_FOR[r.to]||0)?`, at ${r.cap-1}–${r.cap-1} the next point wins`:""}.`].join("\n")+(t.format?`\n\n${t.format}`:"") }
   const adv=Number(t.advance)||2, ko=rules(t,{stage:"ko"}), fin=rules(t,{stage:"ko",roundName:"Final"}), same=(x,y)=>ruleTxt(x)===ruleTxt(y);
   const lines=[
@@ -347,7 +347,7 @@ const shuffle = a => { const x=[...a]; for(let i=x.length-1;i>0;i--){ const j=cr
 async function generateGroups(t, cat){
   const ids=teamsOf(t,cat).filter(x=>x.status==="confirmed").map(x=>x.id);
   if(ids.length<2){ toast("Confirm at least 2 teams first"); return }
-  const size=Math.max(3, Number(t.groupSize)||(isTeam(t)?3:4)), ng=Math.max(1, Math.round(ids.length/size)), letters="ABCDEFGHIJKLMNOP";
+  const size=Math.max(3, Number(t.groupSize)||(isTeam(t)?3:4)), ng=Number(t.numGroups)>0 ? Math.max(1,Math.min(Number(t.numGroups), Math.floor(ids.length/2))) : Math.max(1, Math.round(ids.length/size)), letters="ABCDEFGHIJKLMNOP";
   const groups={}; for(let g=0;g<ng;g++) groups[letters[g]]=[];
   shuffle(ids).forEach((id,i)=>{ const row=Math.floor(i/ng), col=i%ng, g=row%2?ng-1-col:col; groups[letters[g]].push(id) });
   await clearMatches(t, cat);
@@ -365,6 +365,15 @@ async function clearMatches(t, cat, stage){
   const ms=matchesOf(t,cat).filter(m=>!stage || m.stage===stage);
   for(let i=0;i<ms.length;i+=400){ const b=db.batch(); ms.slice(i,i+400).forEach(m=>b.delete(db.collection("tmatches").doc(m.id))); await b.commit() }
 }
+// Team Cup with an even number of groups: groups pair up across the draw (A with C, B with D…):
+// Winner A v Runner-up C, Winner B v Runner-up D, Winner C v Runner-up A, Winner D v Runner-up B
+function crossPairs(t, groups){
+  const G=Object.keys(groups||{}).sort(), adv=Math.max(1,Number(t.advance)||2), h=G.length/2, n=adv===2?G.length:h;
+  if(!isTeam(t) || nWild(t,groups) || G.length<2 || G.length%2 || adv>2 || (n&(n-1)) || G.some(g=>groups[g].length<adv)) return null;
+  const out=[]; for(let i=0;i<h;i++) out.push([{g:G[i],p:1},{g:G[i+h],p:adv}]);
+  if(adv===2) for(let i=0;i<h;i++) out.push([{g:G[i+h],p:1},{g:G[i],p:2}]);
+  return out;
+}
 const seedOrder = P => { let o=[1]; while(o.length<P){ const n=o.length*2; o=o.flatMap(s=>[s,n+1-s]) } return o };
 const roundName = (n) => n===1?"Final":n===2?"Semi-finals":n===4?"Quarter-finals":`Round of ${n*2}`;
 async function generateKnockouts(t, cat){
@@ -377,15 +386,16 @@ async function generateKnockouts(t, cat){
   } else
   { for(let k=0;k<adv;k++) seeds.push(...G.filter(g=>groups[g].length>k).map(g=>({g, p:k+1})));
     for(let k=1;k<=nWild(t,groups);k++) seeds.push({wild:k}) }
-  if(seeds.length<2){ toast("Not enough teams go through for a knockout"); return }
+  const cross=crossPairs(t,groups);
+  if(!cross && seeds.length<2){ toast("Not enough teams go through for a knockout"); return }
   const keepPlan=Object.fromEntries(matchesOf(t,cat).filter(m=>m.stage==="ko" && m.pcourt).map(m=>[m.id,{pcourt:m.pcourt, ptime:m.ptime||null, pnum:m.pnum??null, pslot:m.pslot??null}]));
   await clearMatches(t, cat, "ko");
-  let P=1; while(P<seeds.length) P*=2;
+  let P=1; while(P<(cross?cross.length*2:seeds.length)) P*=2;
   const order=seedOrder(P), batch=db.batch(), base=Math.max(0,...matchesOf(t).map(m=>m.order||0))+1;
   // first-round pairs; then swap opponents so nobody meets a team from their own group
-  const grpOf=x=>x?.g ?? x?.seed, pairs=[];
-  for(let i=0;i<P;i+=2) pairs.push([seeds[order[i]-1]||null, seeds[order[i+1]-1]||null]);
-  for(let i=0;i<pairs.length;i++){ const [a,b]=pairs[i]; if(!a||!b||grpOf(a)!==grpOf(b)) continue;
+  const grpOf=x=>x?.g ?? x?.seed, pairs=cross||[];
+  if(!cross) for(let i=0;i<P;i+=2) pairs.push([seeds[order[i]-1]||null, seeds[order[i+1]-1]||null]);
+  if(!cross) for(let i=0;i<pairs.length;i++){ const [a,b]=pairs[i]; if(!a||!b||grpOf(a)!==grpOf(b)) continue;
     for(let j=0;j<pairs.length;j++){ const [c,d]=pairs[j]; if(j===i||!d) continue;
       if(grpOf(a)!==grpOf(d) && grpOf(c)!==grpOf(b)){ pairs[i][1]=d; pairs[j][1]=b; break } } }
   let prev=[], o=base, roundSize=P/2, rnd=1;
@@ -753,8 +763,8 @@ function viewOrg(only){
       ${mailPanel(t)}
       <p class="muted" style="font-size:.82rem">📥 Import takes Google Form responses (.xlsx or .csv): teams already here get their contact details filled in, new teams are added.</p></section>`;
   if(ot==="fixtures") body=`<section class="panel"><h2>1 · Groups</h2>${catBar(t)}
-      <p class="muted">${isTeam(t)?`Groups of about ${Number(t.groupSize)||3}; every tie is men's, women's and two mixed doubles. Top ${Number(t.advance)||2} per group go through.`:`Groups of about ${Number(t.groupSize)||4}; everyone plays everyone in their group. ${Number(t.advance)===1?"The winner":`The top ${Number(t.advance)||2}`} of each group go${Number(t.advance)===1?"es":""} through.`} Only confirmed teams are included. Change group sizes in 📝 Details.</p>
-      <div class="row"><button class="btn primary" data-gen="${esc(S.cat||"")}">${t.groups?.[S.cat]?"Re-make groups":"Make groups"}</button>${matchesOf(t,S.cat).length?`<button class="btn small ghost danger" data-clearfix="${esc(S.cat||"")}">Clear all fixtures</button>`:""}</div>
+      <p class="muted">${isTeam(t)?`${Number(t.numGroups)>0?`${Number(t.numGroups)} groups`:`Groups of about ${Number(t.groupSize)||3}`}; every tie is men's, women's and two mixed doubles. Top ${Number(t.advance)||2} per group go through.`:`Groups of about ${Number(t.groupSize)||4}; everyone plays everyone in their group. ${Number(t.advance)===1?"The winner":`The top ${Number(t.advance)||2}`} of each group go${Number(t.advance)===1?"es":""} through.`} Only confirmed teams are included. Change group sizes in 📝 Details.</p>
+      <div class="row"><label class="f" style="margin:0">Number of groups <select data-numgroups="1">${[0,2,3,4,5,6,8].map(n=>`<option value="${n}" ${(Number(t.numGroups)||0)===n?"selected":""}>${n?n:"Auto"}</option>`).join("")}</select></label><button class="btn primary" data-gen="${esc(S.cat||"")}">${t.groups?.[S.cat]?"Re-make groups":"Make groups"}</button>${matchesOf(t,S.cat).length?`<button class="btn small ghost danger" data-clearfix="${esc(S.cat||"")}">Clear all fixtures</button>`:""}</div>
       <p class="muted" style="font-size:.85rem">${(()=>{ const g=matchesOf(t,S.cat).filter(m=>m.stage==="group"); return g.length?`${g.filter(m=>m.status==="done").length} of ${g.length} group matches played.`:"No groups yet." })()}</p></section>
     <section class="panel"><h2>2 · Knockouts</h2><p class="muted">Make it any time: the places read "Winner Group A" and so on, and fill in by themselves as groups finish.</p>
       <button class="btn primary" data-genko="${esc(S.cat||"")}">${matchesOf(t,S.cat).some(m=>m.stage==="ko")?"Re-make knockout bracket":"Make knockout bracket"}</button></section>
@@ -1041,6 +1051,7 @@ function shrinkImage(file, max=1400){
     let q=.85, out=c.toDataURL("image/jpeg",q); while(out.length>700000 && q>.4){ q-=.1; out=c.toDataURL("image/jpeg",q) } res(out) }; img.onerror=rej; img.src=URL.createObjectURL(file) });
 }
 document.addEventListener("change", async e=>{
+  if(e.target.dataset?.numgroups && S.isAdmin){ const t=T(); if(t) await db.collection("tourneys").doc(t.id).set({numGroups:Number(e.target.value)||0},{merge:true}).then(()=>toast("Saved. Press Re-make groups to use it."),()=>toast("Couldn't save")); return }
   const pc=e.target.dataset?.plcourt, pt=e.target.dataset?.pltime, pn=e.target.dataset?.plnum;
   if((pc||pt||pn) && S.isAdmin){ const id=pc||pt||pn, data=pc?{pcourt:Number(e.target.value)||null}:pt?{ptime:e.target.value||null}:{pnum:Number(e.target.value)||null, pslot:Math.max(0,(Number(e.target.value)||1)-1)};
     await db.collection("tmatches").doc(id).update(data).then(()=>toast(pc?`Court ${e.target.value||"cleared"}`:pt?`Time ${e.target.value||"cleared"}`:`${ordinal(Number(e.target.value)||1)} on its court`),()=>toast("Couldn't save")); return }

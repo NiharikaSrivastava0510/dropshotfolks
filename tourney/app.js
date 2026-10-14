@@ -279,10 +279,17 @@ const shortRound = n => ({"Final":"Final","Semi-finals":"SF","Quarter-finals":"Q
 // what to show before a knockout slot is decided: "Winner Group A", "Winner QF 2"
 function sideLabel(m, side){
   const src=m.src?.[side]; if(src){ const t=S.tourneys.find(x=>x.id===m.tid), adv=Number(t?.advance)||2;
-    return src.seed ? `Seed ${src.seed}` : src.wild ? `Best ${adv===1?"runner-up":PLACE(adv+1)} ${src.wild}` : `${PLACE(src.p)} Group ${src.g}` }
+    return src.seed ? seedLabel(t, m.cat, src.seed) : src.wild ? `Best ${adv===1?"runner-up":PLACE(adv+1)} ${src.wild}` : `${PLACE(src.p)} Group ${src.g}` }
   const from=m.from?.[side==="a"?0:1], f=from && S.matches.find(x=>x.id===from);
   if(f?.bye) return sideLabel(f, f.src?.a||f.a ? "a" : "b");
   return f ? `${m.fromLose?"Loser":"Winner"} ${shortRound(f.roundName)} ${f.slot||""}`.trim() : "To be decided";
+}
+// Team Cup seeds in words: group winners first (best record first), then runners-up
+function seedLabel(t, cat, k){
+  const G=Object.keys(t?.groups?.[cat]||{}).length||1, adv=Math.max(1,Number(t?.advance)||2), place=Math.ceil(k/G), i=k-(place-1)*G;
+  if(place>adv) return `Best ${PLACE(adv+1)} place`;
+  const who=place===1?"group winner":place===2?"runner-up":`${PLACE(place)} place`;
+  return i===1?`Best ${who}`:`${ordinal(i)} best ${who}`;
 }
 const sideName = (m, side) => { const id=sideTeam(m,side); return id ? esc(tName(id)) : `<i class="muted">${esc(sideLabel(m,side))}</i>` };
 
@@ -415,6 +422,10 @@ async function generateKnockouts(t, cat){
     prev=next;
   }
   await batch.commit(); toast(`${catName(t,cat)}: knockout bracket of ${P} made. Teams fill in as groups finish.`);
+  // give the new knockout matches courts and times straight away, after the group matches
+  if(matchesOf(t).some(m=>m.stage==="group" && m.pcourt)){
+    for(let i=0;i<30 && !matchesOf(t,cat).some(m=>m.stage==="ko" && !m.bye && m.order>=base);i++) await new Promise(r=>setTimeout(r,100));
+    await scheduleAll(S.tourneys.find(x=>x.id===t.id)||t, true) }
 }
 
 /* ---------- courts & order of play (organiser) ---------- */
@@ -423,6 +434,16 @@ const clockOn = t => t?.timed!==false;
 const ordinal = n => n+(["th","st","nd","rd"][(n%100-20)%10]||["th","st","nd","rd"][n%100]||"th");
 const planOrder = m => [Number(m.pnum)||999, Number(m.pslot)||999, String(m.ptime||"99")];
 const byPlan = (x,y) => { const a=planOrder(x), b=planOrder(y); return a[0]-b[0] || a[1]-b[1] || a[2].localeCompare(b[2]) || (x.order||0)-(y.order||0) };
+// when & where a knockout match (or a whole Team Cup tie) is on, for everyone to see
+function whenTxt(t, m){
+  const ms=m.tie?S.matches.filter(x=>x.tie===m.tie&&x.pcourt):m.pcourt?[m]:[]; if(!ms.length) return "Time & court to come";
+  const courts=[...new Set(ms.map(x=>x.pcourt))].sort((a,b)=>a-b), times=ms.map(x=>x.ptime).filter(Boolean).sort();
+  const run=courts.length>2 && courts[courts.length-1]-courts[0]===courts.length-1;
+  const c=`Court${courts.length>1?"s":""} ${run?`${courts[0]}–${courts[courts.length-1]}`:courts.length>1?`${courts.slice(0,-1).join(", ")} & ${courts[courts.length-1]}`:courts[0]}`;
+  return clockOn(t)&&times.length ? `🕒 ${times[0]} · ${c}` : `📍 ${c}${!m.tie&&m.pnum?` · ${ordinal(Number(m.pnum))}`:""}`;
+}
+const AVC=["#7A2331","#D97757","#2f8f4e","#3b6fb6","#8a4fb3","#c28a12","#1f8a8a","#b33a6b"];
+const avatar = name => { const s=String(name||"?"), h=[...s].reduce((a,c)=>a*31+c.charCodeAt(0)>>>0,7); return `<i class="av" style="background:${AVC[h%AVC.length]}">${esc(s.trim()[0]?.toUpperCase()||"?")}</i>` };
 function planTxt(m, short){
   const t=S.tourneys.find(x=>x.id===m.tid); if(!m.pcourt) return "";
   if(clockOn(t) && m.ptime) return short ? `${m.ptime} C${m.pcourt}` : `🕒 ${m.ptime} · Court ${m.pcourt}`;
@@ -430,7 +451,7 @@ function planTxt(m, short){
   return short ? `C${m.pcourt}${m.pnum?` #${m.pnum}`:""}` : `Court ${m.pcourt}${m.pnum?` · ${ordinal(Number(m.pnum))} on court`:""}`;
 }
 const hm = (start, mins) => { const [h,m]=String(start||"10:00").split(":").map(Number), x=h*60+m+mins; return `${String(Math.floor(x/60)%24).padStart(2,"0")}:${String(x%60).padStart(2,"0")}` };
-async function scheduleAll(t){
+async function scheduleAll(t, koOnly){
   const C=Math.max(1,Number(t.courts)||4), mins=Math.max(5,Number(t.matchMins)||15), ms=matchesOf(t).filter(m=>!m.bye);
   if(!ms.length){ toast("Make the fixtures first"); return }
   const slotOf={}, teamsIn=m=>m.stage==="group"?resOf(m,m.a,m.b):m.tie?resOf(m,m.tie+"a",m.tie+"b"):[];
@@ -443,8 +464,12 @@ async function scheduleAll(t){
         const v = f.bye ? ready(f) : fs.every(x=>slotOf[x.id]!=null) ? Math.max(...fs.map(x=>slotOf[x.id]))+1 : null; if(v==null) return null; e=Math.max(e,v) } return e }
     return 0;
   };
-  const pending=[...ms].sort((a,b)=>(a.stage==="ko")-(b.stage==="ko") || (a.round||0)-(b.round||0) || (a.order||0)-(b.order||0));
+  let pending=[...ms].sort((a,b)=>(a.stage==="ko")-(b.stage==="ko") || (a.round||0)-(b.round||0) || (a.order||0)-(b.order||0));
   let slot=0, last=new Set(); const perCourt={};
+  // knockouts only: group matches keep their courts and times, knockouts follow on after them
+  if(koOnly){ const gm=ms.filter(m=>m.stage==="group"); if(gm.some(m=>m.pslot==null)) koOnly=false;
+    else { gm.forEach(m=>{ slotOf[m.id]=m.pslot; perCourt[m.pcourt]=Math.max(perCourt[m.pcourt]||0, Number(m.pnum)||0) });
+      slot=gm.length?Math.max(...gm.map(m=>m.pslot))+1:0; pending=pending.filter(m=>m.stage!=="group") } }
   while(pending.length && slot<500){
     const used=new Set(), now=new Set();
     for(let c=1;c<=C;c++){
@@ -455,7 +480,7 @@ async function scheduleAll(t){
     last=now; slot++;
   }
   for(let i=0;i<ms.length;i+=400){ const b=db.batch();
-    ms.slice(i,i+400).forEach(m=>{ if(slotOf[m.id]!=null) b.update(db.collection("tmatches").doc(m.id),{pcourt:m._c, pslot:slotOf[m.id], pnum:m._n, ptime:clockOn(t)?hm(t.startTime,slotOf[m.id]*mins):null}) }); await b.commit() }
+    ms.slice(i,i+400).forEach(m=>{ if(slotOf[m.id]!=null && (!koOnly || m.stage!=="group")) b.update(db.collection("tmatches").doc(m.id),{pcourt:m._c, pslot:slotOf[m.id], pnum:m._n, ptime:clockOn(t)?hm(t.startTime,slotOf[m.id]*mins):null}) }); await b.commit() }
   toast(clockOn(t) ? `Courts and times set: ${slot} rounds of ${mins} min on ${C} court${C>1?"s":""}, finishing about ${hm(t.startTime,slot*mins)}` : `Courts and order of play set on ${C} court${C>1?"s":""}: about ${slot} matches per court`);
 }
 
@@ -509,11 +534,12 @@ function bracket(t, cat){
   const card=m=>{ const a=sideTeam(m,"a"), b=sideTeam(m,"b"), tr=m.tie?tieResult(m.tie):null, w=tr?tr.winner:m.status==="done"?m.winner:null;
     const live=tr?S.matches.some(x=>x.tie===m.tie&&x.status==="live"):m.status==="live";
     const sc=side=>tr ? (tr.done?String(side==="a"?tr.a:tr.b):"") : m.status==="done"?(m.games||[]).map(g=>side==="a"?g[0]:g[1]).join(" "):"";
-    const line=(id,side)=>`<div class="bl ${w===side?"win":w?"lose":""}"><span class="${id?"":"tbd"}">${id?esc(tName(id)):esc(sideLabel(m,side))}</span><b>${esc(sc(side))}</b></div>`;
+    const line=(id,side)=>`<div class="bl ${w===side?"win":w?"lose":""}">${id?avatar(tName(id)):`<i class="av tbd">?</i>`}<span class="${id?"":"tbd"}">${id?esc(tName(id)):esc(sideLabel(m,side))}</span><b>${w===side&&m.roundName==="Final"?"🏆 ":""}${esc(sc(side))}</b></div>`;
     const bronze=m.roundName==="Bronze medal match", top=bronze?`🥉 ${isTeam(t)?"Bronze medal":"3rd place"}`:"";
-    const when=live?`<span class="livebadge">Live</span>`:w?`<span class="bdone">Final score</span>`:m.pcourt?`<span>${esc(planTxt(m))}</span>`:"";
-    const pick = S.isAdmin && !live && !w && !m.bye ? (m.tie ? `<div class="bpick"><button class="btn small ghost" data-openko="${esc(m.tie)}">✏️ Courts & times</button></div>` : `<div class="bpick">${planPick(t,m)}</div>`) : "";
-    return `<div class="bm ${live?"live":""} ${bronze?"bronze":""}">${top||when?`<div class="bt">${top?`<b>${top}</b>`:""}${when}</div>`:""}${line(a,"a")}${line(b,"b")}${pick}</div>` };
+    const when=live?`<span class="livebadge">Live</span>`:w?`<span class="bdone">✓ Final score</span>`:`<span class="bwhen">${esc(whenTxt(t,m))}</span>`;
+    const label=top||`${shortRound(m.roundName)}${/^(SF|QF|R\d+)$/.test(shortRound(m.roundName))?` ${m.slot}`:""}`;
+    const pick = S.isAdmin && !live && !w && !m.bye ? (m.tie ? `<div class="bpick"><button class="btn small ghost" data-openko="${esc(m.tie)}">✏️ Change court / time</button></div>` : `<div class="bpick">${planPick(t,m)}</div>`) : "";
+    return `<div class="bm ${live?"live":""} ${bronze?"bronze":""} ${m.roundName==="Final"?"final":""}"><div class="bt"><b>${label}</b>${when}</div>${line(a,"a")}${line(b,"b")}${pick}</div>` };
   return `<div class="bracket">${rounds.map(rn=>{ const ms=ko.filter(m=>m.round===rn).sort((a,b)=>a.slot-b.slot), real=ms.filter(m=>!m.bye);
     const show=real.length?real:ms, name=(ms.find(m=>m.roundName!=="Bronze medal match")||ms[0])?.roundName||"";
     return `<div class="bround"><h4>${esc(name==="Final"?"🏆 Final":name)}</h4><div class="bcol">${show.map(card).join("")}</div></div>` }).join("")}</div>`;
@@ -608,7 +634,7 @@ function viewFix(){
     <p class="muted" style="font-size:.85rem">No code yet? Teams get one when the organiser confirms their place.</p></section>`;
   const myPass = !S.isAdmin && ls.get(`dsf:fx:${t.id}`,null);
   const tools = S.isAdmin ? `<div class="otools ${S.fxTools?"open":""}"><button class="btn ${S.fxTools?"":"primary"} otbtn" data-fxtools="1">${S.fxTools?"Hide organiser tools ▴":"⚙️ Organiser tools: make groups, knockouts, courts & times ▾"}</button>${S.fxTools?viewOrg("fixtures"):""}</div>` : "";
-  const head=`${orgBar(t)}${pickBar(t)}${myPass?.code?passCard(t,myPass):""}${tools}<section class="panel"><h2>Fixtures & results</h2>${glanceLine(t)}${S.isAdmin&&matchesOf(t).length?`<p class="orghint">✏️ Organiser: change a match's court or time right on it, or tap it to fix the score.</p>`:""}
+  const head=`${orgBar(t)}${pickBar(t)}${myPass?.code?passCard(t,myPass)+myMatches(t,myPass.team):""}${tools}<section class="panel"><h2>Fixtures & results</h2>${glanceLine(t)}${S.isAdmin&&matchesOf(t).length?`<p class="orghint">✏️ Organiser: change a match's court or time right on it, or tap it to fix the score.</p>`:""}
     ${catBar(t)}</section>`;
   const groups=t.groups?.[S.cat], ms=matchesOf(t,S.cat), edit=canRef(t);
   if(!groups && !ms.length) return head+`<section class="panel"><div class="empty">Fixtures appear here once the organiser makes the groups.</div></section>`;
@@ -1173,6 +1199,19 @@ function confirmMsg(t, x){
 }
 const ukPhone = p => { let d=String(p||"").replace(/[^\d+]/g,""); if(d.startsWith("+")) return d.slice(1); if(d.startsWith("00")) return d.slice(2); if(d.startsWith("0")) return "44"+d.slice(1); return d };
 // the pass a team shows at check-in
+// the team's own matches, in order, with time, court and opponent
+function myMatches(t, team){
+  if(!team) return ""; const seen=new Set(), rows=[];
+  matchesOf(t).filter(m=>!m.bye).sort(byPlan).forEach(m=>{ const key=m.tie||m.id; if(seen.has(key)) return;
+    const a=sideTeam(m,"a"), b=sideTeam(m,"b"); if(a!==team && b!==team) return; seen.add(key);
+    const tr=m.tie?tieResult(m.tie):null, done=tr?tr.done:m.status==="done", live=m.tie?S.matches.some(x=>x.tie===m.tie&&x.status==="live"):m.status==="live";
+    const opp=a===team?b:a, mine=a===team?"a":"b", res=done?(tr?`${tr[mine]}–${tr[mine==="a"?"b":"a"]}`:""):"";
+    rows.push(`<div class="mm ${live?"live":""} ${done?"done":""}"><span class="mm-when">${live?`<span class="livebadge">Live</span>`:done?`<b>${(tr?tr.winner:m.winner)===mine?"Won":"Lost"} ${esc(res)}</b>`:esc(whenTxt(t,m))}</span>
+      <span class="mm-vs">${opp?avatar(tName(opp)):""}<span><span>vs <b>${opp?esc(tName(opp)):esc(sideLabel(m,mine==="a"?"b":"a"))}</b></span><small class="muted">${esc(m.stage==="ko"?m.roundName:`Group ${m.group}`)}</small></span></span></div>`) });
+  if(!rows.length) return "";
+  return `<section class="panel"><h2>🗓 Your matches</h2><div class="mmlist">${rows.join("")}</div>
+    <p class="muted" style="font-size:.85rem">Times are a guide: matches run on points, so be at your court a few minutes early.</p></section>`;
+}
 function passCard(t, p){
   const x=teamById(p.team), url=passUrl(t,p.code);
   return `<section class="panel pass"><div class="pass-qr">${qrSvg(url)}</div><div class="pass-info"><span class="lbl">🎫 Team pass · ${esc(t.name||"")}</span><h2>${esc(x?.name||p.name||"Your team")}</h2>

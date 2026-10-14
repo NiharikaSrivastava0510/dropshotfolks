@@ -697,6 +697,39 @@ body.refonly{padding-bottom:24px!important}
 .ci-top h2{margin:2px 0 8px}.ci-bar{height:10px;border-radius:99px;background:var(--sunk);overflow:hidden;margin-bottom:14px}.ci-bar i{display:block;height:100%;background:#2f8f4e;border-radius:99px}
 .ci-scan{width:100%;font-size:1.15rem;padding:16px;margin-bottom:10px}.ci-top .row{display:flex;gap:8px}.ci-top input,#ci-find{padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);font-size:1rem}
 .ci-list{display:grid;gap:8px;margin-top:10px}.ci-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:var(--bg)}.ci-row>div{flex:1;display:grid}.ci-row.in{opacity:.75;border-color:#2f8f4e}
+
+/* ---- bracket: times on every card, avatars, connectors ---- */
+.bm{overflow:visible;transition:transform .18s,box-shadow .18s}
+.bm:hover{transform:translateY(-2px);box-shadow:0 16px 30px -18px rgba(90,22,32,.55)}
+.bm>:first-child{border-radius:12px 12px 0 0}.bm>:last-child{border-radius:0 0 12px 12px}
+.bm .bt{align-items:center;padding:7px 12px;background:linear-gradient(90deg,var(--tint),color-mix(in srgb,var(--tint) 40%,var(--surface)))}
+.bm .bt b{font-size:.74rem;letter-spacing:.08em;text-transform:uppercase}
+.bwhen{display:inline-flex;align-items:center;gap:4px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:99px;padding:3px 9px;font-size:.76rem;font-weight:700;letter-spacing:0;white-space:nowrap}
+.bm .bl{gap:10px;padding:10px 12px}
+.bm .bl span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.av{flex:none;width:26px;height:26px;border-radius:50%;display:inline-grid;place-items:center;color:#fff;font-style:normal;font-weight:800;font-size:.78rem;box-shadow:inset 0 -2px 0 rgba(0,0,0,.15)}
+.av.tbd{background:var(--sunk);color:var(--muted)}
+.bm.final{border:2px solid #E2B33C;box-shadow:0 0 0 4px rgba(226,179,60,.18),var(--shadow)}
+.bm.final .bt{background:linear-gradient(90deg,#F6E3A8,#FBF1D2)}.bm.final .bt b{color:#7a5300}
+.bround:not(:last-child) .bm:not(.bronze)::after{content:"";position:absolute;top:50%;right:-23px;width:22px;border-top:2px solid var(--line)}
+.bround:not(:first-child) .bm:not(.bronze)::before{content:"";position:absolute;top:50%;left:-23px;width:22px;border-top:2px solid var(--line)}
+.bround h4{background:var(--grad);color:#fff;box-shadow:0 8px 18px -12px rgba(90,22,32,.8)}
+.bpick .btn{font-size:.8rem}
+/* ---- a little more life everywhere ---- */
+body{background:radial-gradient(1200px 500px at 85% -10%,color-mix(in srgb,var(--ball) 16%,transparent),transparent 60%),radial-gradient(900px 400px at -10% 30%,color-mix(in srgb,var(--accent) 10%,transparent),transparent 60%),var(--bg);background-attachment:fixed}
+.panel{transition:box-shadow .2s}
+.panel:hover{box-shadow:0 1px 2px rgba(90,22,32,.06),0 22px 44px -26px rgba(90,22,32,.45)}
+nav.tabs button[aria-selected="true"]::before{animation:tabPop .35s ease}
+@keyframes tabPop{0%{transform:scale(.6)}70%{transform:scale(1.2)}100%{transform:scale(1)}}
+.chip{transition:transform .15s}.chip:hover{transform:scale(1.04)}
+.tie,.rb,.otc,.ci-row,.team{transition:transform .16s,box-shadow .16s}
+.tie:hover,.otc:hover,.ci-row:hover,.team:hover{transform:translateY(-2px);box-shadow:0 14px 26px -18px rgba(90,22,32,.5)}
+::selection{background:color-mix(in srgb,var(--ball) 35%,transparent)}
+@media (prefers-reduced-motion:reduce){.bm,.tie,.otc,.ci-row,.team,.chip,.panel{transition:none}.bm:hover,.tie:hover,.otc:hover,.ci-row:hover,.team:hover{transform:none}nav.tabs button[aria-selected="true"]::before{animation:none}}
+.mmlist{display:grid;gap:8px}.mm{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:var(--bg)}
+.mm-when{flex:none;min-width:150px;font-weight:700;font-size:.88rem}.mm-vs{display:flex;align-items:center;gap:10px;min-width:0}.mm-vs>span{display:grid}
+.mm.live{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 15%,transparent)}.mm.done{opacity:.75}
+@media (max-width:520px){.mm{flex-direction:column;align-items:flex-start;gap:6px}.mm-when{min-width:0}}
 </style>
 
 <div class="wrap">
@@ -718,5 +751,5 @@ body.refonly{padding-bottom:24px!important}
 <div class="toast" id="toast" hidden></div>
 
 <script src="qrcode.js?v=1"></script>
-<script src="app.js?v=202610142300"></script>
+<script src="app.js?v=202610150000"></script>
 </body></html>

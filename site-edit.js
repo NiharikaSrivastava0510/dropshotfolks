@@ -1,6 +1,6 @@
 /* Dropshot Folks: organiser edits for the main website.
    Visitors: the text, links and photos the organiser changed are loaded from Firestore (site/*) and shown in place.
-   Organiser: sign in from the footer (or open /#edit), click any text to change it, change links and photos, then Save.
+   Organiser: open dropshotfolks.co.uk/#edit (or 🏠 Edit homepage on the tournament page), click any text to change it, change links and photos, then Save.
    Loaded right after the footer, before the page's other scripts, so every element is tagged with its original content. */
 (function () {
   const PROJECT = "dropshotfolks", API = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents`;
@@ -183,4 +183,5 @@
   document.querySelectorAll("[data-site-edit]").forEach(a => a.addEventListener("click", e => { e.preventDefault(); start() }));
   if (location.hash === "#edit") window.siteReady.then(() => start());
   else if (ls.get("dsf:siteedit") === "1") window.siteReady.then(() => start(true));
+  addEventListener("hashchange", () => { if (location.hash === "#edit") window.siteReady.then(() => start()) });
 })();

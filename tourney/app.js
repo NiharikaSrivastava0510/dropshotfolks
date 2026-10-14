@@ -163,14 +163,14 @@ function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; cle
 
 /* ---------- state ---------- */
 const S = {
-  tab: /^#(screen|court=\d+)$/.test(location.hash) ? "screen" : location.hash==="#ref" ? "ref" : location.hash==="#checkin" ? "checkin" : ls.get("dsf:ttab","reg"),
+  tab: /^#(screen|court=\d+)$/.test(location.hash) ? "screen" : location.hash==="#ref" ? "ref" : location.hash==="#checkin" ? "checkin" : new URLSearchParams(location.search).get("tab") || ls.get("dsf:ttab","reg"),
   refOnly: location.hash==="#ref",
   tourneys:[], teams:[], matches:[], contacts:{}, secret:null, unlock:null,
   uid:null, isAdmin:false, loaded:false, tid: new URLSearchParams(location.search).get("t") || ls.get("dsf:tid",null),
   cat: null, toss: {}, newT:false, codes:{}, codesLoaded:false, desk:null, deskCode:null, mail:null, mailing:false, scan:null, otab: ls.get("dsf:otab","details"), editTeam:null, addTeam:false, myTeam: ls.get("dsf:myteam",null), refCourt: ls.get("dsf:refcourt",1), edit:null, scrIdx:0
 };
 let db=null, auth=null;
-const T = () => S.tourneys.find(t=>t.id===S.tid) || nextTourney() || null;
+const T = () => S.tourneys.find(t=>t.id===S.tid) || (S.tid && S.tourneys.find(t=>t.id.startsWith(S.tid))) || nextTourney() || null;
 // the soonest tournament that hasn't finished yet, else the most recent
 function nextTourney(){ const today=new Date(Date.now()-864e5).toISOString().slice(0,10), by=[...S.tourneys].sort((a,b)=>String(a.date||"9").localeCompare(String(b.date||"9")));
   return by.find(t=>String(t.date||"9")>=today) || by[by.length-1] }
@@ -778,7 +778,7 @@ function orgBar(t){
   if(!S.isAdmin) return "";
   const preset = PRESETS.map(p=>{ const x=p.find(); if(p.create ? x : (!x || x.preset===p.key)) return ""; return `<button class="btn small primary" data-preset="${p.key}">${p.btn}</button>` }).join("");
   return `<div class="orgbar"><span class="ob-l">🔑 Organiser</span>${t?`<span class="ob-t">Editing <b>${esc(t.name||"Tournament")}</b></span>`:""}<span class="ob-g"></span>${preset}
-    <button class="btn small" data-tnew="1">➕ New tournament</button>${t?`<button class="btn small ghost danger" data-tdelt="${esc(t.id)}">🗑 Delete</button>`:""}</div>`;
+    <a class="btn small" href="../#edit">🏠 Edit homepage</a><button class="btn small" data-tnew="1">➕ New tournament</button>${t?`<button class="btn small ghost danger" data-tdelt="${esc(t.id)}">🗑 Delete</button>`:""}</div>`;
 }
 // organiser: one team, with an inline editor
 function teamCard(t, x){
@@ -857,7 +857,7 @@ function render(){
   if(!S.isAdmin){ S.editDetails=false; S.newT=false }
   const t=T(), anyLive=t && matchesOf(t).some(m=>m.status==="live");
   $("#tabs").innerHTML=tabs.map(([k,l])=>`<button role="tab" data-tab="${k}" aria-selected="${k===S.tab}">${k==="live"&&anyLive?'<span class="dot pulse"></span>':""}${esc(l)}</button>`).join("");
-  const tf=$("#tfoot"); if(tf) tf.innerHTML=S.isAdmin?"":`<button class="btn small ghost" data-signin="1" type="button">🔑 Organiser login</button>`;
+  const tf=$("#tfoot"); if(tf) tf.innerHTML=S.isAdmin||S.tab!=="reg"?"":`<button class="btn small ghost" data-signin="1" type="button">🔑 Organiser login</button>`;
   $("#who").innerHTML=(S.isAdmin?`<span class="org-flag">Organiser</span>`:location.hash==="#login"?`<button class="btn small" data-signin="1" type="button">🔑 Organiser sign in</button>`:"")+(S.uid && !auth?.currentUser?.isAnonymous?` <button class="btn small" id="signOut" type="button">Sign out</button>`:"");
   const tn=$("#tname"); tn.innerHTML=t?`🏆 <b>${esc(t.name||"Tournament")}</b> · ${esc(fmtDate(t.date))}`:""; tn.hidden=!t;
   const views={reg:viewReg, teams:viewTeams, fix:viewFix, live:viewLive, ref:viewRef, org:viewOrg, checkin:viewCheckin};

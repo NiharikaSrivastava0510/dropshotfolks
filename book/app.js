@@ -14,51 +14,61 @@ const lvByCourt = n => LEVELS.find(l=>l.court===n);
 const CLR = {1:"var(--d1)",2:"var(--d2)",3:"var(--c1)",4:"var(--c2)"};
 const COACHING = "https://dropshotfolks.co.uk/#coaching";
 const PER_COURT = 7, GAME_MINS = 12;
-// Level quiz about what you can do on court, not what you know about badminton.
-// "On court" answers score 0 (beginner) to 4 (upper high intermediate);
-// match-situation questions have one right answer (the one players at the level actually play) and show why.
+// Level quiz: what you can actually do on court, doubles rotation and tournament grade.
+// Shot answers run from 0 to 4: 1 is a high beginner (E), 2 lower intermediate (D-), 3 intermediate to mid (D+/C-), 4 upper (C+).
+// Your level follows your weaker shots, not just your best ones.
+// Match questions have one right answer: what a player at that level does without thinking.
 const QUIZ = [
-  {e:"🌈", img:"court-wide-1", call:"Warm-up · forehand clear", k:"clear", q:"From your back line, hit a forehand clear. Where does it land?", ic:["🙈","🤏","👍","🚀","🎯"], a:["Mid-court or shorter","The back half, if I really go for it","Near the back line most times","Between the back lines every time, from anywhere at the back","Every time, and I can play it flat to attack or while moving backwards under pressure"]},
-  {e:"🔙", img:"backhand-defence", call:"Warm-up · backhand", k:"backhand", q:"The shuttle goes high to your backhand back corner. What can you do with it?", ic:["🏃","😬","↗️","🎯","🪄"], a:["I run round it or miss it","Get it over the net, usually short","Lift it to mid-court","Clear it into the back third most times","Clear, drop or smash it with control"]},
-  {e:"🏸", img:"service-ready", call:"Rally 1 · after the serve", tag:"rotation", q:"Doubles. You low-serve, and the receiver pushes it flat to the mid-court sideline behind you. Your partner is at the back. Who takes it, and how?", a:["You, the server: turn and chase it","Your partner: drive or push it flat back, staying on the attack","Your partner: lift it high to the back","Leave it, it will go out"], correct:1, why:"After a low serve the server holds the net. The back player takes the mid-court and keeps it flat, because lifting hands them the attack."},
-  {e:"💥", img:"jump-reach", call:"Warm-up · smash", k:"smash", q:"Your smash from the back of the court:", ic:["🤷","📉","👌","⚡","🔨"], a:["I don't really smash from the back","It goes flat or into the net a lot","It's steep, but players at my level return it easily","Steep and fast: it wins points at my level","I smash, follow it in and finish the reply, again and again"]},
-  {e:"🛡️", img:"backhand-defence", call:"Warm-up · defence", k:"defence", q:"Someone smashes hard straight at you. What usually happens?", ic:["🙈","😬","↩️","🎯","🔄"], a:["I miss it","I get a racket on it, but it often goes into the net or out","I lift it back high most times","I block it to the net or lift it deep, my choice","I counter-drive or block it tight and turn defence into attack"]},
-  {e:"🎯", img:"jump-reach", call:"Rally 2 · where to smash", tag:"attack", q:"You've got a high lift at the back. They're defending side by side and they're good at it. Where do you smash?", a:["Cross-court to the far sideline","At a defender's body: the racket-side hip or shoulder","As hard as you can down the line, whatever happens","Don't smash: clear it back"], correct:1, why:"A smash into the body cramps the defender; a cross-court smash travels further and gives them time."},
-  {e:"👟", img:"court-lunge", call:"Warm-up · footwork", k:"footwork", q:"Back corner to the net and back again, six times without a break, at game speed. How does it go?", ic:["🛑","🐢","😮‍💨","🏃","🦸"], a:["I couldn't do it without stopping","I'd do it, slowly and flat-footed","With chassé steps, but I'm puffed by the end","Quickly, with a split step, back to the middle each time","At full game speed, and I could do it all game"]},
-  {e:"🔁", img:"court-wide-2", call:"Rally 3 · after a lift", tag:"rotation", q:"You and your partner are front-and-back, attacking. Your partner at the back gets stuck and lifts. You're at the net. What now?", a:["Stay at the net to cut off their reply","Go to the back to help your partner","Drop back so you're side by side, ready to defend","Move to the middle of the court and wait"], correct:2, why:"Once your side lifts, you're defending: get side by side and cover the smash. Staying at the net leaves the whole back of your court open."},
-  {e:"🥅", img:"net-high-five", call:"Warm-up · at the net", k:"net", q:"The shuttle pops up just above the net on your side. You…", ic:["🙈","↩️","👇","🔨","🎩"], a:["Duck or miss it","Push it back over","Tap it down sometimes","Kill it, most of the time","Kill it or play a tight net shot, my choice, without touching the net"]},
-  {e:"🏸", img:"service-ready", call:"Warm-up · your serve", k:"serve", q:"Your low serve in doubles:", ic:["😬","🎈","👌","🎯","♟️"], a:["Often hits the net or goes up high","Gets over, but sits up and gets attacked","Mostly tight; attacked now and then","Tight every time, and I flick-serve when they creep in","Tight, I vary where it goes and I'm ready for the reply"]},
-  {e:"🫣", img:"court-three", call:"Rally 4 · under pressure", tag:"pressure", q:"You're stretched to the net and the shuttle is low. Your opponent is right on the net with the racket up. What do you play?", a:["A tight net shot back","Lift it high and deep to the back corner","Smash it","Hit it as hard as you can at them"], correct:1, why:"A net shot to a player waiting with the racket up gets killed. Lift it deep and get ready to defend."},
-  {e:"🔁", img:"court-lunge", call:"Warm-up · rallies", k:"rally", q:"In a game against players at your level, how long do your rallies last?", ic:["🐣","🙂","💪","🔥","🦸"], a:["I'm still learning to hit the shuttle back","A few shots, under 6","6–10 shots","10–15 shots, fast","15+, and I build the point to win it"]},
-  {e:"⚡", img:"backhand-defence", call:"Warm-up · pace", k:"pace", q:"Which games can you keep up with for a full game, not just a few rallies?", ic:["🐢","🚶","🏃","🏎️","🚀"], a:["Slow and gentle","Social pace; medium-paced games are a stretch","Medium to fast","Fast rallies, all game","Tournament pace, game after game"]},
-  {e:"🌀", img:"court-wide-2", call:"Rally 5 · late to the back", tag:"pressure", q:"They clear you deep to the back and you're late and off balance. Best shot?", a:["Smash anyway, attack is best","A fast drop","A high, deep clear to buy time","Drive it flat at the net player"], correct:2, why:"An off-balance smash or drop is weak and gets punished. A high clear gives you time to get back in position."},
-  {e:"🎯", img:"court-three", call:"Warm-up · errors", k:"errors", q:"Be honest: in a 21-point game, how many points do you give away with your own mistakes (net, out, missed)?", ic:["😅","🙃","🙂","😎","🧊"], a:["More than 10","About 7–10","About 4–6","2 or 3","Hardly any"]},
-  {e:"👯", img:"group-high-five", call:"Warm-up · doubles", k:"doubles", q:"How do you play doubles?", ic:["🙋","🧭","🔄","🛡️","♟️"], a:["I haven't played doubles","I'm still working out where to stand","Front-and-back to attack, side-by-side to defend","We switch smoothly without talking and cover every gap","We plan our play: who serves, who attacks, where to target"]},
-  {e:"🔢", img:"group-high-five", call:"Rally 6 · who serves", tag:"rules", q:"Doubles. It's 7–5 to your side and your partner just served and won the rally. Who serves next, and from where?", a:["You, from the right","Your partner again, from the left","Your partner again, from the right","The other side serves"], correct:2, why:"The server keeps serving while your side wins, swapping sides. 8 is even, so it's from the right."},
-  {e:"🏆", img:"kneel-celebrate", call:"Cool-down · results", k:"tour", q:"Competitive matches: how do you get on?", ic:["🙈","🎪","🤝","🏅","🥇"], a:["Never played one","Social games only","Social tournaments, I win some games","League or regular tournaments, I win often","Ranked tournaments or county level, medals included"]}
+  {e:"🌈", img:"court-wide-1", call:"Warm-up · clear", k:"clear", q:"You're right at your back line. Hit a forehand clear. Where does it land, honestly?", ic:["🙈","🤏","👍","🚀","🎯"], a:["Mid-court or shorter","In the back half, but only if I wind up and I'm standing still","Near the back line most times, when I have time","Between the back lines nearly every time, even when I'm moving","Deep every time, and I can play it flat and fast to attack"]},
+  {e:"🏸", img:"service-ready", call:"Rally 1 · after the serve", tag:"rotation", q:"Doubles. You low-serve. The receiver pushes it flat past you to the mid-court sideline. Your partner is behind you. Who takes it, and what do they play?", a:["You, the server: turn and chase it","Your partner: lift it high and deep to reset","Your partner: drive or push it flat back, keeping the attack","Leave it: pushes like that usually go out"], correct:2, why:"After a low serve the server holds the net. The back player takes the mid-court and keeps it flat, because lifting hands them the attack."},
+  {e:"🔙", img:"backhand-defence", call:"Warm-up · backhand", k:"backhand", q:"A high shuttle drops into your backhand back corner and you can't get round it. What happens?", ic:["🏃","😬","↗️","🎯","🪄"], a:["I miss it or frame it","It gets over the net, but short and high","Lifts to mid-court, so they attack it","A backhand clear to the back third, or a decent drop, most times","Backhand clear, drop or smash, with control"]},
+  {e:"💥", img:"jump-reach", call:"Warm-up · smash", k:"smash", q:"Smashing from the back of the court against players at your level:", ic:["🤷","📉","👌","⚡","🔨"], a:["I don't really smash from the back","It goes flat, long or into the net a lot","It's steep, but they get it back easily","Steep and fast, and it often wins the point or forces a weak reply","I can smash, follow it in and finish the reply, rally after rally"]},
+  {e:"🎯", img:"jump-reach", call:"Rally 2 · where to smash", tag:"attack", q:"High lift to your back court. They're defending side by side and they're good at it. Where does your smash go?", a:["Cross-court to the far sideline","Down the tramline, as hard as you can","At a defender's body: the racket-side hip or shoulder","Short and soft into the middle"], correct:2, why:"A smash into the body cramps the defender. A cross-court smash travels further and gives them time."},
+  {e:"🪶", img:"court-three", call:"Warm-up · drop", k:"drop", q:"Your drop shot from the back:", ic:["🤷","📉","👌","🎯","🎩"], a:["I don't play drops yet","It floats to mid-court or hits the net","It lands in front of the service line, but they see it coming","Tight to the net, straight or cross-court","Slice drops that look like a smash or clear until the last moment"]},
+  {e:"🔁", img:"court-wide-2", call:"Rally 3 · after a lift", tag:"rotation", q:"You and your partner are front-and-back, attacking. Your partner at the back gets stuck and has to lift. You're at the net. What now?", a:["Stay at the net to cut off their reply","Step back to the service line and wait","Go side by side with your partner, ready to defend","Swap: you go back, your partner comes forward"], correct:2, why:"Once your side lifts, you're defending. Get side by side and cover the smash; staying at the net leaves a hole behind you."},
+  {e:"🥅", img:"net-high-five", call:"Warm-up · net", k:"net", q:"The shuttle drops just over the net on your side, below the tape. Your net shot:", ic:["🙈","↩️","👇","🎯","🎩"], a:["Pops up high or goes in the net","Gets over, but sits up and gets killed","Tight sometimes, loose when I'm rushed","Tight and tumbling most of the time","Tight with spin, and I can hold it and flick it to the back instead"]},
+  {e:"🛡️", img:"backhand-defence", call:"Warm-up · defence", k:"defence", q:"A hard smash comes straight at you. What usually happens?", ic:["🙈","😬","↩️","🎯","🔄"], a:["I miss it","I get a racket on it, but it often goes in the net or out","I lift it back high, but it's not always deep","Block to the net or lift deep, my choice","I block tight or counter-drive and turn defence into attack"]},
+  {e:"🧱", img:"court-wide-1", call:"Rally 4 · after a block", tag:"rotation", q:"You're defending side by side. You block their smash short to the net and it's a good block. What do you do next?", a:["Stay side by side and wait","Go back to the baseline","Follow your block in to the net; your partner covers the back","Both rush forward to the net"], correct:2, why:"A good block turns defence into attack. Follow it in to take the net, and your partner moves back: front-and-back."},
+  {e:"⚡", img:"backhand-defence", call:"Warm-up · drives", k:"drive", q:"A fast, flat drive exchange at mid-court:", ic:["🐢","😬","🤝","💪","🚀"], a:["I can't keep up","I survive one or two, then lift","I hold my own at medium speed","I win most of them and push into the gaps","Fast on forehand and backhand, and I choose when to change the pace"]},
+  {e:"↗️", img:"court-wide-2", call:"Rally 5 · net player's job", tag:"rotation", q:"Front-and-back. Your partner smashes cross-court from the back. You're the net player. Where do you move?", a:["Stay dead centre","Towards the side the smash went, to cut off the straight reply","Towards the other side, away from the smash","Back to mid-court to help"], correct:1, why:"Most replies to a smash come back straight. Shift to the side the smash went and you can kill the block."},
+  {e:"🏸", img:"service-ready", call:"Warm-up · serve", k:"serve", q:"Your low serve in doubles, against good receivers:", ic:["😬","🎈","👌","🎯","♟️"], a:["Often hits the net or goes up high","Gets over, but sits up and gets attacked","Mostly tight, attacked now and then","Tight every time, and I flick it when they creep in","Tight, I vary it, and I'm ready for every reply"]},
+  {e:"🛬", img:"service-ready", call:"Warm-up · return", k:"ret", q:"They serve a good low serve to you. Your return:", ic:["🎈","🙃","➡️","🔨","🎯"], a:["I lift it high nearly every time","I get it back somehow, often high","I push it to mid-court or play a net shot","I attack anything loose and play tight off good ones","I rush loose serves and place good ones into any of the four corners"]},
+  {e:"🫣", img:"court-three", call:"Rally 6 · under pressure", tag:"pressure", q:"You're stretched at the net, the shuttle is low, and your opponent is right on the net with the racket up. What do you play?", a:["A tight net shot back","Lift it high and deep to the back corner","A flat push straight at them","A cross-court net shot"], correct:1, why:"A net shot to a player waiting with the racket up gets killed. Lift it deep and get ready to defend."},
+  {e:"👟", img:"court-lunge", call:"Warm-up · footwork", k:"footwork", q:"Back corner to the net and back again, six times without a break, at game speed:", ic:["🛑","🐢","😮‍💨","🏃","🦸"], a:["I couldn't do it without stopping","I'd do it, slowly and flat-footed","With chassé steps, but I'm puffed by the end","Quickly, with a split step, back to the middle each time","At full game speed, and I could do it all game"]},
+  {e:"🌀", img:"court-wide-2", call:"Rally 7 · late to the back", tag:"pressure", q:"They clear you deep and you're late and off balance at the back. Best shot?", a:["Smash anyway: attack is the best defence","A fast cross-court drop","A high, deep clear to buy time","Drive it flat at the net player"], correct:2, why:"An off-balance smash or drop is weak and gets punished. A high clear gives you time to get back in position."},
+  {e:"🎯", img:"court-three", call:"Warm-up · errors", k:"errors", q:"Be honest: in a 21-point game, how many points do you give away with your own mistakes (net, out, missed, faults)?", ic:["😅","🙃","🙂","😎","🧊"], a:["More than 10","About 7–10","About 4–6","2 or 3","Hardly any"]},
+  {e:"🔢", img:"group-high-five", call:"Rally 8 · who serves", tag:"rules", q:"Doubles. It's 7–5 to your side and your partner just served and won the rally. Who serves next, and from where?", a:["You, from the right","Your partner again, from the left","Your partner again, from the right","You, from the left"], correct:2, why:"The server keeps serving while your side wins, swapping sides. 8 is even, so it's from the right."},
+  {e:"👯", img:"group-high-five", call:"Warm-up · doubles", k:"doubles", q:"How does your doubles rotation work in a fast game?", ic:["🙋","🧭","🔄","🛡️","♟️"], a:["I haven't played much doubles","I'm still working out where to stand","We get front-and-back and side-by-side right most of the time","We rotate without talking and cover every gap","We plan it: who serves, who attacks, which player to target"]},
+  {e:"🏆", img:"kneel-celebrate", call:"Cool-down · tournaments", k:"tgrade", q:"Tournaments: what's the highest grade you've played?", ic:["🙈","🎪","🥉","🥈","🥇"], a:["I've never played one","Fun or social tournaments only","E or D grade","C grade","B grade or higher (A, open, county)"]},
+  {e:"🥇", img:"kneel-celebrate", call:"Cool-down · results", k:"tres", q:"And how did you do at that grade?", ic:["🙈","🙂","💪","🏅","🏆"], a:["I haven't played one, or lost every match","Won a match or two","Got out of the group","Reached a semi-final or final","Won it"]}
 ];
-const packQuiz = ans => ({v:3, a:QUIZ.map((_,i)=>ans?.[i] ?? "").join(",")});
+// answers that describe your shots and game (tournament answers are counted separately)
+const SHOT_KEYS = ["clear","backhand","smash","drop","net","defence","drive","serve","ret","footwork","errors","doubles"];
+const packQuiz = ans => ({v:4, a:QUIZ.map((_,i)=>ans?.[i] ?? "").join(",")});
 const knowCount = ans => QUIZ.filter((x,i)=>x.correct!=null && ans?.[i]===x.correct).length;
 const qv = (ans,k) => ans[QUIZ.findIndex(x=>x.k===k)];
+const LV_ORDER = ["E","D-","D+","C-","C+"];
 function levelFrom(ans){
   if(QUIZ.some((_,i)=>ans?.[i]==null)) return null;
-  const self = QUIZ.map((x,i)=>x.correct==null ? ans[i] : null).filter(v=>v!=null);
+  const shots = SHOT_KEYS.map(k=>qv(ans,k)).sort((a,b)=>a-b);
+  const mean = shots.reduce((a,b)=>a+b,0)/shots.length, weak = shots[Math.floor(shots.length*.3)];
+  // half your average, half your weaker shots: one or two strong answers can't lift you
+  const sc = (mean+weak)/2;
+  let i = sc<1.6 ? 0 : sc<2.25 ? 1 : sc<2.85 ? 2 : sc<3.45 ? 3 : 4;
+  // can't clear past mid-court, get a low serve in or play doubles yet: beginner
+  if(qv(ans,"clear")<=1 && qv(ans,"serve")<=1 || qv(ans,"clear")===0 || qv(ans,"doubles")===0) i = 0;
+  // match questions cap the level: players who play at a level read these situations without thinking
   const nKnow = QUIZ.filter(x=>x.correct!=null).length, know = knowCount(ans);
-  // E: can't clear past mid-court, can't keep a rally going, or can't get a low serve over
-  if(qv(ans,"clear")===0 || qv(ans,"rally")===0 || qv(ans,"serve")===0) return "E";
-  // on-court answers count for 0–20 and match situations for 0–5, so the number of questions doesn't shift levels
-  const t = self.reduce((a,b)=>a+b,0)*20/(self.length*4) + know*5/nKnow;
-  if(t<=4 || self.filter(v=>v===0).length >= Math.ceil(self.length*.5)) return "E";
-  const order=["D-","D+","C-","C+"];
-  let lv = t<=9?"D-":t<=15?"D+":t<=20?"C-":"C+";
-  // each level also needs the shots and game that define it, so one strong answer can't lift you
-  const can = {
-    "C+": qv(ans,"tour")>=3 && qv(ans,"errors")>=3 && qv(ans,"smash")>=3 && qv(ans,"defence")>=3 && qv(ans,"footwork")>=3 && qv(ans,"backhand")>=3 && know>=nKnow-1,
-    "C-": qv(ans,"rally")>=3 && qv(ans,"pace")>=3 && qv(ans,"defence")>=3 && qv(ans,"footwork")>=3 && qv(ans,"net")>=3 && qv(ans,"backhand")>=2 && qv(ans,"errors")>=2 && know>=nKnow-2,
-    "D+": qv(ans,"rally")>=2 && qv(ans,"pace")>=2 && qv(ans,"doubles")>=2 && qv(ans,"clear")>=2 && qv(ans,"defence")>=2 && qv(ans,"serve")>=2 && know>=Math.ceil(nKnow/2)
-  };
-  while(lv!=="D-" && !can[lv]) lv=order[order.indexOf(lv)-1];
-  return lv;
+  if(know<nKnow-1) i = Math.min(i,3);
+  if(know<nKnow-2) i = Math.min(i,2);
+  if(know<nKnow/2) i = Math.min(i,1);
+  // C+ players play graded tournaments
+  const g = qv(ans,"tgrade"), r = qv(ans,"tres");
+  if(g<=1) i = Math.min(i,3);
+  // tournament results are hard evidence: they set a floor (C grade = C-, B grade or higher = C+, a step lower unless you reached the semis),
+  // but lift you at most one level above what your shots say
+  const floor = g===4 ? (r>=3?4:3) : g===3 ? (r>=3?3:2) : g===2 && r>=3 ? 2 : 0;
+  return LV_ORDER[Math.max(i, Math.min(floor, i+1))];
 }
 const STATUS = {
   awaiting:{label:"Awaiting payment", cls:"st-awaiting"},
@@ -448,7 +458,7 @@ function quizFields(prefix, ans){
   if(i>=n){
     const lv=levelFrom(ans), l=lv&&lvByCode(lv), right=k=>ans[k]===QUIZ[k].correct;
     const tagged=t=>QUIZ.every((x,k)=>x.tag!==t || right(k));
-    const badges=[["🧭","Court sense",tagged("rotation")],["💥","Attack brain",tagged("attack")],["🛡️","Cool under pressure",tagged("pressure")],["📏","Rules ref",tagged("rules")]];
+    const badges=[["🔄","Rotation pro",tagged("rotation")],["💥","Attack brain",tagged("attack")],["🛡️","Cool under pressure",tagged("pressure")],["📏","Rules ref",tagged("rules")]];
     const confetti=Array.from({length:18},(_,k)=>`<span style="left:${(k*53)%100}%;animation-delay:${(k%6)*.18}s">${["🏸","🎉","✨","🏆","🪶","🎊"][k%6]}</span>`).join("");
     return `<div class="qcard qres">${board}${fb}<div class="qconf" aria-hidden="true">${confetti}</div>
       <div class="qemoji">🏆</div><p class="lbl">Game, set and match</p>
@@ -571,7 +581,7 @@ function viewBook(){
         <span>${myB?`<span class="chip st-confirmed">✓ Booked</span> Court ${myB.court} ${stChip(myB.status)}`:closed?`<span class="chip st-waitlist">${noCourt?`Not running for ${esc(lv.code)} players`:"Booking closed"}</span>`:left>0?`Court ${ct} · ${esc(courtName(s,ct))}: <b>${left} of ${cap(s,ct)}</b> places left`:`Court ${ct} · ${esc(courtName(s,ct))} is full. You'll go on the waiting list for your level (players can't join another level's court).`}</span></span></label>`}).join("")}</div>
   </section>
   <section class="panel">
-    <div><h2>Bring a guest</h2><p class="muted">Guests answer the same five questions and are placed on the court for their level. They're added to every session you tick above.</p></div>
+    <div><h2>Bring a guest</h2><p class="muted">Guests answer the same questions and are placed on the court for their level. They're added to every session you tick above.</p></div>
     ${S.guests.length?`<div class="picks">${S.guests.map((g,i)=>`<div class="pick booked">${avatar("guest"+i,g.name)}<span class="t"><b>${esc(g.name)}</b><span>${lvChip(g.level)} ${esc(lvByCode(g.level).name)}</span></span><button class="btn small ghost danger" data-rmguest="${i}" style="margin-left:auto">Remove</button></div>`).join("")}</div>`:""}
     <details id="guestBox"><summary><b>Add a guest</b></summary>
       <div class="quiz" style="margin-top:10px">

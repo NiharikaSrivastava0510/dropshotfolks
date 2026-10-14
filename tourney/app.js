@@ -590,12 +590,8 @@ function viewTeams(){
 }
 function viewFix(){
   const t=T(); if(!t) return noTourney();
-  const all=teamsOf(t).sort((a,b)=>a.name.localeCompare(b.name)), me=S.myTeam && all.find(x=>x.id===S.myTeam);
-  const mine = me ? matchesOf(t).filter(m=>!m.bye && (sideTeam(m,"a")===me.id || sideTeam(m,"b")===me.id)).sort(byPlan) : [];
   const tools = S.isAdmin ? `<div class="otools ${S.fxTools?"open":""}"><button class="btn ${S.fxTools?"":"primary"} otbtn" data-fxtools="1">${S.fxTools?"Hide organiser tools ▴":"⚙️ Organiser tools: make groups, knockouts, courts & times ▾"}</button>${S.fxTools?viewOrg("fixtures"):""}</div>` : "";
   const head=`${orgBar(t)}${pickBar(t)}${tools}<section class="panel"><h2>Fixtures & results</h2>${glanceLine(t)}${S.isAdmin&&matchesOf(t).length?`<p class="orghint">✏️ Organiser: change a match's court or time right on it, or tap it to fix the score.</p>`:""}
-    <label class="f" style="max-width:420px">🔎 Find my team<select id="myTeam" data-myteam="1"><option value="">Choose your team…</option>${all.map(x=>`<option value="${esc(x.id)}" ${x.id===S.myTeam?"selected":""}>${esc(x.name)} · ${esc(catName(t,x.cat))}</option>`).join("")}</select></label>
-    ${me?`<div class="mlist">${mine.length?fixList(t,mine,{me:me.id,cat:!isTeam(t)}):`<div class="empty">No matches for ${esc(me.name)} yet.</div>`}</div>`:""}
     ${catBar(t)}</section>`;
   const groups=t.groups?.[S.cat], ms=matchesOf(t,S.cat), edit=canRef(t);
   if(!groups && !ms.length) return head+`<section class="panel"><div class="empty">Fixtures appear here once the organiser makes the groups.</div></section>`;
@@ -630,7 +626,7 @@ function schedPanel(t){
       ${on?`<label class="f" style="width:140px">First match<input id="fx-start" type="time" value="${esc(t.startTime||"10:00")}"></label>
       <label class="f" style="width:150px">Minutes per match<input id="fx-mins" type="number" min="5" max="60" value="${esc(t.matchMins||15)}"></label>`:""}
       <button class="btn primary" data-fxsched="1">${has?`Update courts & ${on?"times":"order"}`:`Assign courts & ${on?"times":"order"}`}</button></div>
-    <p class="muted" style="font-size:.85rem">${on?"Each match gets a court and a start time.":"Matches run on points, not the clock: each match gets a court and its place in that court's queue (1st, 2nd, 3rd…). When a court's match finishes, the next one for that court starts."} Covers every category. Nobody plays twice at once, and knockouts come after their groups${matchesOf(t).some(m=>m.stage==="ko")?"":" (make the knockout bracket first in Organiser → Fixtures so it's included)"}. ${last?`Last match at <b>${esc(last)}</b>. `:""}To move one match, change its court or ${on?"time":"order"} right on the match below.</p></section>`;
+    <p class="muted" style="font-size:.85rem">${on?"Each match gets a court and a start time.":"Matches run on points, not the clock: each match gets a court and its place in that court's queue (1st, 2nd, 3rd…). When a court's match finishes, the next one for that court starts."} Covers every category. Nobody plays twice at once, and knockouts come after their groups${matchesOf(t).some(m=>m.stage==="ko")?"":" (make the knockout bracket first, in step 2 above, so it's included)"}. ${last?`Last match at <b>${esc(last)}</b>. `:""}To move one match, change its court or ${on?"time":"order"} right on the match below.</p></section>`;
 }
 
 /* referee */
@@ -1016,7 +1012,6 @@ document.addEventListener("change", async e=>{
     try{ const list=teamsFromRows(await readSheet(f)); if(!list.length){ toast("No teams found. Is there a 'Team Name' column?"); return } await importTeams(T(), list) }
     catch(err){ console.error(err); toast("Couldn't read that file. Save it as .xlsx or .csv and try again.") } return }
   if(e.target.id==="fx-timed" && S.isAdmin){ const t=T(); if(t) await db.collection("tourneys").doc(t.id).set({timed:e.target.checked},{merge:true}); return }
-  if(e.target.id==="myTeam"){ S.myTeam=e.target.value||null; ls.set("dsf:myteam",S.myTeam); render(); return }
   if(e.target.id!=="to-poster" || !e.target.files?.[0]) return;
   try{ S.posterDraft=await shrinkImage(e.target.files[0]); render(); toast("Poster ready. Press Save to publish it.") }catch{ toast("Couldn't read that image") }
 });

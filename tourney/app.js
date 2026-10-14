@@ -167,7 +167,7 @@ const S = {
   refOnly: location.hash==="#ref",
   tourneys:[], teams:[], matches:[], contacts:{}, secret:null, unlock:null,
   uid:null, isAdmin:false, loaded:false, tid: new URLSearchParams(location.search).get("t") || ls.get("dsf:tid",null),
-  cat: null, toss: {}, newT:false, codes:{}, codesLoaded:false, scan:null, otab: ls.get("dsf:otab","details"), editTeam:null, addTeam:false, myTeam: ls.get("dsf:myteam",null), refCourt: ls.get("dsf:refcourt",1), edit:null, scrIdx:0
+  cat: null, toss: {}, newT:false, codes:{}, codesLoaded:false, mail:null, mailing:false, scan:null, otab: ls.get("dsf:otab","details"), editTeam:null, addTeam:false, myTeam: ls.get("dsf:myteam",null), refCourt: ls.get("dsf:refcourt",1), edit:null, scrIdx:0
 };
 let db=null, auth=null;
 const T = () => S.tourneys.find(t=>t.id===S.tid) || nextTourney() || null;
@@ -750,6 +750,7 @@ function viewOrg(only){
       ${(()=>{ const ts=teamsOf(t,S.cat); if(!ts.length) return `<div class="empty">No teams in this category yet.</div>`;
         return `<div class="row"><span class="muted">${ts.length} teams · ${ts.filter(x=>x.status==="confirmed").length} confirmed</span>${ts.some(x=>x.status!=="confirmed")?`<button class="btn small" data-confirmall="${esc(S.cat)}">Confirm all</button>`:""}</div>
         <div class="otl">${ts.map(x=>teamCard(t,x)).join("")}</div>` })()}
+      ${mailPanel(t)}
       <p class="muted" style="font-size:.82rem">📥 Import takes Google Form responses (.xlsx or .csv): teams already here get their contact details filled in, new teams are added.</p></section>`;
   if(ot==="fixtures") body=`<section class="panel"><h2>1 · Groups</h2>${catBar(t)}
       <p class="muted">${isTeam(t)?`Groups of about ${Number(t.groupSize)||3}; every tie is men's, women's and two mixed doubles. Top ${Number(t.advance)||2} per group go through.`:`Groups of about ${Number(t.groupSize)||4}; everyone plays everyone in their group. ${Number(t.advance)===1?"The winner":`The top ${Number(t.advance)||2}`} of each group go${Number(t.advance)===1?"es":""} through.`} Only confirmed teams are included. Change group sizes in 📝 Details.</p>
@@ -782,8 +783,8 @@ function teamCard(t, x){
     <div class="muted">${esc(playersOf(x).join(" · "))}</div>
     ${c.email||c.phone?`<div class="otc-c">${esc([c.email,c.phone].filter(Boolean).join(" · "))}</div>`:""}${more.length?`<details class="otc-m"><summary>More details</summary><div>${more.map(esc).join("<br>")}</div></details>`:""}
     ${x.status==="confirmed"&&S.codes[x.id]?(()=>{ const code=S.codes[x.id].code, msg=confirmMsg(t,x), ph=ukPhone(c.phone);
-      return `<div class="otc-code"><span>🎟 Code <b class="code">${esc(code)}</b>${x.checkedIn?' <span class="chip st-confirmed">✅ Checked in</span>':""}</span>
-        <div class="row">${c.email?`<a class="btn small" href="mailto:${esc(c.email)}?subject=${encodeURIComponent(`${x.name} is confirmed · ${t.name||"Tournament"}`)}&body=${encodeURIComponent(msg)}">📧 Email</a>`:""}<button class="btn small primary" data-sendqr="${esc(x.id)}">📲 Send QR</button><a class="btn small" href="https://wa.me/${ph?esc(ph):""}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener" title="${ph?"Opens a chat with the captain":"No phone saved: pick the chat in WhatsApp"}">💬 WhatsApp</a><button class="btn small ghost" data-copy="${esc(msg)}">Copy message</button><a class="btn small ghost" href="${esc(passUrl(t,code))}" target="_blank" rel="noopener">🎫 Pass</a></div></div>` })():""}
+      return `<div class="otc-code"><span>🎟 Code <b class="code">${esc(code)}</b>${S.codes[x.id].mailedAt?` <span class="chip st-confirmed" title="${esc(S.codes[x.id].mailedTo||"")}">📧 Emailed ${esc(new Date(S.codes[x.id].mailedAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))}</span>`:c.email?"":' <span class="chip st-awaiting">No email saved</span>'}${x.checkedIn?' <span class="chip st-confirmed">✅ Checked in</span>':""}</span>
+        <div class="row">${S.mail?.url&&c.email?`<button class="btn small" data-mailteam="${esc(x.id)}">📧 ${S.codes[x.id].mailedAt?"Email again":"Email now"}</button>`:c.email?`<a class="btn small" href="mailto:${esc(c.email)}?subject=${encodeURIComponent(`${x.name} is confirmed · ${t.name||"Tournament"}`)}&body=${encodeURIComponent(msg)}">📧 Email</a>`:""}<button class="btn small primary" data-sendqr="${esc(x.id)}">📲 Send QR</button><a class="btn small" href="https://wa.me/${ph?esc(ph):""}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener" title="${ph?"Opens a chat with the captain":"No phone saved: pick the chat in WhatsApp"}">💬 WhatsApp</a><button class="btn small ghost" data-copy="${esc(msg)}">Copy message</button><a class="btn small ghost" href="${esc(passUrl(t,code))}" target="_blank" rel="noopener">🎫 Pass</a></div></div>` })():""}
     <div class="row"><button class="btn small" data-tedit="${esc(x.id)}">✏️ Edit</button>${x.status==="confirmed"?`<button class="btn small ghost" data-tconfirm="${esc(x.id)}" data-v="pending">Unconfirm</button>`:`<button class="btn small primary" data-tconfirm="${esc(x.id)}" data-v="confirmed">Confirm</button>`}<button class="btn small ghost danger" data-tdel="${esc(x.id)}">Delete</button></div></div>`;
 }
 
@@ -924,6 +925,12 @@ document.addEventListener("click", async e=>{
   if(ds.cat){ S.cat=ds.cat; render(); return }
   if(ds.fxtab){ S.fxTab=ds.fxtab; render(); return }
   if(ds.openko){ const d=document.querySelector("details.vm[id$='-ko']"); if(d){ d.open=true; const el=document.querySelector(`[data-medit="${ds.openko}_MD"]`)?.closest(".tie")||d; el.scrollIntoView({behavior:"smooth",block:"center"}); el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"),1600) } return }
+  if(ds.mailteam){ const x=teamById(ds.mailteam); if(x) await mailTeam(t,x); return }
+  if(ds.mailall){ await mailAll(t); return }
+  if(ds.mailsave){ const url=($("#mail-url")?.value||"").trim(); if(url && !/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)){ toast("Paste the Web app URL: it starts https://script.google.com/macros/s/ and ends /exec"); return }
+    await db.collection("config").doc("mail").set({url, updatedAt:nowIso()}).then(()=>{ S.mail={url}; render(); toast(url?"Saved ✓ Now press Send test email":"Automatic emails turned off") },()=>toast("Couldn't save")); return }
+  if(ds.mailtest){ const r=await mailPost({test:true}); toast(r.ok?`Test email sent to ${DSF_ORG} ✓ Check your inbox`:`Didn't work: ${r.error}`); return }
+  if(ds.copyscript){ try{ const txt=await (await fetch("mailer.gs?v="+Date.now())).text(); await navigator.clipboard.writeText(txt); toast("Script copied ✓ Paste it into script.google.com") }catch{ window.open("mailer.gs","_blank") } return }
   if(ds.sendqr){ const x=teamById(ds.sendqr), t=S.tourneys.find(y=>y.id===x?.tid); if(x&&t) await sendQr(t,x); return }
   if(ds.copy){ try{ await navigator.clipboard.writeText(ds.copy); toast("Copied") }catch{ toast(ds.copy) } return }
   if(ds.psignin==="google"){ try{ const c=await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
@@ -982,9 +989,9 @@ document.addEventListener("click", async e=>{
     await db.collection("tourneys").doc(id).set(data,{merge:true}).then(()=>{ S.tid=id; S.newT=false; S.editDetails=false; ls.set("dsf:tid",id); S.posterDraft=undefined; render(); scrollTo({top:0,behavior:"smooth"}); toast("Tournament saved ✓") },()=>toast("Couldn't save")); return }
   if(ds.tcode){ const code=newCode(); await db.collection("tsecrets").doc(t.id).set({code}).then(()=>{ S.secret=code; render(); toast(`Referee code ${code}`) },()=>toast("Couldn't save the code")); return }
   if(ds.tconfirm){ await db.collection("tteams").doc(ds.tconfirm).update({status:ds.v}).catch(()=>toast("Couldn't update"));
-    if(ds.v==="confirmed"){ const x=teamById(ds.tconfirm); if(x) x.status="confirmed"; if(await ensureCodes(t,[ds.tconfirm])) toast("Confirmed ✓ Team code made. Send it with 📧 Email or 💬 WhatsApp.") } return }
+    if(ds.v==="confirmed"){ const x=teamById(ds.tconfirm); if(x) x.status="confirmed"; const made=await ensureCodes(t,[ds.tconfirm]); if(S.mail?.url && x && S.contacts[x.id]?.email && !S.codes[x.id]?.mailedAt) await mailTeam(t,x); else if(made) toast("Confirmed ✓ Team code made. Send it with 📧 Email or 💬 WhatsApp.") } return }
   if(ds.confirmall){ const b=db.batch(), ids=teamsOf(t,ds.confirmall).filter(x=>x.status!=="confirmed").map(x=>x.id); ids.forEach(id=>b.update(db.collection("tteams").doc(id),{status:"confirmed"})); await b.commit();
-    ids.forEach(id=>{ const x=teamById(id); if(x) x.status="confirmed" }); await ensureCodes(t); toast("All confirmed, team codes made"); return }
+    ids.forEach(id=>{ const x=teamById(id); if(x) x.status="confirmed" }); await ensureCodes(t); toast("All confirmed, team codes made"); if(S.mail?.url) await mailAll(t); return }
   if(ds.checkin){ const on=ds.v==="1"; await db.collection("tteams").doc(ds.checkin).update({checkedIn:on, checkedInAt:on?nowIso():null}).then(()=>toast(on?"Checked in ✅":"Check-in undone"),()=>toast("Couldn't save")); return }
   if(ds.tdel){ const x=teamById(ds.tdel); if(!x||!confirm(`Delete ${x.name}?`)) return; await db.collection("tcontacts").doc(x.id).delete().catch(()=>{}); await db.collection("tteams").doc(x.id).delete(); return }
   if(ds.oadd){ const v=id=>($(`#oa-${id}`)?.value||"").trim(), ks=Array.from({length:nPl(t)},(_,i)=>"p"+(i+1)); if(!v("name")||ks.some(k=>!v(k))){ toast(`Add a team name and all ${ks.length} players`); return }
@@ -1178,6 +1185,65 @@ async function sendQr(t, x){
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=file.name; document.body.append(a); a.click(); a.remove();
   toast("Pass picture saved and message copied. Attach the picture in WhatsApp and paste the message.");
 }
+/* ---------- automatic emails: the organiser's own Gmail sends each confirmed team its confirmation, code and QR (tourney/mailer.gs) ---------- */
+const DSF_ORG = "info@dropshotfolks.co.uk";
+function mailPanel(t){
+  const on=!!S.mail?.url, ts=teamsOf(t).filter(x=>x.status==="confirmed"&&S.codes[x.id]), todo=ts.filter(x=>!S.codes[x.id].mailedAt&&S.contacts[x.id]?.email), none=ts.filter(x=>!S.contacts[x.id]?.email);
+  return `<details id="mailset" class="mailset ${on?"on":""}"${on?"":" open"}><summary>📧 Automatic emails · <b>${on?"On ✓":"Off"}</b>${on?` <span class="muted">· confirmed teams get their code and QR by email as soon as you press Confirm</span>`:` <span class="muted">· set up once, free, from your Gmail</span>`}</summary>
+    ${on?`<div class="row">${todo.length?`<button class="btn small primary" data-mailall="1"${S.mailing?" disabled":""}>📧 Email ${todo.length} team${todo.length>1?"s":""} not emailed yet</button>`:`<span class="muted">Every confirmed team with an email has been emailed.</span>`}<button class="btn small ghost" data-mailtest="1">Send test email</button></div>
+      ${none.length?`<p class="muted">No email saved for: ${none.map(x=>esc(x.name)).join(", ")}. Use 📥 Import spreadsheet or ✏️ Edit to add one.</p>`:""}`:""}
+    <ol class="mailsteps">
+      <li>Sign in to Google as <b>${DSF_ORG}</b>, then open <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com → New project</a>.</li>
+      <li><button class="btn small" data-copyscript="1">📋 Copy the script</button> Delete what's in the editor, paste, then press 💾 Save.</li>
+      <li>Click <b>Deploy → New deployment</b>. Click ⚙️ next to "Select type" and choose <b>Web app</b>. Set <b>Execute as: Me</b> and <b>Who has access: Anyone</b>. Click <b>Deploy</b>.</li>
+      <li>Click <b>Authorise access</b> and choose your account. If Google says "Google hasn't verified this app", click <b>Advanced → Go to … (unsafe)</b> → <b>Allow</b>. It's your own script.</li>
+      <li>Copy the <b>Web app URL</b> and paste it here:
+        <div class="row"><input id="mail-url" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(S.mail?.url||"")}" style="flex:1;min-width:220px"><button class="btn small primary" data-mailsave="1">Save</button></div></li>
+      <li>Press <b>Send test email</b>. If it arrives, you're done.</li>
+    </ol></details>`;
+}
+async function mailPost(body){
+  if(!S.mail?.url) return {ok:false, error:"Automatic emails aren't set up"};
+  try{ const token=await auth.currentUser.getIdToken();
+    const r=await fetch(S.mail.url,{method:"POST", body:JSON.stringify({...body, token})}); return await r.json() }
+  catch(e){ return {ok:false, error:"Couldn't reach the email script. Check the Web app URL and that access is set to Anyone."} }
+}
+const b64 = async blob => { const u=new Uint8Array(await blob.arrayBuffer()); let s=""; for(let i=0;i<u.length;i+=0x8000) s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000)); return btoa(s) };
+function mailHtml(t, x, code){
+  const url=passUrl(t,code), wa=t.wa||WA_GROUP, P="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;";
+  return `<div style="background:#F3E9D9;padding:24px 12px;${P}"><div style="max-width:560px;margin:0 auto;background:#FCF7EE;border-radius:18px;overflow:hidden;border:1px solid #DFCDAE">
+  <div style="background:#7A2331;color:#fff;padding:22px 24px;text-align:center"><div style="font-size:22px;font-weight:800;letter-spacing:.04em">DROPSHOT FOLKS</div><div style="color:#EBD9BA;font-size:15px;margin-top:4px">${esc(t.name||"Tournament")} · ${esc(fmtDate(t.date))}</div></div>
+  <div style="padding:24px;color:#24100F;font-size:16px;line-height:1.5">
+    <div style="font-size:22px;font-weight:800;margin-bottom:8px">✅ Registration confirmed</div>
+    <p style="margin:0 0 12px">Hi ${esc(x.p1||"there")},</p>
+    <p style="margin:0 0 12px">Great news: <b>${esc(x.name)}</b> is confirmed for <b>${esc(t.name||"the tournament")}</b> on <b>${esc(fmtDate(t.date))}</b>${t.venue?` at <b>${esc(t.venue)}</b>`:""}.</p>
+    <p style="margin:0 0 6px">Players: ${esc(playersOf(x).join(" · "))}</p>
+    <div style="text-align:center;margin:22px 0 8px"><div style="font-size:13px;color:#715250;text-transform:uppercase;letter-spacing:.12em">Your team code</div>
+      <div style="display:inline-block;margin-top:6px;background:#EFE3CE;color:#7A2331;font:800 30px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.3em;padding:10px 18px;border-radius:12px">${esc(code)}</div></div>
+    <p style="margin:12px 0;text-align:center">Use this code to see your fixtures on the tournament page.</p>
+    <div style="text-align:center;margin:18px 0"><a href="${esc(url)}" style="display:inline-block;background:#7A2331;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px">See your fixtures →</a></div>
+    <div style="text-align:center;margin:22px 0 6px"><img src="cid:qr" alt="Team pass QR code" width="300" style="max-width:100%;border-radius:12px;border:1px solid #DFCDAE"></div>
+    <p style="margin:6px 0 18px;text-align:center;color:#715250;font-size:14px">📱 Show this QR code at the Tournament Desk when you arrive to check in. It's also attached.</p>
+    <p style="margin:0 0 12px">💬 Updates on the day go to the tournament WhatsApp group. If you haven't joined yet: <a href="${esc(wa)}" style="color:#7A2331">${esc(wa)}</a></p>
+    <p style="margin:18px 0 0">See you on court! 🏸<br><b>Dropshot Folks</b></p></div></div></div>`;
+}
+async function mailTeam(t, x, quiet){
+  const c=S.contacts[x.id]||{}, code=S.codes[x.id]?.code; if(!code){ if(!quiet) toast("No team code yet"); return false }
+  if(!c.email){ if(!quiet) toast(`No email saved for ${x.name}`); return false }
+  if(!quiet) toast(`Emailing ${x.name}…`);
+  const png=await passPng(t,x,code);
+  const r=await mailPost({to:c.email, cc:[c.email2,c.email3,c.email4].filter(Boolean), subject:`✅ ${x.name} is confirmed · ${t.name||"Tournament"} · team code ${code}`,
+    text:confirmMsg(t,x), html:mailHtml(t,x,code), png:await b64(png), file:`${x.name.replace(/[^\w]+/g,"-")}-team-pass.png`});
+  if(!r.ok){ toast(`Email to ${x.name} didn't send: ${r.error||"unknown error"}`); return false }
+  const at=nowIso(); S.codes[x.id]={...S.codes[x.id], mailedAt:at, mailedTo:c.email};
+  await db.collection("tcodes").doc(x.id).set({mailedAt:at, mailedTo:c.email},{merge:true}).catch(()=>{}); render();
+  if(!quiet) toast(`Emailed ${x.name} ✓ (${c.email})`); return true;
+}
+async function mailAll(t){
+  if(S.mailing) return; const todo=teamsOf(t).filter(x=>x.status==="confirmed"&&S.codes[x.id]&&!S.codes[x.id].mailedAt&&S.contacts[x.id]?.email); if(!todo.length){ toast("Nobody left to email"); return }
+  S.mailing=true; render(); let n=0; for(const x of todo){ toast(`Emailing ${x.name} (${n+1}/${todo.length})…`); if(await mailTeam(t,x,true)) n++; else break }
+  S.mailing=false; render(); toast(n===todo.length?`Emailed ${n} team${n>1?"s":""} ✓`:`Emailed ${n} of ${todo.length}. Check the message above and try again.`);
+}
 // organiser: what a scanned team code shows
 function scanCard(){
   if(!S.isAdmin || !S.scan) return ""; const p=S.scan, x=teamById(p.team), t=S.tourneys.find(y=>y.id===p.tid);
@@ -1303,6 +1369,7 @@ setTimeout(checkVersion, 4000); setInterval(checkVersion, 120000);
   listen("tteams", d=>{ S.teams=d; once("tteams") });
   listen("tmatches", d=>{ S.matches=d.map(m=>({...m, games:fromDb(m.games)})); once("tmatches") });
   if(S.isAdmin){
+    db.collection("config").doc("mail").onSnapshot(d=>{ S.mail=d.exists&&d.data().url?d.data():null; render() },()=>{});
     listen("tcontacts", d=>{ S.contacts=Object.fromEntries(d.map(x=>[x.id,x])); render() });
     db.collection("tcodes").onSnapshot(sn=>{ S.codes=Object.fromEntries(sn.docs.map(d=>[d.id,d.data()])); const first=!S.codesLoaded; S.codesLoaded=true; render();
       if(first) setTimeout(async()=>{ for(const t of S.tourneys) await ensureCodes(t) },2500) },()=>{});

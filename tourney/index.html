@@ -483,6 +483,43 @@ nav.tabs button[data-tab="org"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='http:
 .prize.gold{background:#fdf3d6;border-color:#e2bf55;color:#6b4e00}
 .prize.silver{background:#eef0f3;border-color:#b9c0c9;color:#3d4550}
 .prize.bronze{background:#f8e7da;border-color:#d39a6a;color:#6d3a14}
+.prize em{font-style:normal;font-weight:600;letter-spacing:0;text-transform:none;opacity:.7;margin-left:4px}
+.prize b[contenteditable]{outline:1.5px dashed currentColor;outline-offset:3px;border-radius:6px;cursor:text;min-height:1.3em}
+.prize b[contenteditable]:empty::before{content:attr(data-ph);opacity:.5;font-weight:500}
+.prize b[contenteditable]:focus{outline-style:solid;background:rgba(255,255,255,.6)}
+.glance{margin:2px 0;padding:8px 12px;border-radius:12px;background:var(--tint);font-size:.95rem}
+.glance b{color:var(--accent)}
+.orgbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px;margin-bottom:14px;border-radius:16px;background:#2b0f16;color:#fff}
+.orgbar .ob-l{font-weight:800;letter-spacing:.04em}
+.orgbar .ob-t{opacity:.8;font-size:.9rem}
+.orgbar .ob-g{flex:1}
+.orgbar .btn{background:rgba(255,255,255,.12);color:#fff;border-color:transparent}
+.orgbar .btn.primary{background:#f3d9a4;color:#2b0f16}
+.orgbar .btn.danger{color:#ffb3b3}
+.otools{margin-bottom:14px;display:grid;gap:12px}
+.otools .otbtn{justify-self:start}
+.fmtv{display:grid;gap:14px}
+.fv-glance{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.fv-stat{display:grid;gap:2px;padding:12px;border-radius:14px;background:var(--grad);color:#fff;text-align:center}
+.fv-stat b{font-family:var(--display);font-size:1.9rem;line-height:1}
+.fv-stat span{font-size:.78rem;opacity:.9}
+.fv-box{display:grid;gap:10px;padding:14px;border-radius:16px;border:1px solid var(--line);background:var(--surface)}
+.fv-box h4{margin:0;font-size:1.05rem}
+.fv-box p{margin:0}
+.fv-tie{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+.fv-tie div{display:grid;justify-items:center;gap:4px;padding:12px 8px;border-radius:12px;background:var(--tint);text-align:center}
+.fv-tie span{font-size:1.6rem}
+.fv-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;counter-reset:st}
+.fv-steps div{display:grid;gap:4px;padding:12px;border-radius:12px;background:var(--tint);position:relative}
+.fv-steps i{font-style:normal;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:#fff;font-weight:800}
+.fv-steps span{font-size:.9rem;color:var(--muted)}
+.fv-pts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.fv-pts div{display:grid;justify-items:center;padding:10px 6px;border-radius:12px;background:var(--tint);text-align:center}
+.fv-pts b{font-family:var(--display);font-size:1.7rem;color:var(--accent);line-height:1}
+.fv-pts span{font-size:.8rem}
+.fv-score{display:grid;gap:6px}
+.fv-score div{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:9px 12px;border-radius:10px;background:var(--tint)}
+.fv-score span{color:var(--muted)}
 .tinfo .big{font-family:var(--display);font-size:1.8rem;font-weight:700;line-height:1.1}
 .cats{display:flex;gap:8px;flex-wrap:wrap}
 .cats button{all:unset;cursor:pointer;padding:8px 14px;border-radius:99px;background:var(--tint);font-weight:600;font-size:.9rem}
@@ -647,5 +684,5 @@ body.refonly{padding-bottom:24px!important}
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="app.js?v=202610140124"></script>
+<script src="app.js?v=202610140156"></script>
 </body></html>

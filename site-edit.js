@@ -76,6 +76,7 @@
     .se-bar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:99999;display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:min(940px,calc(100vw - 24px));padding:10px 12px;border-radius:18px;background:#2b0f16;color:#fff;font:600 14px/1.3 system-ui,sans-serif;box-shadow:0 18px 40px -12px rgba(0,0,0,.5)}
     .se-bar .se-tip{font-weight:400;opacity:.8}.se-bar .se-grow{flex:1}
     .se-bar button{font:inherit;border:0;border-radius:99px;padding:8px 14px;background:rgba(255,255,255,.14);color:#fff;cursor:pointer}
+    .se-bar .se-link{color:#f3d9a4;text-decoration:none;padding:8px 10px}
     .se-bar .se-save{background:#f3d9a4;color:#2b0f16}.se-bar button:disabled{opacity:.45;cursor:default}
     .se-toast{position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:99999;padding:10px 16px;border-radius:12px;background:#2b0f16;color:#fff;font:600 14px system-ui,sans-serif;box-shadow:0 10px 30px -10px rgba(0,0,0,.5)}`;
   document.head.append(css);
@@ -109,7 +110,7 @@
       ${el && linkOf(el) ? `<button type="button" data-se="link">🔗 Change link</button>` : ""}
       ${el && el.tagName === "IMG" ? `<button type="button" data-se="photo">📷 Replace photo</button>` : ""}
       ${el && isChanged(el) ? `<button type="button" data-se="orig">↺ Original</button>` : ""}
-      <span class="se-grow"></span><button type="button" data-se="save" class="se-save" ${n ? "" : "disabled"}>💾 Save${n ? ` (${n})` : ""}</button><button type="button" data-se="exit">Done</button>`;
+      <span class="se-grow"></span><a href="tourney/" class="se-link">🏆 Manage tournaments</a><button type="button" data-se="save" class="se-save" ${n ? "" : "disabled"}>💾 Save${n ? ` (${n})` : ""}</button><button type="button" data-se="exit">Done</button>`;
   }
   const linkOf = el => el.dataset.eh != null ? el : (el.querySelector("a[data-eh]") || el.closest("a[data-eh]"));
   const isChanged = el => { const k = el.dataset.ek; return !!(saved.t[k] || saved.h[k] || saved.i[k] || dirty.t[k] != null || dirty.h[k] != null || dirty.i[k] != null) };

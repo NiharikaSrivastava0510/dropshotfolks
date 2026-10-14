@@ -380,7 +380,19 @@ nav.tabs button[data-tab="court"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='htt
 .readmodal{position:fixed;inset:0;z-index:60;background:rgba(30,10,14,.55);display:grid;place-items:center;padding:16px}
 .readcard{background:var(--surface);color:var(--ink);border-radius:20px;padding:20px;max-width:560px;width:100%;max-height:86vh;display:grid;grid-template-rows:auto 1fr auto;gap:12px;box-shadow:var(--shadow)}
 .readcard h2{margin:0}
-.readtxt{overflow:auto;line-height:1.55;font-size:.95rem}
+.readtxt{overflow:auto;line-height:1.6;font-size:1rem;padding-right:4px}
+.readcard{max-width:680px}
+.rich{display:grid;gap:10px}
+.rich p{margin:0}
+.rich h4{margin:6px 0 0}
+.clauses{margin:0;padding:0;list-style:none;counter-reset:cl;display:grid;gap:10px}
+.clauses li{counter-increment:cl;display:grid;grid-template-columns:30px 1fr;column-gap:10px;padding:12px;border-radius:12px;background:var(--tint)}
+.clauses li::before{content:counter(cl);grid-row:span 2;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:#fff;font-weight:800;font-size:.85rem}
+.clauses li b{font-size:1rem;margin-bottom:2px}
+.clauses li span{font-size:.95rem;color:var(--ink)}
+.fmtlist{margin:0;padding-left:18px;display:grid;gap:8px}
+.fmtlist b{color:var(--accent)}
+.readbox .rich{margin-top:10px}
 .tie{display:grid;gap:6px;padding:8px;border:1px solid var(--line);border-radius:16px;background:color-mix(in srgb,var(--accent) 4%,transparent)}
 .tie.me{border-color:var(--accent)}
 .tie-h{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;font-weight:700;padding:2px 6px}
@@ -457,7 +469,20 @@ nav.tabs button[data-tab="ref"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='http:
 nav.tabs button[data-tab="org"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d=%22M4 21V10l8-6 8 6v11M9 21v-6h6v6%22/%3E%3C/svg%3E")}
 
 /* ---------- tournament ---------- */
-.tinfo{display:grid;gap:6px}
+.tinfo{display:grid;gap:8px;align-content:start}
+.thero{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:24px;align-items:start}
+.thero.noposter{grid-template-columns:1fr}
+.tposter img{width:100%;max-height:78vh;object-fit:contain;border-radius:16px;display:block;box-shadow:var(--shadow);position:sticky;top:90px}
+@media (max-width:760px){.thero{grid-template-columns:1fr}}
+.tinfo .entry{font-size:1.05rem}
+.prizes{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:4px 0}
+.prize{display:grid;gap:2px;padding:12px;border-radius:14px;border:1.5px solid;align-content:start}
+.prize .pm{font-size:1.6rem;line-height:1}
+.prize .pl{font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.prize b{font-size:.95rem;line-height:1.35}
+.prize.gold{background:#fdf3d6;border-color:#e2bf55;color:#6b4e00}
+.prize.silver{background:#eef0f3;border-color:#b9c0c9;color:#3d4550}
+.prize.bronze{background:#f8e7da;border-color:#d39a6a;color:#6d3a14}
 .tinfo .big{font-family:var(--display);font-size:1.8rem;font-weight:700;line-height:1.1}
 .cats{display:flex;gap:8px;flex-wrap:wrap}
 .cats button{all:unset;cursor:pointer;padding:8px 14px;border-radius:99px;background:var(--tint);font-weight:600;font-size:.9rem}
@@ -622,5 +647,5 @@ body.refonly{padding-bottom:24px!important}
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="app.js?v=202610140113"></script>
+<script src="app.js?v=202610140124"></script>
 </body></html>

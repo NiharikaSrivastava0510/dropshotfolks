@@ -17,6 +17,7 @@ const DEFAULT_TERMS = `1. Your place is only confirmed once the entry fee has be
 const TEAM_CUP = {name:"Badminton Team Cup", date:"2026-10-18", venue:"Westminster City School", address:"55 Palace Street, London SW1E 5HJ",
   entry:"£22 per person (£88 per team of 4)", info:"Dropshot Folks' first Team Cup! Teams of 4 (2 men, 2 women) play men's, women's and mixed doubles in every tie. 9:00am–4:00pm.\nFree shirts for all registered players.",
   prizes:"Winners: trophy, gold medals, bags and bottles · Runners-up: silver medals, beanies and headbands · 3rd: bronze medals, grip tapes and socks",
+  prize1:"Trophy + gold medals, bags & bottles", prize2:"Silver medals, beanies & headbands", prize3:"Bronze medals, grip tapes & socks",
   mode:"team", catIds:["TC"], cats:[{id:"TC",name:"Team Cup"}], maxTeams:18, courts:4, startTime:"09:00", matchMins:15, groupSize:3, advance:2, wild:0, bronze:true,
   pointsTo:15, deuce:true, cap:17, bestOf:1, regOpen:false, format:"", directions:"",
   terms:`1. Eligibility. No participants under the age of 18 are permitted to compete. Proof of age may be requested by the Organizer at check-in. Each player may only represent one (1) team in the Event.
@@ -61,12 +62,26 @@ const TEAM_CUP_TEAMS = [
   ["The Fourmidables","Matthew","Milan","Bahee","Nikhila"], ["Shuttle Warriors","Ling","Nakorn Pinsiranon","Pawan Gurung","Keerthi Maddineni"],
   ["BC2","Cameron Sin","Rebecca Yang","Michael Lieu","Anju lama"], ["Net Gains","Imran Hoque","Clare Walsh","Sara Bel Houla","Rahul Singh"],
   ["GODSHUTTLER","Ayestain","Vinotha","Pooja","Moiz"]];
+function richTxt(txt){
+  const out=[]; let list=[];
+  const flush=()=>{ if(list.length){ out.push(`<ol class="clauses">${list.join("")}</ol>`); list=[] } };
+  String(txt||"").split(/\n+/).map(l=>l.trim()).filter(Boolean).forEach(l=>{
+    const m=/^(\d+)[.)]\s*(.*)$/.exec(l);
+    if(m){ const t=/^([^.:]{2,45})[.:]\s+(.+)$/.exec(m[2]); list.push(`<li>${t?`<b>${esc(t[1])}</b><span>${esc(t[2])}</span>`:`<span>${esc(m[2])}</span>`}</li>`) }
+    else { flush(); out.push(`<p>${esc(l)}</p>`) } });
+  flush(); return `<div class="rich">${out.join("")}</div>`;
+}
+const prizeCards = t => { const p=[t.prize1,t.prize2,t.prize3];
+  if(!p.some(Boolean)) return t.prizes?`<p><b>Prizes:</b> ${esc(t.prizes)}</p>`:"";
+  return `<div class="prizes">${[["🥇","Winners","gold"],["🥈","Runners-up","silver"],["🥉","Third place","bronze"]].map(([i,l,c],k)=>p[k]?`<div class="prize ${c}"><span class="pm">${i}</span><span class="pl">${l}</span><b>${esc(p[k])}</b></div>`:"").join("")}</div>` };
 const bankOf = t => t?.bank && (t.bank.acct || t.bank.sort) ? t.bank : null;
 // a Team Cup tie: men's, women's and two mixed doubles (XD = mixed 1: man 1 + woman 1, XD2 = mixed 2: man 2 + woman 2)
 const DISC = {MD:"Men's doubles", WD:"Women's doubles", XD:"Mixed doubles 1", XD2:"Mixed doubles 2"};
 const isTeam = t => t?.mode==="team";
 const nPl = t => isTeam(t)?4:2;
 const playersOf = x => [x?.p1,x?.p2,x?.p3,x?.p4].filter(Boolean);
+const fmtHtml = t => { const [main, extra] = formatTxt(t).split("\n\n");
+  return `<div class="rich"><ul class="fmtlist">${main.split("\n").filter(Boolean).map(l=>{ const m=/^([^:]{2,40}):\s*(.+)$/.exec(l); return `<li>${m?`<b>${esc(m[1])}</b> ${esc(m[2])}`:esc(l)}</li>` }).join("")}</ul>${extra?`<h4>Also</h4>${richTxt(extra)}`:""}</div>` };
 function formatTxt(t){
   const r=rules(t);
   if(isTeam(t)){ const adv=Number(t.advance)||2, wild=Number(t.wild)||0;
@@ -75,7 +90,7 @@ function formatTxt(t){
       `Group stage: round robin in groups of about ${Number(t.groupSize)||3}.`,
       `Group points: win by 6 or more points = 4, win by 4–5 = 3, win by 1–3 = 1, loss = 0. The margin is the total points across the tie's 4 matches. Level teams are split by points difference, then head-to-head.`,
       `Knockouts: top ${adv} of each group${wild?` plus the best ${wild} third-placed team${wild>1?"s":""}`:""} go through, ranked by points. The top seeds get a bye if the bracket isn't full.${t.bronze!==false?" The final and the bronze medal match are played at the same time.":""}`,
-      `Each match: 1 game, ${ruleTxt(r)}${r.deuce&&r.cap<(CAP_FOR[r.to]||0)?`, at ${r.cap-1}–${r.cap-1} the next point wins`:""}.`].join("\n")+(t.format?`\n\n${t.format}`:"") }
+      `Each match: ${r.bestOf===1?"1 game ":""}${ruleTxt(r)}${r.deuce&&r.cap<(CAP_FOR[r.to]||0)?`, at ${r.cap-1}–${r.cap-1} the next point wins`:""}.`].join("\n")+(t.format?`\n\n${t.format}`:"") }
   const adv=Number(t.advance)||2, ko=rules(t,{stage:"ko"}), fin=rules(t,{stage:"ko",roundName:"Final"}), same=(x,y)=>ruleTxt(x)===ruleTxt(y);
   const lines=[
     `Group stage: round robin in groups of about ${Number(t.groupSize)||4}. ${adv===1?"The group winner goes":`The top ${adv} from each group go`} through to the knockouts${Number(t.koSize)>0?`, and the best ${adv===1?"runners-up":"teams in the next place"} fill any spare places up to ${Number(t.koSize)}`:""}.`,
@@ -466,17 +481,17 @@ function viewReg(){
   const mine=S.uid?S.teams.filter(x=>x.tid===t.id && x.createdBy===S.uid):[];
   const full=c=>Number(t.maxTeams)>0 && teamsOf(t,c).length>=Number(t.maxTeams);
   const mapQ=[t.venue,t.address].filter(Boolean).join(", "), r=rules(t);
-  return `${pickBar(t)}${t.poster?`<section class="panel" style="padding:10px"><img src="${esc(t.poster)}" alt="${esc(t.name||"Tournament")} poster" style="width:100%;max-height:80vh;object-fit:contain;border-radius:16px;display:block"></section>`:""}<section class="panel tinfo">
+  return `${pickBar(t)}<section class="panel thero ${t.poster?"":"noposter"}">${t.poster?`<div class="tposter"><img src="${esc(t.poster)}" alt="${esc(t.name||"Tournament")} poster"></div>`:""}<div class="tinfo">
       ${S.isAdmin?`<button class="btn small editbtn" data-goorg="details">✏️ Edit details</button>`:""}<span class="lbl">${esc(fmtDate(t.date))}${t.venue?` · ${esc(t.venue)}`:""}</span>
       <div class="big">${esc(t.name||"Tournament")}</div>
       ${t.info?`<p>${esc(t.info).replace(/\n/g,"<br>")}</p>`:""}
       <div class="row">${cats(t).map(c=>`<span class="chip st-paid">${esc(c.name)} · ${teamsOf(t,c.id).length}${Number(t.maxTeams)?`/${Number(t.maxTeams)}`:""} teams</span>`).join("")}</div>
-      ${t.entry?`<p><b>Entry:</b> ${esc(t.entry)}</p>`:""}${t.prizes?`<p><b>Prizes:</b> ${esc(t.prizes)}</p>`:""}
+      ${t.entry?`<p class="entry"><b>Entry:</b> ${esc(t.entry)}</p>`:""}${prizeCards(t)}
       <p><b>Scoring:</b> ${r.bestOf===1?"1 game ":r.bestOf===2?"2 games (total points decide at 1–1), ":""}${esc(ruleTxt({...r,bestOf:r.bestOf===2?1:r.bestOf}))}${t.stageRules?" in the groups. Knockout rounds are longer: see the game format.":"."}</p>
-      <details class="readbox" id="rd-format"><summary>📋 Game format</summary><p>${esc(formatTxt(t)).replace(/\n/g,"<br>")}</p></details>
-      <details class="readbox" id="rd-terms"><summary>📜 Terms & conditions</summary><p>${esc(t.terms||DEFAULT_TERMS).replace(/\n/g,"<br>")}</p></details>
+      <details class="readbox" id="rd-format"><summary>📋 Game format</summary>${fmtHtml(t)}</details>
+      <details class="readbox" id="rd-terms"><summary>📜 Terms & conditions</summary>${richTxt(t.terms||DEFAULT_TERMS)}</details>
       ${mapQ?`<div class="row" style="align-items:flex-start"><a class="btn small" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQ)}" target="_blank" rel="noopener">📍 Directions</a><span style="font-size:.9rem">${esc(mapQ)}${t.directions?`<br><span class="muted">${esc(t.directions).replace(/\n/g,"<br>")}</span>`:""}</span></div>`:""}
-    </section>
+    </div></section>
     <section class="panel"><h2>Register a team</h2>
     ${t.regOpen ? `<form id="regForm" class="regform" novalidate>
         <fieldset><legend>🏸 Team</legend><div class="grid2">
@@ -621,7 +636,8 @@ function viewOrg(){
   // tournament details, in plain groups; rarely-needed settings tucked under "More options"
   const form=x=>`<div class="ogrp"><h3>📝 The basics</h3><div class="grid2">
       ${f("name","Tournament name",x?.name)}${f("date","Date",x?.date,"date")}${f("venue","Venue",x?.venue)}${f("address","Address (for the map)",x?.address,"text",'placeholder="e.g. Lodge Ave, Dagenham RM8 2JR"')}
-      ${f("entry","Entry fee",x?.entry,"text",'placeholder="e.g. £25 per player"')}${f("prizes","Prizes",x?.prizes)}
+      ${f("entry","Entry fee",x?.entry,"text",'placeholder="e.g. £25 per player"')}
+      <div style="grid-column:1/-1"><span class="lbl">Prizes</span><div class="grid2" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">${f("p1","🥇 Gold · winners",x?.prize1??(x?.prize2||x?.prize3?"":x?.prizes),"text",'placeholder="e.g. Trophy + £200"')}${f("p2","🥈 Silver · runners-up",x?.prize2,"text",'placeholder="e.g. Medals + £150"')}${f("p3","🥉 Bronze · third place",x?.prize3,"text",'placeholder="e.g. Medals + £100"')}</div></div>
       ${ta("info","About (shown at the top of the Register tab)",x?.info,4)}
       ${ta("dirs","Directions & travel tips",x?.directions,2,"Nearest station, buses, parking, which entrance…")}
       <div style="grid-column:1/-1;display:grid;gap:6px"><span class="lbl">Poster</span>
@@ -808,7 +824,7 @@ document.addEventListener("click", async e=>{
   const t0=e.target.closest("button,a,[data-medit]"); if(!t0) return;
   const ds=t0.dataset, t=T();
   if(ds.readopen){ const t2=T(); if(!t2) return; const k=ds.readopen, box=document.createElement("div"); box.className="readmodal"; box.setAttribute("role","dialog"); box.setAttribute("aria-modal","true");
-    box.innerHTML=`<div class="readcard"><h2>${k==="format"?"📋 Game format":"📜 Terms & conditions"}</h2><div class="readtxt">${esc(k==="format"?formatTxt(t2):(t2.terms||DEFAULT_TERMS)).replace(/\n/g,"<br>")}</div><button type="button" class="btn primary" data-readdone="${k}">I've read this ✓</button></div>`;
+    box.innerHTML=`<div class="readcard"><h2>${k==="format"?"📋 Game format":"📜 Terms & conditions"}</h2><div class="readtxt">${k==="format"?fmtHtml(t2):richTxt(t2.terms||DEFAULT_TERMS)}</div><button type="button" class="btn primary" data-readdone="${k}">I've read this ✓</button></div>`;
     document.body.appendChild(box); box.querySelector("[data-readdone]").focus(); return }
   if(ds.readdone){ (S.read||={})[ds.readdone]=true; t0.closest(".readmodal")?.remove(); render(); return }
   if(ds.wajoin){ S.waOpened=true; setTimeout(render,300); return }   // let the link open, then unlock the tick box
@@ -857,7 +873,7 @@ document.addEventListener("click", async e=>{
   if(ds.noposter){ S.posterDraft=""; render(); return }
   if(ds.tsave){ const g=id=>$(`#to-${id}`), team=g("mode").value==="team", catIds=team?["TC"]:CAT_PRESETS.filter(([id])=>g(`cat-${id}`)?.checked).map(([id])=>id);
     if(!g("name").value.trim()){ toast("Give the tournament a name"); return } if(!catIds.length){ toast("Pick at least one category"); return }
-    const data={name:g("name").value.trim(), date:g("date").value, venue:g("venue").value.trim(), entry:g("entry").value.trim(), info:g("info").value.trim(), prizes:g("prizes").value.trim(),
+    const data={name:g("name").value.trim(), date:g("date").value, venue:g("venue").value.trim(), entry:g("entry").value.trim(), info:g("info").value.trim(), prize1:g("p1").value.trim().slice(0,200), prize2:g("p2").value.trim().slice(0,200), prize3:g("p3").value.trim().slice(0,200),
       maxTeams:Number(g("max").value)||0, courts:Math.min(12,Math.max(1,Number(g("courts").value)||4)), groupSize:Math.min(8,Math.max(3,Number(g("gsize").value)||4)), advance:Math.min(4,Math.max(1,Number(g("adv").value)||2)),
       pointsTo:Number(g("to").value)||21, deuce:g("deuce").value!=="0", bestOf:Number(g("bo").value)||1, startTime:g("start").value||"10:00", matchMins:Math.min(60,Math.max(5,Number(g("mins").value)||15)),
       address:g("address").value.trim(), directions:g("dirs").value.trim(), format:g("format").value.trim().slice(0,2000), terms:(g("terms").value.trim()||DEFAULT_TERMS).slice(0,5000),
@@ -990,6 +1006,9 @@ async function autoSetup(){
       const times=[...new Set(matchesOf(t).filter(m=>m.ptime).map(m=>m.ptime))].sort(), per={};
       const b=db.batch(); [...ms].sort((x,y)=>String(x.ptime||"99").localeCompare(String(y.ptime||"99"))||(x.order||0)-(y.order||0)).forEach(m=>{ per[m.pcourt]=(per[m.pcourt]||0)+1;
         b.update(db.collection("tmatches").doc(m.id),{pnum:per[m.pcourt], pslot:Math.max(0,times.indexOf(m.ptime))}) }); await b.commit() }
+    // gold / silver / bronze prizes for the two events, if not set yet
+    for(const [tid,pz] of [["t20261018-teamcup",{prize1:TEAM_CUP.prize1, prize2:TEAM_CUP.prize2, prize3:TEAM_CUP.prize3}], [S.tourneys.find(x=>x.date==="2026-11-21")?.id, {prize1:"£200 per team, in each category", prize2:"£150 per team, in each category", prize3:"£100 per team, in each category"}]]){
+      const x=tid && S.tourneys.find(y=>y.id===tid); if(x && !x.prize1 && !x.prize2 && !x.prize3) await db.collection("tourneys").doc(x.id).set(pz,{merge:true}) }
     const np=S.tourneys.find(x=>x.date==="2026-11-21");
     if(np && np.preset!=="netplay"){ await db.collection("tourneys").doc(np.id).set({...NET_PLAY, preset:"netplay"},{merge:true}); done.push("the official Net Play details") }
     if(done.length){ S.tid=id; ls.set("dsf:tid",id); render(); toast(`Set up: ${done.join(", ")} ✓`) }

@@ -927,8 +927,10 @@ document.addEventListener("click", async e=>{
   if(ds.openko){ const d=document.querySelector("details.vm[id$='-ko']"); if(d){ d.open=true; const el=document.querySelector(`[data-medit="${ds.openko}_MD"]`)?.closest(".tie")||d; el.scrollIntoView({behavior:"smooth",block:"center"}); el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"),1600) } return }
   if(ds.mailteam){ const x=teamById(ds.mailteam); if(x) await mailTeam(t,x); return }
   if(ds.mailall){ await mailAll(t); return }
-  if(ds.mailsave){ const url=($("#mail-url")?.value||"").trim(); if(url && !/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)){ toast("Paste the Web app URL: it starts https://script.google.com/macros/s/ and ends /exec"); return }
-    await db.collection("config").doc("mail").set({url, updatedAt:nowIso()}).then(()=>{ S.mail={url}; render(); toast(url?"Saved ✓ Now press Send test email":"Automatic emails turned off") },()=>toast("Couldn't save")); return }
+  if(ds.mailsave){ const url=($("#mail-url")?.value||"").trim(); if(url && !/^https:\/\/script\.google\.com\/(a\/macros\/[\w.-]+|macros)\/s\/[\w-]+\/exec$/.test(url)){ toast("Paste the Web app URL: it starts https://script.google.com/macros/s/ and ends /exec"); return }
+    const saved=await db.collection("config").doc("mail").set({url, updatedAt:nowIso()}).then(()=>{ S.mail=url?{url}:null; render(); return true },()=>{ toast("Couldn't save"); return false });
+    if(!saved) return; if(!url){ toast("Automatic emails turned off"); return } toast("Saved ✓ Sending a test email…"); const r=await mailPost({test:true});
+    toast(r.ok?`Test email sent to ${DSF_ORG} ✓ Check your inbox`:`Test email didn't send: ${r.error}`); return }
   if(ds.mailtest){ const r=await mailPost({test:true}); toast(r.ok?`Test email sent to ${DSF_ORG} ✓ Check your inbox`:`Didn't work: ${r.error}`); return }
   if(ds.copyscript){ try{ const txt=await (await fetch("mailer.gs?v="+Date.now())).text(); await navigator.clipboard.writeText(txt); toast("Script copied ✓ Paste it into script.google.com") }catch{ window.open("mailer.gs","_blank") } return }
   if(ds.sendqr){ const x=teamById(ds.sendqr), t=S.tourneys.find(y=>y.id===x?.tid); if(x&&t) await sendQr(t,x); return }
@@ -1198,8 +1200,8 @@ function mailPanel(t){
       <li>Click <b>Deploy → New deployment</b>. Click ⚙️ next to "Select type" and choose <b>Web app</b>. Set <b>Execute as: Me</b> and <b>Who has access: Anyone</b>. Click <b>Deploy</b>.</li>
       <li>Click <b>Authorise access</b> and choose your account. If Google says "Google hasn't verified this app", click <b>Advanced → Go to … (unsafe)</b> → <b>Allow</b>. It's your own script.</li>
       <li>Copy the <b>Web app URL</b> and paste it here:
-        <div class="row"><input id="mail-url" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(S.mail?.url||"")}" style="flex:1;min-width:220px"><button class="btn small primary" data-mailsave="1">Save</button></div></li>
-      <li>Press <b>Send test email</b>. If it arrives, you're done.</li>
+        <div class="row"><input id="mail-url" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(S.mail?.url||"")}" style="flex:1;min-width:220px"><button class="btn small primary" data-mailsave="1">Save &amp; send test email</button></div></li>
+      <li>Check your inbox for <b>"Dropshot Folks emails are working ✓"</b>. If it's there, you're done.</li>
     </ol></details>`;
 }
 async function mailPost(body){

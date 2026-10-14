@@ -213,6 +213,7 @@ function sideLabel(m, side){
   const src=m.src?.[side]; if(src){ const t=S.tourneys.find(x=>x.id===m.tid), adv=Number(t?.advance)||2;
     return src.seed ? `Seed ${src.seed}` : src.wild ? `Best ${adv===1?"runner-up":PLACE(adv+1)} ${src.wild}` : `${PLACE(src.p)} Group ${src.g}` }
   const from=m.from?.[side==="a"?0:1], f=from && S.matches.find(x=>x.id===from);
+  if(f?.bye) return sideLabel(f, f.src?.a||f.a ? "a" : "b");
   return f ? `${m.fromLose?"Loser":"Winner"} ${shortRound(f.roundName)} ${f.slot||""}`.trim() : "To be decided";
 }
 const sideName = (m, side) => { const id=sideTeam(m,side); return id ? esc(tName(id)) : `<i class="muted">${esc(sideLabel(m,side))}</i>` };
@@ -423,12 +424,16 @@ function standTable(t, cat, G){
 function bracket(t, cat){
   const ko=matchesOf(t,cat).filter(m=>m.stage==="ko" && (!m.disc || m.disc==="MD")); if(!ko.length) return "";
   const rounds=[...new Set(ko.map(m=>m.round))].sort((a,b)=>a-b);
-  return `<div class="bracket">${rounds.map(rn=>{ const ms=ko.filter(m=>m.round===rn).sort((a,b)=>a.slot-b.slot);
-    return `<div class="bround"><h4>${esc(ms[0]?.roundName||"")}</h4>${ms.map(m=>{ const a=sideTeam(m,"a"), b=sideTeam(m,"b"), tr=m.tie?tieResult(m.tie):null, w=tr?tr.winner:m.status==="done"?m.winner:null;
-      const sc=side=>tr ? (tr.done?String(side==="a"?tr.a:tr.b):"") : m.status==="done"&&!m.bye?(m.games||[]).map(g=>side==="a"?g[0]:g[1]).join(" "):"";
-      const line=(id,side)=>`<div><span class="${w===side?"win":""} ${id?"":"tbd"}">${id?esc(tName(id)):(m.bye&&!m.src?.[side]&&!m.from?"bye":esc(sideLabel(m,side)))}</span><span>${esc(sc(side))}</span></div>`;
-      const live=tr?S.matches.some(x=>x.tie===m.tie&&x.status==="live"):m.status==="live";
-      return `<div class="bm ${live?"live":""}">${m.roundName==="Bronze medal match"?`<div class="bt">🥉 ${isTeam(t)?"Bronze medal match":"3rd-place play-off"}</div>`:""}${m.pcourt&&!m.bye&&m.status!=="done"?`<div class="bt">${esc(planTxt(m))}</div>`:""}${line(a,"a")}${line(b,"b")}</div>` }).join("")}</div>` }).join("")}</div>`;
+  const card=m=>{ const a=sideTeam(m,"a"), b=sideTeam(m,"b"), tr=m.tie?tieResult(m.tie):null, w=tr?tr.winner:m.status==="done"?m.winner:null;
+    const live=tr?S.matches.some(x=>x.tie===m.tie&&x.status==="live"):m.status==="live";
+    const sc=side=>tr ? (tr.done?String(side==="a"?tr.a:tr.b):"") : m.status==="done"?(m.games||[]).map(g=>side==="a"?g[0]:g[1]).join(" "):"";
+    const line=(id,side)=>`<div class="bl ${w===side?"win":w?"lose":""}"><span class="${id?"":"tbd"}">${id?esc(tName(id)):esc(sideLabel(m,side))}</span><b>${esc(sc(side))}</b></div>`;
+    const bronze=m.roundName==="Bronze medal match", top=bronze?`🥉 ${isTeam(t)?"Bronze medal":"3rd place"}`:"";
+    const when=live?`<span class="livebadge">Live</span>`:w?`<span class="bdone">Final score</span>`:m.pcourt?`<span>${esc(planTxt(m))}</span>`:"";
+    return `<div class="bm ${live?"live":""} ${bronze?"bronze":""}">${top||when?`<div class="bt">${top?`<b>${top}</b>`:""}${when}</div>`:""}${line(a,"a")}${line(b,"b")}</div>` };
+  return `<div class="bracket">${rounds.map(rn=>{ const ms=ko.filter(m=>m.round===rn).sort((a,b)=>a.slot-b.slot), real=ms.filter(m=>!m.bye);
+    const show=real.length?real:ms, name=(ms.find(m=>m.roundName!=="Bronze medal match")||ms[0])?.roundName||"";
+    return `<div class="bround"><h4>${esc(name==="Final"?"🏆 Final":name)}</h4><div class="bcol">${show.map(card).join("")}</div></div>` }).join("")}</div>`;
 }
 function courtCard(t, c){
   const m=liveOn(t,c), r=rules(t,m);
@@ -519,11 +524,17 @@ function viewFix(){
     ${catBar(t)}</section>${S.isAdmin && matchesOf(t).length ? schedPanel(t) : ""}`;
   const groups=t.groups?.[S.cat], ms=matchesOf(t,S.cat), edit=canRef(t);
   if(!groups && !ms.length) return head+`<section class="panel"><div class="empty">Fixtures appear here once the organiser makes the groups.</div></section>`;
-  const ko=bracket(t,S.cat);
-  const koList=ms.filter(m=>m.stage==="ko" && !m.bye).sort((a,b)=>a.round-b.round||a.slot-b.slot||(a.order||0)-(b.order||0));
-  return head + (ko?`<section class="panel"><h2>Knockouts</h2>${ko}<div class="mlist">${fixList(t,koList,{edit, plan:true})}</div></section>`:"") +
-    (groups?`<div class="groups">${Object.keys(groups).sort().map(G=>`<div class="grp"><h3>Group ${G}<span class="muted" style="font-size:.8rem;font-family:var(--body)">top ${Number(t.advance)||2} go through</span></h3>${standTable(t,S.cat,G)}
-      <div class="mlist">${fixList(t,ms.filter(m=>m.stage==="group"&&m.group===G),{edit, plan:true})}</div></div>`).join("")}</div>`:"");
+  const hasKo=ms.some(m=>m.stage==="ko"), fx=hasKo && (S.fxTab==="ko" || !groups) ? "ko" : "groups";
+  const tabs=`<div class="fxtabs"><button data-fxtab="groups" aria-pressed="${fx==="groups"}">Groups</button><button data-fxtab="ko" aria-pressed="${fx==="ko"}" ${hasKo?"":"disabled"}>Knockouts</button></div>`;
+  if(fx==="ko"){ const koList=ms.filter(m=>m.stage==="ko" && !m.bye).sort((a,b)=>a.round-b.round||a.slot-b.slot||(a.order||0)-(b.order||0));
+    return head+`<section class="panel">${tabs}${bracket(t,S.cat)}
+      <details class="vm" id="vm-${esc(S.cat)}-ko"><summary>${isTeam(t)?"View every knockout match":"View knockout matches"} (${isTeam(t)?new Set(koList.map(m=>m.tie)).size+" ties":koList.length})</summary><div class="mlist">${fixList(t,koList,{edit, plan:true})}</div></details></section>` }
+  const adv=Number(t.advance)||2;
+  return head+`<section class="panel">${tabs}
+    <p class="muted" style="margin:0 0 4px">${adv===1?"The group winner goes":`The top ${adv} in each group go`} through${Number(t.koSize)>0||Number(t.wild)?", plus the best of the rest":""}. Green = going through.</p>
+    <div class="groups">${Object.keys(groups||{}).sort().map(G=>{ const gm=ms.filter(m=>m.stage==="group"&&m.group===G), n=isTeam(t)?new Set(gm.map(m=>m.tie)).size:gm.length, played=isTeam(t)?new Set(gm.filter(m=>m.tie&&tieResult(m.tie).complete).map(m=>m.tie)).size:gm.filter(m=>m.status==="done").length;
+      return `<div class="grp"><h3>Group ${G}<span class="muted" style="font-size:.8rem;font-family:var(--body)">${played} of ${n} played</span></h3>${standTable(t,S.cat,G)}
+        <details class="vm" id="vm-${esc(S.cat)}-${G}"><summary>View all ${n} ${isTeam(t)?"ties":"matches"}</summary><div class="mlist">${fixList(t,gm,{edit, plan:true})}</div></details></div>` }).join("")}</div></section>`;
 }
 function viewLive(){
   const t=T(); if(!t) return noTourney();
@@ -802,6 +813,7 @@ document.addEventListener("click", async e=>{
   if(ds.screen){ e.preventDefault(); location.hash="#screen"; return }
   if(ds.tid){ S.tid=ds.tid; S.newT=false; S.cat=null; ls.set("dsf:tid",S.tid); render(); return }
   if(ds.cat){ S.cat=ds.cat; render(); return }
+  if(ds.fxtab){ S.fxTab=ds.fxtab; render(); return }
   if(ds.copy){ try{ await navigator.clipboard.writeText(ds.copy); toast("Copied") }catch{ toast(ds.copy) } return }
   if(ds.signin){ try{ await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); ls.set("dsf:ttab","org"); location.reload() }catch{ toast("Sign-in didn't finish") } return }
   if(ds.withdraw){ const x=teamById(ds.withdraw); if(!x||!confirm(`Withdraw ${x.name}?`)) return;

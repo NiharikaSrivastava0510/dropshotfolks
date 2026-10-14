@@ -582,6 +582,13 @@ function viewReg(){
 }
 function viewTeams(){
   const t=T(); if(!t) return noTourney();
+  if(!S.isAdmin && !playerIn()) return `${pickBar(t)}<section class="panel signgate"><div class="sg-ico">👥</div><h2>Sign in to see the teams</h2>
+    <p class="muted">Players: sign in with Google, or get a sign-in link by email. It only takes a moment.</p>
+    <button class="btn primary" data-psignin="google">Sign in with Google</button>
+    <div class="sg-or"><span>or</span></div>
+    <div class="row sg-mail"><input id="pl-email" type="email" autocomplete="email" placeholder="you@example.com"><button class="btn" data-psignin="email">✉️ Email me a link</button></div>
+    ${S.linkSent?`<p class="sg-sent">📬 Link sent to <b>${esc(S.linkSent)}</b>. Open it on this device to sign in.</p>`:""}
+    <p class="muted" style="font-size:.85rem">Organiser? Use 🔑 Organiser login at the bottom of <a href="/">dropshotfolks.co.uk</a>.</p></section>`;
   if(S.isAdmin) return `${orgBar(t)}${pickBar(t)}${viewOrg("teams")}`;
   return `${pickBar(t)}<section class="panel">${S.isAdmin?`<button class="btn small editbtn" data-goorg="teams">✏️ Manage teams</button>`:""}<h2>Teams</h2>${catBar(t)}
     ${(()=>{ const ts=teamsOf(t,S.cat); return ts.length?`<p class="muted">${ts.length} team${ts.length>1?"s":""} registered${Number(t.maxTeams)?` of ${Number(t.maxTeams)}`:""} · ${ts.filter(x=>x.status==="confirmed").length} confirmed</p>
@@ -822,7 +829,8 @@ function viewScreen(){
 }
 
 /* ---------- render ---------- */
-const TABS = () => [["reg","Register"],["teams","Teams"],["fix","Fixtures"],["live","Live"],["ref","Referee"]];
+const TABS = () => [["reg","Register"],["teams","Teams"],["fix","Fixtures"],["live","Live"],...(S.isAdmin||S.unlock||S.refOnly?[["ref","Referee"]]:[])];
+const playerIn = () => !!auth?.currentUser && !auth.currentUser.isAnonymous;
 function render(){
   if(document.activeElement?.dataset?.prize){ render.later=true; return }   // don't wipe a prize while it's being typed
   const keep={}; document.querySelectorAll("#main input[id],#main select[id],#main textarea[id]").forEach(el=>{ if(el.type!=="file") keep[el.id]=el.type==="checkbox"?{c:el.checked}:{v:el.value} });
@@ -909,6 +917,13 @@ document.addEventListener("click", async e=>{
   if(ds.fxtab){ S.fxTab=ds.fxtab; render(); return }
   if(ds.openko){ const d=document.querySelector("details.vm[id$='-ko']"); if(d){ d.open=true; const el=document.querySelector(`[data-medit="${ds.openko}_MD"]`)?.closest(".tie")||d; el.scrollIntoView({behavior:"smooth",block:"center"}); el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"),1600) } return }
   if(ds.copy){ try{ await navigator.clipboard.writeText(ds.copy); toast("Copied") }catch{ toast(ds.copy) } return }
+  if(ds.psignin==="google"){ try{ const c=await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+      if(ADMINS.includes(String(c.user.email||"").toLowerCase())) return location.reload();
+      S.uid=c.user.uid; render(); toast(`Signed in as ${c.user.email}`) }catch(e){ toast(e?.code==="auth/popup-blocked"?"Allow pop-ups, then try again":"Sign-in didn't finish") } return }
+  if(ds.psignin==="email"){ const em=($("#pl-email")?.value||"").trim();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)){ toast("Enter your email address"); return }
+    try{ await auth.sendSignInLinkToEmail(em,{url:location.origin+location.pathname+"?t="+encodeURIComponent(T()?.id||""), handleCodeInApp:true}); ls.set("dsf:linkemail",em); S.linkSent=em; render() }
+    catch(e){ toast(e?.code==="auth/operation-not-allowed"?"Email sign-in isn't switched on yet":"Couldn't send the link. Check the address.") } return }
   if(ds.signin){ try{ await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); ls.set("dsf:ttab","org"); location.reload() }catch{ toast("Sign-in didn't finish") } return }
   if(ds.withdraw){ const x=teamById(ds.withdraw); if(!x||!confirm(`Withdraw ${x.name}?`)) return;
     await db.collection("tcontacts").doc(x.id).delete().catch(()=>{}); await db.collection("tteams").doc(x.id).delete().then(()=>toast("Team withdrawn"),()=>toast("Couldn't withdraw")); return }
@@ -1181,6 +1196,9 @@ setTimeout(checkVersion, 4000); setInterval(checkVersion, 120000);
   render();
   if(!window.FIREBASE_CONFIG?.apiKey){ $("#main").innerHTML=`<section class="panel"><div class="empty">Firebase isn't configured.</div></section>`; return }
   firebase.initializeApp(window.FIREBASE_CONFIG); db=firebase.firestore(); auth=firebase.auth();
+  if(auth.isSignInWithEmailLink(location.href)){ const em=ls.get("dsf:linkemail",null) || prompt("Confirm your email to finish signing in");
+    if(em) try{ await auth.signInWithEmailLink(em, location.href); ls.set("dsf:linkemail",null); S.tab="teams"; setTimeout(()=>toast(`Signed in as ${em}`),800) }catch{ setTimeout(()=>toast("That sign-in link has expired. Ask for a new one."),800) }
+    history.replaceState(null,"",location.pathname+(new URLSearchParams(location.search).get("t")?`?t=${new URLSearchParams(location.search).get("t")}`:"")) }
   if(window.FIREBASE_EMULATOR){ auth.useEmulator("http://127.0.0.1:9099"); db.useEmulator("127.0.0.1",8080) }
   await new Promise(res=>{ let first=true; auth.onAuthStateChanged(u=>{
     S.uid=u?.uid||null; S.isAdmin=!!u && u.emailVerified && ADMINS.includes(String(u.email||"").toLowerCase());

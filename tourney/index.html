@@ -520,6 +520,15 @@ nav.tabs button[data-tab="org"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='http:
 .fv-score{display:grid;gap:6px}
 .fv-score div{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:9px 12px;border-radius:10px;background:var(--tint)}
 .fv-score span{color:var(--muted)}
+.signgate{display:grid;justify-items:center;text-align:center;gap:12px;padding:34px 20px}
+.signgate .sg-ico{font-size:2.6rem}
+.signgate h2{margin:0}
+.signgate p{margin:0;max-width:440px}
+.sg-or{display:flex;align-items:center;gap:10px;width:min(360px,100%);color:var(--muted);font-size:.85rem}
+.sg-or::before,.sg-or::after{content:"";flex:1;height:1px;background:var(--line)}
+.sg-mail{flex-wrap:nowrap;width:min(460px,100%)}
+.sg-mail input{flex:1;min-width:0}
+.sg-sent{padding:10px 14px;border-radius:12px;background:var(--ok-bg);color:var(--ink)}
 .fmtform{display:grid;gap:14px}
 .fe-row{display:grid;grid-template-columns:minmax(150px,1.2fr) repeat(3,minmax(120px,1fr));gap:10px;align-items:end;padding:10px 0;border-top:1px dashed var(--line)}
 .fe-row:first-of-type{border-top:0}
@@ -689,5 +698,5 @@ body.refonly{padding-bottom:24px!important}
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="app.js?v=202610140227"></script>
+<script src="app.js?v=202610140249"></script>
 </body></html>

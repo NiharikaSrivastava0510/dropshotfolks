@@ -679,6 +679,16 @@ body.refonly{padding-bottom:24px!important}
 .fc-idle p{font-family:var(--display);font-size:6vh;color:#fff;margin:0}
 .fc-idle small{font-size:3vh}
 
+.pass{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center;border:2px dashed var(--accent)}
+.pass-qr{background:#fff;border-radius:12px;padding:8px;line-height:0}
+.pass-qr svg{width:150px;height:150px;display:block}
+.pass-info h2{margin:4px 0}.pass-info p{margin:4px 0}
+.code{font-family:ui-monospace,Menlo,monospace;letter-spacing:.12em;background:var(--tint);padding:2px 8px;border-radius:6px}
+@media (max-width:520px){.pass{grid-template-columns:1fr;justify-items:center;text-align:center}.pass-qr svg{width:200px;height:200px}}
+.scancard{border:2px solid var(--ball)}.scancard.in{border-color:#2f8f4e}.scancard .row{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.scanbox video{width:100%;max-height:60vh;border-radius:12px;background:#000;margin:8px 0}
+.otc-code{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.otc-code>span{margin-right:auto}
 </style>
 
 <div class="wrap">
@@ -698,5 +708,6 @@ body.refonly{padding-bottom:24px!important}
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="app.js?v=202610140249"></script>
+<script src="qrcode.js?v=1"></script>
+<script src="app.js?v=202610141200"></script>
 </body></html>

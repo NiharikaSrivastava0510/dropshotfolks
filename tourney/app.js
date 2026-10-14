@@ -167,7 +167,7 @@ const S = {
   refOnly: location.hash==="#ref",
   tourneys:[], teams:[], matches:[], contacts:{}, secret:null, unlock:null,
   uid:null, isAdmin:false, loaded:false, tid: new URLSearchParams(location.search).get("t") || ls.get("dsf:tid",null),
-  cat: null, toss: {}, newT:false, otab: ls.get("dsf:otab","details"), editTeam:null, addTeam:false, myTeam: ls.get("dsf:myteam",null), refCourt: ls.get("dsf:refcourt",1), edit:null, scrIdx:0
+  cat: null, toss: {}, newT:false, codes:{}, codesLoaded:false, scan:null, otab: ls.get("dsf:otab","details"), editTeam:null, addTeam:false, myTeam: ls.get("dsf:myteam",null), refCourt: ls.get("dsf:refcourt",1), edit:null, scrIdx:0
 };
 let db=null, auth=null;
 const T = () => S.tourneys.find(t=>t.id===S.tid) || nextTourney() || null;
@@ -582,13 +582,7 @@ function viewReg(){
 }
 function viewTeams(){
   const t=T(); if(!t) return noTourney();
-  if(!S.isAdmin && !playerIn()) return `${pickBar(t)}<section class="panel signgate"><div class="sg-ico">👥</div><h2>Sign in to see the teams</h2>
-    <p class="muted">Players: sign in with Google, or get a sign-in link by email. It only takes a moment.</p>
-    <button class="btn primary" data-psignin="google">Sign in with Google</button>
-    <div class="sg-or"><span>or</span></div>
-    <div class="row sg-mail"><input id="pl-email" type="email" autocomplete="email" placeholder="you@example.com"><button class="btn" data-psignin="email">✉️ Email me a link</button></div>
-    ${S.linkSent?`<p class="sg-sent">📬 Link sent to <b>${esc(S.linkSent)}</b>. Open it on this device to sign in.</p>`:""}
-    <p class="muted" style="font-size:.85rem">Organiser? Use 🔑 Organiser login at the bottom of <a href="/">dropshotfolks.co.uk</a>.</p></section>`;
+
   if(S.isAdmin) return `${orgBar(t)}${pickBar(t)}${viewOrg("teams")}`;
   return `${pickBar(t)}<section class="panel">${S.isAdmin?`<button class="btn small editbtn" data-goorg="teams">✏️ Manage teams</button>`:""}<h2>Teams</h2>${catBar(t)}
     ${(()=>{ const ts=teamsOf(t,S.cat); return ts.length?`<p class="muted">${ts.length} team${ts.length>1?"s":""} registered${Number(t.maxTeams)?` of ${Number(t.maxTeams)}`:""} · ${ts.filter(x=>x.status==="confirmed").length} confirmed</p>
@@ -597,8 +591,13 @@ function viewTeams(){
 }
 function viewFix(){
   const t=T(); if(!t) return noTourney();
+  if(!fxUnlocked(t)) return `${pickBar(t)}<section class="panel signgate"><div class="sg-ico">🔒</div><h2>Fixtures are for registered teams</h2>
+    <p class="muted">Enter the team code from your confirmation message, or scan the QR code in it with your phone camera.</p>
+    <div class="row sg-mail"><input id="fx-code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" placeholder="Team code" style="text-transform:uppercase;letter-spacing:.2em;font-family:var(--mono)"><button class="btn primary" data-fxcode="1">Unlock</button></div>
+    <p class="muted" style="font-size:.85rem">No code yet? Teams get one when the organiser confirms their place.</p></section>`;
+  const myPass = !S.isAdmin && ls.get(`dsf:fx:${t.id}`,null);
   const tools = S.isAdmin ? `<div class="otools ${S.fxTools?"open":""}"><button class="btn ${S.fxTools?"":"primary"} otbtn" data-fxtools="1">${S.fxTools?"Hide organiser tools ▴":"⚙️ Organiser tools: make groups, knockouts, courts & times ▾"}</button>${S.fxTools?viewOrg("fixtures"):""}</div>` : "";
-  const head=`${orgBar(t)}${pickBar(t)}${tools}<section class="panel"><h2>Fixtures & results</h2>${glanceLine(t)}${S.isAdmin&&matchesOf(t).length?`<p class="orghint">✏️ Organiser: change a match's court or time right on it, or tap it to fix the score.</p>`:""}
+  const head=`${orgBar(t)}${pickBar(t)}${myPass?.code?passCard(t,myPass):""}${tools}<section class="panel"><h2>Fixtures & results</h2>${glanceLine(t)}${S.isAdmin&&matchesOf(t).length?`<p class="orghint">✏️ Organiser: change a match's court or time right on it, or tap it to fix the score.</p>`:""}
     ${catBar(t)}</section>`;
   const groups=t.groups?.[S.cat], ms=matchesOf(t,S.cat), edit=canRef(t);
   if(!groups && !ms.length) return head+`<section class="panel"><div class="empty">Fixtures appear here once the organiser makes the groups.</div></section>`;
@@ -745,7 +744,7 @@ function viewOrg(only){
         return `<div class="row"><span class="lbl">Referee link</span><b class="code" style="font-size:.95rem;letter-spacing:0">${esc(link.replace("https://",""))}</b><button class="btn small" data-copy="${esc(link)}">Copy link</button>${S.secret?`<a class="btn small primary" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">Send link & code on WhatsApp</a>`:""}</div>` })()}
       <p class="muted" style="font-size:.85rem">Referees open the link on their phone and enter the code. They only see the scoring screen, nothing else. A new code locks out phones using the old one.</p>
       <div class="row"><a class="btn small" href="#screen" data-screen="1">📺 Open big screen</a><span class="muted" style="font-size:.85rem">Put it on the projector and press F for full screen.</span></div></section>`;
-  if(ot==="teams") body=`<section class="panel"><div class="row" style="justify-content:space-between"><h2>Teams</h2><div class="row"><label class="btn small" for="imp-file">📥 Import spreadsheet</label><input id="imp-file" type="file" accept=".xlsx,.csv" hidden><button class="btn small primary" data-oaddopen="1">➕ Add a team</button></div></div>${catBar(t)}
+  if(ot==="teams") body=`<section class="panel"><div class="row" style="justify-content:space-between"><h2>Teams</h2><div class="row"><button class="btn small" data-scanqr="1">📷 Scan QR</button><label class="btn small" for="imp-file">📥 Import spreadsheet</label><input id="imp-file" type="file" accept=".xlsx,.csv" hidden><button class="btn small primary" data-oaddopen="1">➕ Add a team</button></div></div>${catBar(t)}
       ${S.addTeam?`<div class="ogrp"><h3>New team · ${esc(catName(t,S.cat))}</h3><div class="grid2"><label class="f">Team name<input id="oa-name" maxlength="40"></label>${Array.from({length:nPl(t)},(_,i)=>`<label class="f">Player ${i+1}<input id="oa-p${i+1}" maxlength="60"></label>`).join("")}</div>
         <div class="row"><button class="btn primary small" data-oadd="${esc(S.cat||"")}">Add team</button><button class="btn small ghost" data-oaddopen="0">Cancel</button></div></div>`:""}
       ${(()=>{ const ts=teamsOf(t,S.cat); if(!ts.length) return `<div class="empty">No teams in this category yet.</div>`;
@@ -782,6 +781,9 @@ function teamCard(t, x){
   return `<div class="otc"><div class="otc-h"><b>${esc(x.name)}</b>${x.status==="confirmed"?'<span class="chip st-confirmed">Confirmed</span>':'<span class="chip st-awaiting">Pending</span>'}${c.paid?`<span class="chip st-awaiting">${c.payName?`Paid as ${esc(c.payName)}`:"Says paid"} · check bank</span>`:""}${c.wa?'<span class="chip st-confirmed">WhatsApp ✓</span>':""}</div>
     <div class="muted">${esc(playersOf(x).join(" · "))}</div>
     ${c.email||c.phone?`<div class="otc-c">${esc([c.email,c.phone].filter(Boolean).join(" · "))}</div>`:""}${more.length?`<details class="otc-m"><summary>More details</summary><div>${more.map(esc).join("<br>")}</div></details>`:""}
+    ${x.status==="confirmed"&&S.codes[x.id]?(()=>{ const code=S.codes[x.id].code, msg=confirmMsg(t,x), ph=ukPhone(c.phone);
+      return `<div class="otc-code"><span>🎟 Code <b class="code">${esc(code)}</b>${x.checkedIn?' <span class="chip st-confirmed">✅ Checked in</span>':""}</span>
+        <div class="row">${c.email?`<a class="btn small" href="mailto:${esc(c.email)}?subject=${encodeURIComponent(`${x.name} is confirmed · ${t.name||"Tournament"}`)}&body=${encodeURIComponent(msg)}">📧 Email</a>`:""}${ph?`<a class="btn small" href="https://wa.me/${esc(ph)}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">💬 WhatsApp</a>`:""}<button class="btn small ghost" data-copy="${esc(msg)}">Copy message</button><a class="btn small ghost" href="${esc(passUrl(t,code))}" target="_blank" rel="noopener">🎫 Pass</a></div></div>` })():""}
     <div class="row"><button class="btn small" data-tedit="${esc(x.id)}">✏️ Edit</button>${x.status==="confirmed"?`<button class="btn small ghost" data-tconfirm="${esc(x.id)}" data-v="pending">Unconfirm</button>`:`<button class="btn small primary" data-tconfirm="${esc(x.id)}" data-v="confirmed">Confirm</button>`}<button class="btn small ghost danger" data-tdel="${esc(x.id)}">Delete</button></div></div>`;
 }
 
@@ -846,7 +848,7 @@ function render(){
   $("#who").innerHTML=(S.isAdmin?`<span class="org-flag">Organiser</span>`:location.hash==="#login"?`<button class="btn small" data-signin="1" type="button">🔑 Organiser sign in</button>`:"")+(S.uid && !auth?.currentUser?.isAnonymous?` <button class="btn small" id="signOut" type="button">Sign out</button>`:"");
   const tn=$("#tname"); tn.innerHTML=t?`🏆 <b>${esc(t.name||"Tournament")}</b> · ${esc(fmtDate(t.date))}`:""; tn.hidden=!t;
   const views={reg:viewReg, teams:viewTeams, fix:viewFix, live:viewLive, ref:viewRef, org:viewOrg};
-  $("#main").innerHTML = !S.loaded ? `<section class="panel"><div class="empty loading">Loading…</div></section>` : (S.edit?editPanel():"") + views[S.tab]();
+  $("#main").innerHTML = !S.loaded ? `<section class="panel"><div class="empty loading">Loading…</div></section>` : scanCard() + (S.edit?editPanel():"") + views[S.tab]();
   Object.entries(keep).forEach(([id,k])=>{ const el=document.getElementById(id); if(!el) return; if("c" in k) el.checked=k.c; else el.value=k.v });
   document.querySelectorAll("#main details[id]").forEach(d=>{ if(openD.has(d.id)) d.open=true });
 }
@@ -902,6 +904,11 @@ document.addEventListener("click", async e=>{
   if(ds.wajoin){ S.waOpened=true; setTimeout(render,300); return }   // let the link open, then unlock the tick box
   if(t0.id==="signOut"){ await auth.signOut(); location.reload(); return }
   if(ds.goorg){ const k=ds.goorg; S.tab={details:"reg",teams:"teams",fixtures:"fix",refs:"ref"}[k]||"reg"; if(k==="details") S.editDetails=true; if(k==="fixtures") S.fxTools=true; ls.set("dsf:ttab",S.tab); render(); scrollTo({top:0}); return }
+  if(ds.scanqr){ scanQr(); return }
+  if(ds.scanstop){ scanQr.stop?.(); return }
+  if(ds.scanx){ S.scan=null; history.replaceState(null,"",location.pathname+(T()?`?t=${T().id}`:"")); render(); return }
+  if(ds.fxcode){ const p=await useCode($("#fx-code")?.value); if(p){ render(); toast(`Welcome, ${teamById(p.team)?.name||p.name}! 🏸`) } return }
+  if(ds.fxout){ ls.set(`dsf:fx:${T()?.id}`,null); render(); return }
   if(ds.editfmt!=null){ S.editFmt=ds.editfmt==="1"; render(); return }
   if(ds.savefmt && S.isAdmin){ const g=id=>$(`#fe-${id}`), n=(id,min,max,d)=>Math.min(max,Math.max(min,Number(g(id)?.value)||d));
     const data={groupSize:n("gsize",3,8,3), advance:n("adv",1,4,2), koSize:Math.min(64,Math.max(0,Number(g("kosize").value)||0)), deuce:g("deuce").value!=="0", bronze:g("bronze").checked,
@@ -910,7 +917,7 @@ document.addEventListener("click", async e=>{
     await db.collection("tourneys").doc(T().id).set(data,{merge:true}).then(()=>{ S.editFmt=false; render(); toast("Format & scoring saved ✓") },()=>toast("Couldn't save")); return }
   if(ds.editdetails!=null){ S.editDetails=ds.editdetails==="1"; S.newT=false; render(); scrollTo({top:0,behavior:"smooth"}); return }
   if(ds.fxtools!=null){ S.fxTools=!S.fxTools; render(); return }
-  if(ds.tab){ S.tab=ds.tab; S.edit=null; ls.set("dsf:ttab",S.tab); if(location.hash) history.replaceState(null,"",location.pathname); render(); scrollTo({top:0}); return }
+  if(ds.tab){ S.tab=ds.tab; S.edit=null; S.newT=false; ls.set("dsf:ttab",S.tab); if(location.hash) history.replaceState(null,"",location.pathname); render(); scrollTo({top:0}); return }
   if(ds.screen){ e.preventDefault(); location.hash="#screen"; return }
   if(ds.tid){ S.tid=ds.tid; S.newT=false; S.cat=null; ls.set("dsf:tid",S.tid); render(); return }
   if(ds.cat){ S.cat=ds.cat; render(); return }
@@ -972,8 +979,11 @@ document.addEventListener("click", async e=>{
     const id = ds.tsave==="new" ? `t${(data.date||nowIso().slice(0,10)).replace(/-/g,"")}-${Date.now().toString(36).slice(-4)}` : ds.tsave;
     await db.collection("tourneys").doc(id).set(data,{merge:true}).then(()=>{ S.tid=id; S.newT=false; S.editDetails=false; ls.set("dsf:tid",id); S.posterDraft=undefined; render(); scrollTo({top:0,behavior:"smooth"}); toast("Tournament saved ✓") },()=>toast("Couldn't save")); return }
   if(ds.tcode){ const code=newCode(); await db.collection("tsecrets").doc(t.id).set({code}).then(()=>{ S.secret=code; render(); toast(`Referee code ${code}`) },()=>toast("Couldn't save the code")); return }
-  if(ds.tconfirm){ await db.collection("tteams").doc(ds.tconfirm).update({status:ds.v}).catch(()=>toast("Couldn't update")); return }
-  if(ds.confirmall){ const b=db.batch(); teamsOf(t,ds.confirmall).filter(x=>x.status!=="confirmed").forEach(x=>b.update(db.collection("tteams").doc(x.id),{status:"confirmed"})); await b.commit(); toast("All confirmed"); return }
+  if(ds.tconfirm){ await db.collection("tteams").doc(ds.tconfirm).update({status:ds.v}).catch(()=>toast("Couldn't update"));
+    if(ds.v==="confirmed"){ const x=teamById(ds.tconfirm); if(x) x.status="confirmed"; if(await ensureCodes(t,[ds.tconfirm])) toast("Confirmed ✓ Team code made. Send it with 📧 Email or 💬 WhatsApp.") } return }
+  if(ds.confirmall){ const b=db.batch(), ids=teamsOf(t,ds.confirmall).filter(x=>x.status!=="confirmed").map(x=>x.id); ids.forEach(id=>b.update(db.collection("tteams").doc(id),{status:"confirmed"})); await b.commit();
+    ids.forEach(id=>{ const x=teamById(id); if(x) x.status="confirmed" }); await ensureCodes(t); toast("All confirmed, team codes made"); return }
+  if(ds.checkin){ const on=ds.v==="1"; await db.collection("tteams").doc(ds.checkin).update({checkedIn:on, checkedInAt:on?nowIso():null}).then(()=>toast(on?"Checked in ✅":"Check-in undone"),()=>toast("Couldn't save")); return }
   if(ds.tdel){ const x=teamById(ds.tdel); if(!x||!confirm(`Delete ${x.name}?`)) return; await db.collection("tcontacts").doc(x.id).delete().catch(()=>{}); await db.collection("tteams").doc(x.id).delete(); return }
   if(ds.oadd){ const v=id=>($(`#oa-${id}`)?.value||"").trim(), ks=Array.from({length:nPl(t)},(_,i)=>"p"+(i+1)); if(!v("name")||ks.some(k=>!v(k))){ toast(`Add a team name and all ${ks.length} players`); return }
     await db.collection("tteams").add({tid:t.id, cat:ds.oadd, name:v("name"), ...Object.fromEntries(ks.map(k=>[k,v(k)])), createdBy:S.uid, createdAt:nowIso(), status:"confirmed"}); ["name",...ks].forEach(k=>$(`#oa-${k}`).value=""); toast("Team added"); return }
@@ -1109,6 +1119,61 @@ async function autoSetup(){
   autoSetup.running=false;
 }
 
+/* ---------- team codes: each confirmed team gets a code + QR that unlocks Fixtures; the organiser scans it at check-in ---------- */
+// tcodes/{teamId} = {code, tid}  (organiser only) · tpasses/{code} = {tid, team, name}  (anyone can look up one code, nobody can list them)
+const passUrl = (t, code) => `${location.origin}/tourney/?t=${encodeURIComponent(t.id)}&code=${encodeURIComponent(code)}`;
+const qrSvg = (text, cell=6) => { try{ const q=qrcode(0,"M"); q.addData(text); q.make(); return q.createSvgTag({cellSize:cell, margin:2, scalable:true}) }catch{ return "" } };
+async function ensureCodes(t, ids){
+  if(!S.isAdmin || !t || !S.codesLoaded) return 0;
+  const todo=teamsOf(t).filter(x=>x.status==="confirmed" && !S.codes[x.id] && (!ids || ids.includes(x.id)));
+  if(!todo.length) return 0; const b=db.batch();
+  todo.forEach(x=>{ const code=newCode(); S.codes[x.id]={code, tid:t.id}; b.set(db.collection("tcodes").doc(x.id),{code, tid:t.id}); b.set(db.collection("tpasses").doc(code),{tid:t.id, team:x.id, name:x.name}) });
+  await b.commit().catch(()=>toast("Couldn't make team codes. Publish the latest Firebase rules.")); return todo.length;
+}
+const fxUnlocked = t => S.isAdmin || (S.unlock?.tid===t?.id) || !!ls.get(`dsf:fx:${t?.id}`,null);
+async function useCode(code, quiet){
+  code=String(code||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,""); if(code.length<4){ if(!quiet) toast("Enter your team code"); return false }
+  try{ const d=await db.collection("tpasses").doc(code).get(); if(!d.exists){ if(!quiet) toast("That code isn't right. Check your confirmation message."); return false }
+    const p=d.data(); ls.set(`dsf:fx:${p.tid}`,{code, team:p.team, name:p.name}); S.tid=p.tid; ls.set("dsf:tid",p.tid); return p }
+  catch{ if(!quiet) toast("Couldn't check the code. Check your connection."); return false }
+}
+function confirmMsg(t, x){
+  const code=S.codes[x.id]?.code||"", url=passUrl(t,code);
+  return `Hi ${x.p1||"there"},\n\nGreat news: ${x.name} is confirmed for ${t.name||"the tournament"} on ${fmtDate(t.date)}${t.venue?` at ${t.venue}`:""}.\n\nYour team code: ${code}\n\nSee your fixtures and your team pass (QR code to show at check-in):\n${url}\n\nSee you on court!\nDropshot Folks`;
+}
+const ukPhone = p => { let d=String(p||"").replace(/[^\d+]/g,""); if(d.startsWith("+")) return d.slice(1); if(d.startsWith("00")) return d.slice(2); if(d.startsWith("0")) return "44"+d.slice(1); return d };
+// the pass a team shows at check-in
+function passCard(t, p){
+  const x=teamById(p.team), url=passUrl(t,p.code);
+  return `<section class="panel pass"><div class="pass-qr">${qrSvg(url)}</div><div class="pass-info"><span class="lbl">🎫 Team pass · ${esc(t.name||"")}</span><h2>${esc(x?.name||p.name||"Your team")}</h2>
+    ${x?`<p class="muted">${esc(playersOf(x).join(" · "))}</p>`:""}<p>Team code <b class="code">${esc(p.code)}</b></p><p class="muted" style="font-size:.88rem">Show this QR code at the Tournament Desk to check in. Screenshot it to keep it handy.</p>
+    ${x?.checkedIn?`<span class="chip st-confirmed">✅ Checked in</span>`:""}</div></section>`;
+}
+// organiser: what a scanned team code shows
+function scanCard(){
+  if(!S.isAdmin || !S.scan) return ""; const p=S.scan, x=teamById(p.team), t=S.tourneys.find(y=>y.id===p.tid);
+  if(!x) return `<section class="panel scancard"><h2>📷 Scanned code ${esc(p.code||"")}</h2><p>No team found for this code.</p><button class="btn small ghost" data-scanx="1">Close</button></section>`;
+  return `<section class="panel scancard ${x.checkedIn?"in":""}"><span class="lbl">📷 Scanned · ${esc(t?.name||"")}</span><h2>${esc(x.name)}</h2><p>${esc(playersOf(x).join(" · "))}</p>
+    <div class="row">${x.status==="confirmed"?'<span class="chip st-confirmed">Confirmed</span>':'<span class="chip st-awaiting">Not confirmed</span>'}${x.checkedIn?`<span class="chip st-confirmed">✅ Checked in ${x.checkedInAt?esc(new Date(x.checkedInAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})):""}</span>`:""}</div>
+    <div class="row">${x.checkedIn?`<button class="btn small ghost" data-checkin="${esc(x.id)}" data-v="0">Undo check-in</button>`:`<button class="btn primary" data-checkin="${esc(x.id)}" data-v="1">✅ Check in</button>`}${"BarcodeDetector" in window?`<button class="btn small" data-scanqr="1">📷 Scan next</button>`:""}<button class="btn small ghost" data-scanx="1">Close</button></div></section>`;
+}
+// organiser: scan a team's QR code inside the app (Chrome / Android); on iPhone the camera app opens the link instead
+async function scanQr(){
+  if(!("BarcodeDetector" in window)){ toast("Use your phone's camera app to scan the QR code. It opens the check-in screen here."); return }
+  const box=document.createElement("div"); box.className="readmodal"; box.innerHTML=`<div class="readcard scanbox"><h2>📷 Scan a team QR code</h2><video playsinline muted></video><button type="button" class="btn" data-scanstop="1">Cancel</button></div>`; document.body.append(box);
+  let stream; try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}) }catch{ box.remove(); toast("Camera not available"); return }
+  const v=box.querySelector("video"); v.srcObject=stream; await v.play(); const det=new BarcodeDetector({formats:["qr_code"]});
+  const stop=()=>{ stream.getTracks().forEach(k=>k.stop()); box.remove() }; scanQr.stop=stop;
+  (async function loop(){ if(!document.body.contains(box)) return;
+    try{ const r=await det.detect(v); const raw=r[0]?.rawValue; if(raw){ const code=(/[?&]code=([A-Z0-9]+)/i.exec(raw)||[])[1]||raw; stop(); await openScan(code); return } }catch{}
+    requestAnimationFrame(loop) })();
+}
+async function openScan(code){
+  code=String(code||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+  const d=await db.collection("tpasses").doc(code).get().catch(()=>null);
+  S.scan = d?.exists ? {...d.data(), code} : {code}; if(d?.exists){ S.tid=d.data().tid } render(); scrollTo({top:0,behavior:"smooth"});
+}
+
 /* ---------- import teams from a Google Form spreadsheet (.xlsx or .csv) ---------- */
 async function unzip(buf, want){
   const dv=new DataView(buf.buffer, buf.byteOffset, buf.byteLength); let e=buf.length-22; while(e>=0 && dv.getUint32(e,true)!==0x06054b50) e--; if(e<0) throw new Error("not a zip");
@@ -1210,9 +1275,15 @@ setTimeout(checkVersion, 4000); setInterval(checkVersion, 120000);
   listen("tmatches", d=>{ S.matches=d.map(m=>({...m, games:fromDb(m.games)})); once("tmatches") });
   if(S.isAdmin){
     listen("tcontacts", d=>{ S.contacts=Object.fromEntries(d.map(x=>[x.id,x])); render() });
+    db.collection("tcodes").onSnapshot(sn=>{ S.codes=Object.fromEntries(sn.docs.map(d=>[d.id,d.data()])); const first=!S.codesLoaded; S.codesLoaded=true; render();
+      if(first) setTimeout(async()=>{ for(const t of S.tourneys) await ensureCodes(t) },2500) },()=>{});
     const go=()=>{ if(S.loaded) autoSetup(); else setTimeout(go,300) }; setTimeout(go,1200);
     const watchSecret=()=>{ const t=T(); if(t) db.collection("tsecrets").doc(t.id).get().then(d=>{ S.secret=d.exists?d.data().code:null; render() }).catch(()=>{}) };
     setTimeout(watchSecret,800);
   }
+  const qcode=new URLSearchParams(location.search).get("code");
+  if(qcode){ const wait=()=>new Promise(r=>{ const k=()=>S.loaded?r():setTimeout(k,200); k() }); await wait();
+    if(S.isAdmin) openScan(qcode);
+    else { const p=await useCode(qcode,true); S.tab="fix"; render(); if(p) toast(`Welcome, ${teamById(p.team)?.name||p.name}! 🏸`); else toast("That team code isn't right") ; history.replaceState(null,"",location.pathname+(p?`?t=${p.tid}`:"")) } }
   auth.onAuthStateChanged(u=>{ if(u) db.collection("tunlocks").doc(u.uid).onSnapshot(d=>{ S.unlock=d.exists?d.data():null; render() },()=>{}) });
 })();

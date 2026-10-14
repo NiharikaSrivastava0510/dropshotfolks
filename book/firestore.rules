@@ -203,6 +203,15 @@ service cloud.firestore {
     match /tsecrets/{tid} {
       allow read, write: if isAdmin();
     }
+    // Team codes sent on confirmation: the organiser keeps the list; a player can look up only the code they were given.
+    match /tcodes/{id} {
+      allow read, write: if isAdmin();
+    }
+    match /tpasses/{code} {
+      allow get: if true;
+      allow list: if false;
+      allow write: if isAdmin();
+    }
     match /tunlocks/{uid} {
       allow read, delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
       allow create, update: if signedIn() && request.auth.uid == uid

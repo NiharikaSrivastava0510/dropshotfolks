@@ -28,7 +28,7 @@ service cloud.firestore {
     }
 
     function shortText(v, n) { return v is string && v.size() <= n; }
-    function levelCode(v) { return v in ['E', 'D-', 'D+', 'C-', 'C+']; }
+    function levelCode(v) { return v in ['E-', 'E', 'D-', 'D+', 'C-', 'C+']; }
     // What a player may store on their own record.
     function validPlayer(d) {
       return d.keys().hasOnly(['email', 'name', 'phone', 'level', 'quiz', 'verified', 'levelRequest', 'createdAt', 'remind'])

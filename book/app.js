@@ -1,21 +1,24 @@
 /* ---------- Club rules ---------- */
 const LEVELS = [
-  {code:"E", key:"E", name:"Beginner", court:null, desc:"Still learning to hold the racket, can't yet clear from one end of the court to the other, or doesn't know the doubles rules yet. Not for Thursday sessions: start with coaching or a beginners' session."},
+  {code:"E-", key:"Em", name:"New Beginner", court:null, desc:"Can hit the shuttle back and forth from one spot to another, but not yet the different shots, a full game or any pace. Not for Thursday sessions: start with coaching or a beginners' session."},
+  {code:"E", key:"E", name:"Beginner", court:null, desc:"Plays proper games, but clears don't reach the back yet, there's no real smash or drop, and fast shuttles get past. Not for Thursday sessions: start with coaching or a beginners' session."},
   {code:"D-", key:"Dm", name:"Lower Intermediate", court:1, desc:"Social player. Clears from one end to the other, smashes from the front, tries drops, knows the basic serves and how doubles works, but medium-paced games are still a stretch."},
   {code:"D+", key:"Dp", name:"Intermediate", court:2, desc:"Rallies of 6–10 shots, knows doubles rotation, plays clears, smashes and net shots, and enjoys fast-paced badminton."},
   {code:"C-", key:"Cm", name:"Mid Intermediate", court:3, desc:"Fast-paced player. Hits smashes, keeps rallies of 10–15 shots, kills at the net, clears and smashes with only a few mistakes."},
   {code:"C+", key:"Cp", name:"High Intermediate (upper)", court:4, desc:"Plays tournaments regularly, knows every shot and makes hardly any mistakes."}
 ];
-// Club rule: no beginners (E) on Thursday sessions, whatever the court setup says.
+// Club rule: no beginners (E- or E) on Thursday sessions, whatever the court setup says.
 const NO_BEGINNER_DAYS = [4];   // 0 = Sunday … 4 = Thursday
 const beginnersBarred = s => !!s?.date && NO_BEGINNER_DAYS.includes(new Date(s.date+"T12:00:00").getDay());
 const lvByCode = c => LEVELS.find(l=>l.code===c);
+const BEGINNER = ["E-","E"];
 const lvByCourt = n => LEVELS.find(l=>l.court===n);
 const CLR = {1:"var(--d1)",2:"var(--d2)",3:"var(--c1)",4:"var(--c2)"};
 const COACHING = "https://dropshotfolks.co.uk/#coaching";
 const PER_COURT = 7, GAME_MINS = 12;
 // Level quiz: what you can actually do on court, doubles rotation and tournament grade.
-// Shot answers run from 0 to 4: 1 is a high beginner (E), 2 lower intermediate (D-), 3 intermediate to mid (D+/C-), 4 upper (C+).
+// Shot and pace answers run from 0 to 4: 0 only hits the shuttle back and forth (E-), 1 is a beginner playing games (E),
+// 2 lower intermediate (D-), 3 intermediate to mid (D+/C-), 4 upper (C+).
 // Your level follows your weaker shots, not just your best ones.
 // Match questions have one right answer: what a player at that level does without thinking.
 const QUIZ = [
@@ -36,38 +39,45 @@ const QUIZ = [
   {e:"🫣", img:"court-three", call:"Rally 6 · under pressure", tag:"pressure", q:"You're stretched at the net, the shuttle is low, and your opponent is right on the net with the racket up. What do you play?", a:["A tight net shot back","Lift it high and deep to the back corner","A flat push straight at them","A cross-court net shot"], correct:1, why:"A net shot to a player waiting with the racket up gets killed. Lift it deep and get ready to defend."},
   {e:"👟", img:"court-lunge", call:"Warm-up · footwork", k:"footwork", q:"Back corner to the net and back again, six times without a break, at game speed:", ic:["🛑","🐢","😮‍💨","🏃","🦸"], a:["I couldn't do it without stopping","I'd do it, slowly and flat-footed","With chassé steps, but I'm puffed by the end","Quickly, with a split step, back to the middle each time","At full game speed, and I could do it all game"]},
   {e:"🌀", img:"court-wide-2", call:"Rally 7 · late to the back", tag:"pressure", q:"They clear you deep and you're late and off balance at the back. Best shot?", a:["Smash anyway: attack is the best defence","A fast cross-court drop","A high, deep clear to buy time","Drive it flat at the net player"], correct:2, why:"An off-balance smash or drop is weak and gets punished. A high clear gives you time to get back in position."},
+  {e:"⚡", img:"court-wide-2", call:"Warm-up · pace", k:"pace", q:"What pace can you keep up with for a whole game, not just a few rallies?", ic:["🐌","🐢","🚶","🏃","🚀"], a:["Gentle hitting back and forth; I don't play real games yet","Slow games; fast shuttles get past me","Social pace; medium-paced games are a stretch","Medium to fast rallies, all game","Fast tournament pace, game after game"]},
+  {e:"🔁", img:"court-lunge", call:"Warm-up · rallies", k:"rally", q:"In a proper game against players at your level, how long do rallies last?", ic:["🐣","🙂","💪","🔥","🦸"], a:["I can hit it back and forth with a friend, but not in a proper game","A few shots, under 5","5–10 shots","10–15 shots, fast","15+, and I build the point to win it"]},
+  {e:"🎚️", img:"backhand-defence", call:"Warm-up · change of pace", k:"tempo", q:"Can you change the pace of a rally on purpose?", ic:["🤷","➖","🐢","🎚️","🎩"], a:["I just try to get it back","Not really, everything comes off my racket at one speed","Sometimes: I slow it down with a high clear","Yes: I mix fast drives and pushes with slow drops to move them","Yes: I hold, disguise, then speed it up when I choose"]},
+  {e:"🫁", img:"court-three", call:"Warm-up · stamina", k:"stamina", q:"How long can you keep your level up?", ic:["😮‍💨","1️⃣","3️⃣","🌙","🏆"], a:["A few rallies, then I need a break","About one game","Two or three games","A full evening at medium-fast pace","A full evening at full pace, or a whole tournament day"]},
+  {e:"🧊", img:"backhand-defence", call:"Rally 8 · slow it down", tag:"pressure", q:"They keep speeding the rally up with flat drives at you and you're losing the battle. Best way to take the pace off?", a:["Drive back even harder","Lift it high every time","Block it soft to the net so they have to hit up","Hit it straight at the net player"], correct:2, why:"A soft block kills their pace and makes them lift, so you can attack. Lifting every time just hands them the smash."},
   {e:"🎯", img:"court-three", call:"Warm-up · errors", k:"errors", q:"Be honest: in a 21-point game, how many points do you give away with your own mistakes (net, out, missed, faults)?", ic:["😅","🙃","🙂","😎","🧊"], a:["More than 10","About 7–10","About 4–6","2 or 3","Hardly any"]},
-  {e:"🔢", img:"group-high-five", call:"Rally 8 · who serves", tag:"rules", q:"Doubles. It's 7–5 to your side and your partner just served and won the rally. Who serves next, and from where?", a:["You, from the right","Your partner again, from the left","Your partner again, from the right","You, from the left"], correct:2, why:"The server keeps serving while your side wins, swapping sides. 8 is even, so it's from the right."},
+  {e:"🔢", img:"group-high-five", call:"Rally 9 · who serves", tag:"rules", q:"Doubles. It's 7–5 to your side and your partner just served and won the rally. Who serves next, and from where?", a:["You, from the right","Your partner again, from the left","Your partner again, from the right","You, from the left"], correct:2, why:"The server keeps serving while your side wins, swapping sides. 8 is even, so it's from the right."},
   {e:"👯", img:"group-high-five", call:"Warm-up · doubles", k:"doubles", q:"How does your doubles rotation work in a fast game?", ic:["🙋","🧭","🔄","🛡️","♟️"], a:["I haven't played much doubles","I'm still working out where to stand","We get front-and-back and side-by-side right most of the time","We rotate without talking and cover every gap","We plan it: who serves, who attacks, which player to target"]},
   {e:"🏆", img:"kneel-celebrate", call:"Cool-down · tournaments", k:"tgrade", q:"Tournaments: what's the highest grade you've played?", ic:["🙈","🎪","🥉","🥈","🥇"], a:["I've never played one","Fun or social tournaments only","E or D grade","C grade","B grade or higher (A, open, county)"]},
   {e:"🥇", img:"kneel-celebrate", call:"Cool-down · results", k:"tres", q:"And how did you do at that grade?", ic:["🙈","🙂","💪","🏅","🏆"], a:["I haven't played one, or lost every match","Won a match or two","Got out of the group","Reached a semi-final or final","Won it"]}
 ];
 // answers that describe your shots and game (tournament answers are counted separately)
-const SHOT_KEYS = ["clear","backhand","smash","drop","net","defence","drive","serve","ret","footwork","errors","doubles"];
-const packQuiz = ans => ({v:4, a:QUIZ.map((_,i)=>ans?.[i] ?? "").join(",")});
+const SHOT_KEYS = ["clear","backhand","smash","drop","net","defence","drive","serve","ret","footwork","pace","rally","tempo","stamina","errors","doubles"];
+const packQuiz = ans => ({v:5, a:QUIZ.map((_,i)=>ans?.[i] ?? "").join(",")});
 const knowCount = ans => QUIZ.filter((x,i)=>x.correct!=null && ans?.[i]===x.correct).length;
 const qv = (ans,k) => ans[QUIZ.findIndex(x=>x.k===k)];
-const LV_ORDER = ["E","D-","D+","C-","C+"];
+const LV_ORDER = ["E-","E","D-","D+","C-","C+"];
 function levelFrom(ans){
   if(QUIZ.some((_,i)=>ans?.[i]==null)) return null;
   const shots = SHOT_KEYS.map(k=>qv(ans,k)).sort((a,b)=>a-b);
   const mean = shots.reduce((a,b)=>a+b,0)/shots.length, weak = shots[Math.floor(shots.length*.3)];
   // half your average, half your weaker shots: one or two strong answers can't lift you
   const sc = (mean+weak)/2;
-  let i = sc<1.6 ? 0 : sc<2.25 ? 1 : sc<2.85 ? 2 : sc<3.45 ? 3 : 4;
-  // can't clear past mid-court, get a low serve in or play doubles yet: beginner
-  if(qv(ans,"clear")<=1 && qv(ans,"serve")<=1 || qv(ans,"clear")===0 || qv(ans,"doubles")===0) i = 0;
+  let i = sc<0.9 ? 0 : sc<1.6 ? 1 : sc<2.25 ? 2 : sc<2.85 ? 3 : sc<3.45 ? 4 : 5;
+  // only hitting it back and forth, no proper games yet: new beginner
+  if(qv(ans,"rally")===0 && qv(ans,"pace")===0) i = 0;
+  // can't clear past mid-court, get a low serve in, play doubles or keep up with social pace yet: beginner at most
+  if(qv(ans,"clear")<=1 && qv(ans,"serve")<=1 || qv(ans,"clear")===0 || qv(ans,"doubles")===0 || qv(ans,"pace")<=1 && qv(ans,"rally")<=1) i = Math.min(i,1);
   // match questions cap the level: players who play at a level read these situations without thinking
   const nKnow = QUIZ.filter(x=>x.correct!=null).length, know = knowCount(ans);
-  if(know<nKnow-1) i = Math.min(i,3);
-  if(know<nKnow-2) i = Math.min(i,2);
-  if(know<nKnow/2) i = Math.min(i,1);
+  if(know<nKnow-1) i = Math.min(i,4);
+  if(know<nKnow-2) i = Math.min(i,3);
+  if(know<nKnow/2) i = Math.min(i,2);
   // C+ players play graded tournaments
   const g = qv(ans,"tgrade"), r = qv(ans,"tres");
-  if(g<=1) i = Math.min(i,3);
+  if(g<=1) i = Math.min(i,4);
   // tournament results are hard evidence: they set a floor (C grade = C-, B grade or higher = C+, a step lower unless you reached the semis),
   // but lift you at most one level above what your shots say
-  const floor = g===4 ? (r>=3?4:3) : g===3 ? (r>=3?3:2) : g===2 && r>=3 ? 2 : 0;
+  const floor = g===4 ? (r>=3?5:4) : g===3 ? (r>=3?4:3) : g===2 && r>=3 ? 3 : 0;
   return LV_ORDER[Math.max(i, Math.min(floor, i+1))];
 }
 const STATUS = {
@@ -187,7 +197,7 @@ const cap = (s,court) => { const v = Number(s.capacity?.[court] ?? s.capacity ??
 const courtsOf = s => [1,2,3,4].filter(c => cap(s,c) > 0);
 // each session can name its courts and choose which levels play on each (default: court n = level n)
 const courtLevels = (s,c) => { const v=s?.courts?.[c]?.levels, l=Array.isArray(v) && v.length ? v : [lvByCourt(c).code];
-  return beginnersBarred(s) ? l.filter(x=>x!=="E") : l };
+  return beginnersBarred(s) ? l.filter(x=>!BEGINNER.includes(x)) : l };
 const courtName = (s,c) => s?.courts?.[c]?.label || lvByCourt(c).name;
 const courtChips = (s,c) => courtLevels(s,c).map(lvChip).join(" ");
 // a player only ever goes on a court that includes their level: the first one with space, else the first one (waiting list)
@@ -791,7 +801,7 @@ async function setPartners(ids){
 }
 function viewLevel(){
   const res = levelFrom(S.quiz), p = meP();
-  return `<section class="panel"><div><h2>Level guide</h2><p class="muted">Each court is for one level. You book a session and we put you on the court for your level. Beginners (E) can book sessions that have a beginners' court, but not Thursday sessions.</p></div>
+  return `<section class="panel"><div><h2>Level guide</h2><p class="muted">Each court is for one level. You book a session and we put you on the court for your level. Beginners (E- and E) can book sessions that have a beginners' court, but not Thursday sessions.</p></div>
     <div class="levels">${LEVELS.map(l=>`<div class="lvrow"><span class="lv lv-${l.key}">${l.code}</span><div><b>${l.name}</b>${l.court?` · Court ${l.court}`:" · court set per session"}<p class="muted">${l.desc}</p></div></div>`).join("")}</div></section>
   <section class="panel"><div><h2>Think you've moved up?</h2><p class="muted">Take the questions again. If the answer changes, ask the organiser to move you.</p></div>
     <form class="quiz" id="quiz">${quizFields("q", S.quiz)}</form>
@@ -1034,7 +1044,7 @@ async function bookSelected(){
     const myId=`${s.id}_${p.id}`;
     const pickCourt=lvl=>{ const cs=courtsOf(s).filter(c=>courtLevels(s,c).includes(lvl)); return cs.find(c=>used(c)<cap(s,c)) ?? cs[0] ?? null };
     const myCourt=pickCourt(p.level);
-    if(!myCourt){ ok=false; lines.push(p.level==="E" && beginnersBarred(s) ? `${fmtDate(s.date)}: Thursday sessions aren't for beginners (E). Coaching is a great way to start.` : `${fmtDate(s.date)}: this session isn't running a court for ${esc(p.level)} players`); continue }
+    if(!myCourt){ ok=false; lines.push(BEGINNER.includes(p.level) && beginnersBarred(s) ? `${fmtDate(s.date)}: Thursday sessions aren't for beginners (E- and E). Coaching is a great way to start.` : `${fmtDate(s.date)}: this session isn't running a court for ${esc(p.level)} players`); continue }
     if(!S.bookings.find(b=>b.id===myId && b.status!=="cancelled")) await place(myId, {playerId:p.id, name:p.name, level:p.level}, myCourt, "You");
     let k = S.bookings.filter(b=>b.sessionId===s.id && b.hostId===p.id).length;
     for(const g of S.guests){

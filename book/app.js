@@ -211,10 +211,68 @@ function schedule(ids,total){
   }
   return out;
 }
+// Rotation with fixed partners and gender-aware game styles.
+// ids: player ids in booking order; total: games in the session
+// opt.gender: {id:"M"|"F"}; opt.style: "any"|"fair"|"mixed"|"womens"; opt.pairs: [{a,b,from,to}] (game numbers, 1-based, inclusive; empty = whole session)
+const planCache = new Map();
+const GAME_STYLES = [["any","Any mix"],["fair","Fair: mixed, women's or men's doubles"],["mixed","Mixed doubles first"],["womens","Women's doubles first"]];
+const GENDERS = [["","–"],["M","Man"],["F","Woman"]];
+function smartSchedule(ids, total, opt={}){
+  const n=ids.length; if(n<4) return [];
+  const G=opt.gender||{}, style=opt.style||"any", pairs=opt.pairs||[];
+  const played={}, last={}, pc={}, key=(a,b)=>a<b?a+"|"+b:b+"|"+a;
+  ids.forEach(i=>{played[i]=0;last[i]=-1});
+  const quads=[];   // every group of four, in a fixed order so all phones agree
+  for(let a=0;a<n;a++) for(let b=a+1;b<n;b++) for(let c=b+1;c<n;c++) for(let d=c+1;d<n;d++) quads.push([ids[a],ids[b],ids[c],ids[d]]);
+  const teamG = t => { const g=t.map(i=>G[i]); return g.includes(undefined)||g.includes("")||g.includes(null) ? "?" : g.slice().sort().join("") }; // "FM","FF","MM" or "?"
+  function stylePenalty(t1,t2){
+    const a=teamG(t1), b=teamG(t2);
+    if(style==="any" || a==="?" || b==="?") return 0;
+    const fair = a===b;                                   // MF v MF, FF v FF, MM v MM
+    if(style==="fair") return fair?0:150;
+    if(style==="mixed") return (a==="FM"?0:50)+(b==="FM"?0:50)+(fair?0:150);
+    if(style==="womens") return [...t1,...t2].filter(i=>G[i]==="M").length*40 + (fair?0:150);
+    return 0;
+  }
+  const out=[];
+  for(let g=0; g<total; g++){
+    const gn=g+1, active=pairs.filter(p=>ids.includes(p.a)&&ids.includes(p.b)&&(!p.from||gn>=p.from)&&(!p.to||gn<=p.to));
+    const partnerOf={}; active.forEach(p=>{partnerOf[p.a]=p.b; partnerOf[p.b]=p.a});
+    const minP=Math.min(...ids.map(i=>played[i]));
+    const order=ids.map((id,ix)=>({id,ix})).sort((x,y)=>played[x.id]-played[y.id] || last[x.id]-last[y.id] || ((x.ix-g)%n+n)%n-((y.ix-g)%n+n)%n);
+    const rank={}; order.forEach((o,r)=>rank[o.id]=r);
+    let best=null, bs=Infinity;
+    for(const q of quads){
+      if(q.some(i=>partnerOf[i] && !q.includes(partnerOf[i]))) continue;          // partners play together or not at all
+      let fair=0; q.forEach(i=>{ fair += (played[i]-minP)*60 + rank[i]*5 });
+      ids.forEach(i=>{ if(!q.includes(i) && last[i] < g-2 && g>=2) fair += 200 });   // nobody rests three games running
+      const [a,b,c,d]=q;
+      for(const o of [[[a,b],[c,d]],[[a,c],[b,d]],[[a,d],[b,c]]]){
+        if(o.some(t=>partnerOf[t[0]] && partnerOf[t[0]]!==t[1])) continue;        // keep fixed partners on the same side
+        const rep=o.reduce((t,tm)=>t+(partnerOf[tm[0]]===tm[1]?0:(pc[key(...tm)]||0)*15),0);
+        const sc=fair+rep+stylePenalty(o[0],o[1]);
+        if(sc<bs){bs=sc;best=o}
+      }
+    }
+    if(!best){ // pairs make four impossible (e.g. 5 players with two pairs): fall back to ignoring pairs for this game
+      const f=order.slice(0,4).map(o=>o.id); best=[[f[0],f[1]],[f[2],f[3]]];
+    }
+    best.forEach(t=>pc[key(...t)]=(pc[key(...t)]||0)+1);
+    const four=best.flat(); four.forEach(i=>{played[i]++;last[i]=g});
+    out.push({teams:best, sit:ids.filter(i=>!four.includes(i))});
+  }
+  return out;
+}
 function courtPlan(s,c){
   const roster=courtRoster(s,c), r=rotInfo(s), ids=roster.map(b=>b.playerId), ov=s.rot?.[c]||{};
+  // fixed partners and the court's game style; without either, the original rotation is used unchanged
+  const style=s.style?.[c]||"any", pairs=(s.pairs||[]).filter(p=>ids.includes(p.a)&&ids.includes(p.b));
+  const gender=Object.fromEntries(roster.map(b=>[b.playerId,b.gender||""]));
+  const ck=JSON.stringify([ids,r.total,style,pairs,gender]);
+  const base = (style==="any" && !pairs.length) ? schedule(ids, r.total)
+    : (planCache.get(ck) || (planCache.size>200 && planCache.clear(), planCache.set(ck, smartSchedule(ids, r.total, {gender, style, pairs})).get(ck)));
   // organiser edits replace a game while all four players are still in the rotation
-  const games=schedule(ids, r.total).map((g,i)=>{ const o=ov[i];
+  const games=base.map((g,i)=>{ const o=ov[i];
     if(!Array.isArray(o) || o.length!==4 || new Set(o).size!==4 || o.some(id=>!ids.includes(id))) return g;
     return {teams:[[o[0],o[1]],[o[2],o[3]]], sit:ids.filter(x=>!o.includes(x)), edited:true} });
   return {roster, r, games, names:Object.fromEntries(roster.map(b=>[b.playerId,b.name]))} }
@@ -785,7 +843,7 @@ function orgParts(){
     ${reqs.map(p=>`<tr><td>${esc(p.name)} <span class="muted">${esc(p.email)}</span></td><td>${lvChip(p.level)}</td><td>${lvChip(p.levelRequest)}</td><td class="row"><button class="btn small primary" data-approve="${esc(p.id)}">Approve</button><button class="btn small ghost" data-decline="${esc(p.id)}">Decline</button></td></tr>`).join("")}
   </tbody></table></div></section>`:"";
   const sessions = `<section class="panel"><h2>Sessions &amp; bookings</h2>
-    ${ups.length?ups.map(adminSession).join(""):`<div class="empty">No upcoming sessions. Add one below.</div>`}
+    ${ups.length?`<p class="muted">Tap a session to open it. Everything for that session (bookings, adding players, check-in and editing) is inside.</p><div>${ups.map(adminSession).join("")}</div>`:`<div class="empty">No upcoming sessions. Add one below.</div>`}
     <details id="addSess"><summary><b>Add sessions</b></summary>
       <form id="sessForm" class="grid2" style="margin-top:10px">
         <label class="f">First date<input id="s-date" type="date" required></label>
@@ -802,13 +860,14 @@ function orgParts(){
       </form></details>
   </section>`;
   const players = `<section class="panel"><h2>Players</h2>
-    ${S.players.length?`<div class="tbl"><table><thead><tr><th></th><th>Player</th><th>Contact</th><th>Level</th><th>Checked</th></tr></thead><tbody>
-    ${S.players.slice().sort((a,b)=>String(a.name).localeCompare(b.name)).map(p=>(S.pedit===p.id?`<tr><td colspan="5"><div class="grid2">
+    ${S.players.length?`<div class="tbl"><table><thead><tr><th></th><th>Player</th><th>Contact</th><th>Plays as</th><th>Level</th><th>Checked</th></tr></thead><tbody>
+    ${S.players.slice().sort((a,b)=>String(a.name).localeCompare(b.name)).map(p=>(S.pedit===p.id?`<tr><td colspan="6"><div class="grid2">
         <label class="f">Name<input id="pe-name" value="${esc(p.name)}"></label>
         <label class="f">Email<input id="pe-email" type="email" value="${esc(p.email||"")}"></label>
         <label class="f">Mobile<input id="pe-phone" value="${esc(p.phone||"")}"></label>
         <div class="row" style="align-self:end"><button class="btn small primary" data-psave="${esc(p.id)}">Save</button><button class="btn small" data-pedit="">Close</button><button class="btn small ghost danger" data-pdel="${esc(p.id)}">Delete player</button></div>
       </div></td></tr>`:"")+`<tr><td>${avatar(p.id,p.name,"sm")}</td><td>${esc(p.name)}<br><button class="btn small ghost" data-pedit="${esc(p.id)}">Edit</button></td><td class="sel">${esc(p.email||"–")}${p.phone?`<br><span class="muted">${esc(p.phone)}</span>`:""}</td>
+      <td><select data-pgender="${esc(p.id)}" aria-label="Plays as, for ${esc(p.name)}">${GENDERS.map(([k,l])=>`<option value="${k}" ${k===(p.gender||"")?"selected":""}>${l}</option>`).join("")}</select></td>
       <td><select data-setlv="${esc(p.id)}" aria-label="Level for ${esc(p.name)}">${LEVELS.map(l=>`<option value="${l.code}" ${l.code===p.level?"selected":""}>${l.code}</option>`).join("")}</select></td>
       <td><input type="checkbox" data-verify="${esc(p.id)}" ${p.verified?"checked":""} aria-label="Level checked"></td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">Players appear here when they register.</div>`}
   </section>`;
@@ -909,35 +968,51 @@ function adminSession(s){
     const list = S.bookings.filter(b=>b.sessionId===s.id && b.court===c && b.status!=="cancelled").sort((a,b)=>String(a.createdAt).localeCompare(b.createdAt));
     if(!cap(s,c) && !list.length) return "";
     return `<tr><td colspan="5" style="background:var(--sunk)"><b>Court ${c}</b> · ${esc(courtName(s,c))} ${courtChips(s,c)} · ${activeIn(s.id,c).length}/${cap(s,c)}${cap(s,c)?"":" · not running"}</td></tr>` +
-      (list.length?list.map(b=>{ const em=S.players.find(p=>p.id===b.playerId)?.email; return `<tr><td>${esc(b.name)}${offChip(b)}${b.hostId?` <span class="chip st-waitlist">guest ${lvChip(b.level)}</span>`:""}${em?`<br><span class="muted" style="font-size:.82rem">${esc(em)}</span>`:""}</td><td class="mono">${esc(b.ref)}</td><td><select data-status="${esc(b.id)}" aria-label="Status for ${esc(b.name)}">${Object.entries(STATUS).map(([k,v])=>`<option value="${k}" ${k===b.status?"selected":""}>${v.label}</option>`).join("")}</select>${b.absent?' <span class="chip st-cancelled">Not here</span>':""}</td>
+      (list.length?list.map(b=>{ const em=S.players.find(p=>p.id===b.playerId)?.email; return `<tr><td>${esc(b.name)}${offChip(b)}${b.hostId?` <span class="chip st-waitlist">guest ${lvChip(b.level)}</span>`:""}${em?`<br><span class="muted" style="font-size:.82rem">${esc(em)}</span>`:""}<div class="row" style="gap:6px;margin-top:4px"><select class="gsel" data-gender="${esc(b.id)}" aria-label="Plays as, for ${esc(b.name)}">${GENDERS.map(([k,l])=>`<option value="${k}" ${k===(b.gender||"")?"selected":""}>${l}</option>`).join("")}</select>${pairChips(s,b.playerId)}</div></td><td class="mono">${esc(b.ref)}</td><td><select data-status="${esc(b.id)}" aria-label="Status for ${esc(b.name)}">${Object.entries(STATUS).map(([k,v])=>`<option value="${k}" ${k===b.status?"selected":""}>${v.label}</option>`).join("")}</select>${b.absent?' <span class="chip st-cancelled">Not here</span>':""}</td>
         <td><select data-court="${esc(b.id)}" aria-label="Court for ${esc(b.name)}">${[1,2,3,4].map(n=>`<option value="${n}" ${n===b.court?"selected":""}>Court ${n}</option>`).join("")}</select></td>
         <td class="row">${b.status==="paid"||b.status==="awaiting"?`<button class="btn small primary" data-confirm="${esc(b.id)}">Confirm paid</button>`:""}
         ${b.status==="waitlist"?`<button class="btn small" data-offer="${esc(b.id)}">Offer place</button>`:""}
+        ${ACTIVE.includes(b.status)?`<button class="btn small" data-pairwith="${esc(s.id)}|${esc(b.playerId)}">Pair up</button>`:""}
         ${ACTIVE.includes(b.status)?`<button class="btn small ghost" data-absent="${esc(b.id)}">${b.absent?"Back in rotation":"Not here"}</button>`:""}
         <button class="btn small ghost danger" data-acancel="${esc(b.id)}">Cancel</button></td></tr>` }).join(""):`<tr><td colspan="5" class="muted">No bookings</td></tr>`);
   }).join("");
-  return `<div class="bk"><div class="row" style="justify-content:space-between"><h3>${fmtLong(s.date)} · ${esc(s.start)}–${esc(s.end)}${s.title?" · "+esc(s.title):""}</h3>
-    <div class="row"><button class="btn small" data-msg="${s.id}">Copy reminder message</button><button class="btn small" data-emails="${s.id}">Copy player emails</button><button class="btn small" data-toggle="${s.id}">${s.open===false?"Open booking":"Close booking"}</button><button class="btn small ghost danger" data-delsess="${s.id}">Delete</button></div></div>
-    <p class="muted">${esc(v.venue||"No venue set")}${v.address?" · "+esc(v.address):""}</p>
-    <div class="row code-row"><span class="lbl">Host view code</span>${S.secrets[s.id]?`<b class="code">${esc(S.secrets[s.id])}</b><button class="btn small" data-copy="${esc(S.secrets[s.id])}">Copy</button><button class="btn small ghost" data-newcode="${esc(s.id)}">New code</button>`:`<button class="btn small primary" data-newcode="${esc(s.id)}">Create code</button>`}<span class="muted" style="font-size:.82rem">Give it to whoever runs the court-side device. A new code locks out devices using the old one.</span></div>
-    <details id="ci-${s.id}"><summary><b>Check-in list</b> (${S.bookings.filter(b=>b.sessionId===s.id&&ACTIVE.includes(b.status)&&b.checkedIn).length} of ${S.bookings.filter(b=>b.sessionId===s.id&&ACTIVE.includes(b.status)).length} here)</summary><div style="display:grid;gap:10px;margin-top:10px">${checkinList(s)}</div></details>
-    <div class="tbl"><table><thead><tr><th>Player</th><th>Ref</th><th>Status</th><th>Court</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
-    ${S.bookings.some(b=>b.sessionId===s.id&&b.status==="cancelled")?`<details id="canc-${s.id}"><summary>Cancelled (${S.bookings.filter(b=>b.sessionId===s.id&&b.status==="cancelled").length})</summary><div style="display:grid;gap:6px;margin-top:8px">${S.bookings.filter(b=>b.sessionId===s.id&&b.status==="cancelled").map(b=>`<div class="row" style="justify-content:space-between"><span>${esc(b.name)} · Court ${esc(b.court)}</span><span class="row"><button class="btn small" data-restore="${esc(b.id)}">Restore</button><button class="btn small ghost danger" data-bdel="${esc(b.id)}">Delete</button></span></div>`).join("")}</div></details>`:""}
+  // one fold-out card per session: the closed card is a summary, the open card holds everything for that session
+  const inS = S.bookings.filter(b=>b.sessionId===s.id), cnt = st => inS.filter(b=>b.status===st).length;
+  const booked = inS.filter(b=>ACTIVE.includes(b.status)).length, places = [1,2,3,4].reduce((t,n)=>t+cap(s,n),0);
+  const here = inS.filter(b=>ACTIVE.includes(b.status)&&b.checkedIn).length, cancelled = cnt("cancelled");
+  const sub = (id, title, body, open=false) => `<details class="sub" id="${id}-${s.id}" ${open?"open":""}><summary>${title}</summary><div class="sub-body">${body}</div></details>`;
+  return `<details class="sesscard" id="sess-${s.id}" ${sessRemembered(s.id)?"open":""}>
+  <summary class="sess-sum">
+    <span class="sess-date"><b>${esc(new Date(s.date+"T12:00:00").toLocaleDateString("en-GB",{weekday:"short"}))}</b><span class="d">${esc(String(new Date(s.date+"T12:00:00").getDate()))}</span><span>${esc(new Date(s.date+"T12:00:00").toLocaleDateString("en-GB",{month:"short"}))}</span></span>
+    <span class="sess-main"><b>${esc(s.title||"Session")}</b><span class="muted">${esc(s.start)}–${esc(s.end)}${v.venue?` · ${esc(v.venue)}`:""}</span>
+      <span class="sess-stats"><span class="chip ${booked>=places&&places?"st-confirmed":"st-waitlist"}">${booked}/${places} booked</span>${cnt("paid")?`<span class="chip st-paid">${cnt("paid")} to check</span>`:""}${cnt("awaiting")?`<span class="chip st-awaiting">${cnt("awaiting")} unpaid</span>`:""}${cnt("waitlist")?`<span class="chip st-waitlist">${cnt("waitlist")} waiting</span>`:""}${s.open===false?`<span class="chip st-cancelled">Booking closed</span>`:""}</span></span>
+    <span class="chev" aria-hidden="true">›</span>
+  </summary>
+  <div class="sess-body">
+    <div class="row">${v.address?`<span class="muted" style="flex:1;min-width:200px">${esc(v.address)}</span>`:""}<button class="btn small" data-msg="${s.id}">Copy reminder message</button><button class="btn small" data-emails="${s.id}">Copy player emails</button><button class="btn small" data-toggle="${s.id}">${s.open===false?"Open booking":"Close booking"}</button><button class="btn small ghost danger" data-delsess="${s.id}">Delete session</button></div>
+    ${sub("bkl", `<b>Bookings</b> <span class="muted">(${booked} booked${cnt("waitlist")?`, ${cnt("waitlist")} waiting`:""})</span>`, `<div class="tbl"><table><thead><tr><th>Player</th><th>Ref</th><th>Status</th><th>Court</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`, true)}
+    ${sub("pr", `<b>Partners &amp; game style</b> <span class="muted">(${(s.pairs||[]).length} pair${(s.pairs||[]).length===1?"":"s"}${courtsOf(s).some(c=>(s.style?.[c]||"any")!=="any")?" · styles set":""})</span>`, partnersPanel(s), S.pairPick?.sid===s.id)}
+    ${sub("ci", `<b>Check-in list</b> <span class="muted">(${here} of ${booked} here)</span>`, `<div style="display:grid;gap:10px">${checkinList(s)}</div>`)}
+    ${sub("hc", `<b>Host view code</b> <span class="muted">${S.secrets[s.id]?"(set)":"(not set)"}</span>`, `<div class="row code-row">${S.secrets[s.id]?`<b class="code">${esc(S.secrets[s.id])}</b><button class="btn small" data-copy="${esc(S.secrets[s.id])}">Copy</button><button class="btn small ghost" data-newcode="${esc(s.id)}">New code</button>`:`<button class="btn small primary" data-newcode="${esc(s.id)}">Create code</button>`}</div><p class="muted" style="font-size:.82rem">Give it to whoever runs the court-side device. A new code locks out devices using the old one.</p>`)}
+    ${cancelled?sub("canc", `<b>Cancelled</b> <span class="muted">(${cancelled})</span>`, `<div style="display:grid;gap:6px">${inS.filter(b=>b.status==="cancelled").map(b=>`<div class="row" style="justify-content:space-between"><span>${esc(b.name)} · Court ${esc(b.court)}</span><span class="row"><button class="btn small" data-restore="${esc(b.id)}">Restore</button><button class="btn small ghost danger" data-bdel="${esc(b.id)}">Delete</button></span></div>`).join("")}</div>`):""}
     ${(()=>{ const k=slotKey(s), want=S.players.filter(p=>(p.remind||[]).includes(k) && p.email && !S.bookings.some(b=>b.sessionId===s.id && b.playerId===p.id && b.status!=="cancelled"));
       if(!want.length) return "";
       const emails=want.map(p=>p.email).join(","), subj=`Book your Dropshot Folks session: ${fmtLong(s.date)}`;
       const body=`Hi! Places are open for ${fmtLong(s.date)}, ${s.start}–${s.end}${venueOf(s).venue?" at "+venueOf(s).venue:""}.\n\nBook here: ${BOOK_URL}\n\nSee you on court!`;
       return `<div class="banner info"><div class="grow"><b>${want.length} player${want.length>1?"s want":" wants"} a reminder</b> for this session and ${want.length>1?"haven't":"hasn't"} booked yet: ${want.map(p=>esc(p.name)).join(", ")}</div>
         <span class="row"><a class="btn small primary" href="mailto:?bcc=${encodeURIComponent(emails)}&subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}">Email them</a><button class="btn small" data-copy="${esc(emails)}">Copy emails</button></span></div>` })()}
-    <details id="addp-${s.id}"><summary>Add a player to this session</summary>
-      <div class="grid2" style="margin-top:8px">
-        <label class="f">Name<input id="ap-name-${s.id}" placeholder="First and last name"></label>
+    <details class="sub" id="addp-${s.id}"><summary><b>Add a player</b> <span class="muted">(registered player or walk-in)</span></summary>
+      <div class="grid2 sub-body">
+        <label class="f">Player<input id="ap-name-${s.id}" list="ap-list-${s.id}" data-apsearch="${esc(s.id)}" placeholder="Search registered players, or type a new name" autocomplete="off"></label>
+        <datalist id="ap-list-${s.id}">${S.players.filter(p=>!S.bookings.some(b=>b.sessionId===s.id && b.playerId===p.id && b.status!=="cancelled")).slice().sort((a,b)=>String(a.name).localeCompare(b.name)).map(p=>`<option value="${esc(apLabel(p))}"></option>`).join("")}</datalist>
         <label class="f">Court<select id="ap-court-${s.id}">${courtsOf(s).map(n=>`<option value="${n}">Court ${n} · ${esc(courtName(s,n))}</option>`).join("")}</select></label>
+        <label class="f">Plays as (walk-ins)<select id="ap-gender-${s.id}">${GENDERS.map(([k,l])=>`<option value="${k}">${l}</option>`).join("")}</select></label>
         <label class="f">Status<select id="ap-status-${s.id}">${Object.entries(STATUS).filter(([k])=>k!=="cancelled").map(([k,v])=>`<option value="${k}" ${k==="confirmed"?"selected":""}>${v.label}</option>`).join("")}</select></label>
         <div class="row" style="align-self:end"><button class="btn small primary" data-addp="${esc(s.id)}">Add player</button></div>
+        <p class="muted" id="ap-hint-${s.id}" style="grid-column:1/-1;font-size:.85rem">Start typing a name or email to find a registered player. Their court is picked from their level, and the booking shows in their My bookings. Anyone not on the list is added as a walk-in.</p>
       </div></details>
-    <details id="es-${s.id}"><summary>Edit session</summary>
-      <div class="grid2" style="margin-top:8px">
+    <details class="sub" id="es-${s.id}"><summary><b>Edit session &amp; courts</b> <span class="muted">(date, time, venue, court levels, places)</span></summary>
+      <div class="grid2 sub-body">
         <label class="f">Date<input id="es-date-${s.id}" type="date" value="${esc(s.date)}"></label>
         <label class="f">Start<input id="es-start-${s.id}" type="time" value="${esc(s.start)}"></label>
         <label class="f">End<input id="es-end-${s.id}" type="time" value="${esc(s.end)}"></label>
@@ -954,8 +1029,138 @@ function adminSession(s){
         <label class="row" style="grid-column:1/-1;gap:6px"><input type="checkbox" style="width:auto" id="es-all-${s.id}"> Use this court setup for every upcoming ${esc(slotLabel(s))} session</label>
         <div class="row" style="grid-column:1/-1"><button class="btn small primary" data-savesess="${esc(s.id)}">Save session</button><button class="btn small" data-stdcourts="${esc(s.id)}">Use standard courts</button><span class="muted" style="font-size:.82rem">D- Court 1 · D+ Court 2 · C- Court 3 · C+ Court 4, and moves booked players to match.</span></div>
       </div></details>
-    <textarea id="msg-${s.id}" rows="6" hidden readonly></textarea></div>`;
+    <textarea id="msg-${s.id}" rows="6" hidden readonly></textarea>
+  </div></details>`;
 }
+/* ----- partners and game style (organiser) ----- */
+const pairName = (s,id) => S.bookings.find(b=>b.sessionId===s.id && b.playerId===id)?.name || "Player";
+const pairRange = p => !p.from && !p.to ? "whole session" : `games ${p.from||1}–${p.to||"end"}`;
+function pairChips(s,id){
+  return (s.pairs||[]).filter(p=>p.a===id||p.b===id).map(p=>`<span class="chip st-paid" title="Fixed partners, ${esc(pairRange(p))}">🤝 ${esc(pairName(s,p.a===id?p.b:p.a))}${p.from||p.to?` · ${esc(pairRange(p))}`:""}</span>`).join("");
+}
+function partnersPanel(s){
+  const r=rotInfo(s), act=S.bookings.filter(b=>b.sessionId===s.id && ACTIVE.includes(b.status)).sort((a,b)=>String(a.name).localeCompare(b.name));
+  const noG=act.filter(b=>!b.gender), pairs=s.pairs||[], pickA=S.pairPick?.sid===s.id ? S.pairPick.a : "";
+  const opts=(sel)=>`<option value="">Choose a player…</option>`+act.map(b=>`<option value="${esc(b.playerId)}" ${b.playerId===sel?"selected":""}>${esc(b.name)} · Court ${esc(b.court)}</option>`).join("");
+  const gameOpts=(first)=>`<option value="">${first}</option>`+Array.from({length:r.total},(_,i)=>`<option value="${i+1}">Game ${i+1} · ${hhmm(r.at(i))}</option>`).join("");
+  return `
+    <div class="pp-block"><h4>Fixed partners</h4>
+      <p class="muted" style="font-size:.85rem">Partners play on the same side whenever they're on court, and rest together. Choose the whole session or just some games.</p>
+      ${pairs.length?`<div style="display:grid;gap:6px">${pairs.map((p,i)=>{ const ba=act.find(b=>b.playerId===p.a), bb=act.find(b=>b.playerId===p.b);
+        const warn = !ba||!bb ? `<span class="chip st-cancelled">One of them isn't booked</span>` : ba.court!==bb.court ? `<span class="chip st-awaiting">Different courts</span><button class="btn small" data-pairmove="${esc(s.id)}|${i}">Move ${esc(bb.name)} to Court ${esc(ba.court)}</button>` : "";
+        return `<div class="row pp-row"><b>${esc(pairName(s,p.a))} &amp; ${esc(pairName(s,p.b))}</b><span class="muted">${esc(pairRange(p))}${ba&&bb&&ba.court===bb.court?` · Court ${esc(ba.court)}`:""}</span>${warn}<button class="btn small ghost danger" data-rmpair="${esc(s.id)}|${i}" style="margin-left:auto">Remove</button></div>` }).join("")}</div>`:`<p class="muted">No fixed partners yet.</p>`}
+      <div class="grid2" style="margin-top:6px">
+        <label class="f">Player<select id="pa-${s.id}">${opts(pickA)}</select></label>
+        <label class="f">Partner<select id="pb-${s.id}">${opts("")}</select></label>
+        <label class="f">From<select id="pf-${s.id}">${gameOpts("Start of session")}</select></label>
+        <label class="f">Until<select id="pt-${s.id}">${gameOpts("End of session")}</select></label>
+        <div class="row" style="grid-column:1/-1"><button class="btn small primary" data-addpair="${esc(s.id)}">Make pair</button><span class="muted" style="font-size:.82rem">If they're on different courts, the partner moves to the player's court.</span></div>
+      </div>
+    </div>
+    <div class="pp-block"><h4>Game style per court</h4>
+      <p class="muted" style="font-size:.85rem"><b>Fair</b> means every game is mixed v mixed, women v women or men v men, never two men against two women. "First" styles make that type of game whenever there are enough players. Fair play time always comes first.</p>
+      <div class="grid2">${courtsOf(s).map(c=>`<label class="f">Court ${c} · ${esc(courtName(s,c))}<select data-style="${esc(s.id)}|${c}">${GAME_STYLES.map(([k,l])=>`<option value="${k}" ${(s.style?.[c]||"any")===k?"selected":""}>${l}</option>`).join("")}</select></label>`).join("")}</div>
+      ${noG.length?`<div class="banner warn" style="margin-top:6px"><div class="grow"><b>${noG.length} player${noG.length>1?"s don't":" doesn't"} have men's/women's set.</b> Game styles skip them until you set it.
+        <div style="display:grid;gap:6px;margin-top:8px">${noG.map(b=>`<div class="row" style="gap:6px"><span style="min-width:140px">${esc(b.name)}</span><button class="btn small" data-gset="${esc(b.id)}|M">Man</button><button class="btn small" data-gset="${esc(b.id)}|F">Woman</button></div>`).join("")}</div></div></div>`:""}
+    </div>`;
+}
+async function setGender(bookingId, g){
+  const b=S.bookings.find(x=>x.id===bookingId); if(!b) return;
+  await setBooking(bookingId,{gender:g},null,null);
+  // save it on the player's profile and their other upcoming bookings too
+  const p=S.players.find(x=>x.id===b.playerId);
+  if(p && p.gender!==g){ await savePlayer({...p, gender:g});
+    for(const o of S.bookings.filter(x=>x.playerId===p.id && x.id!==bookingId && !x.gender && ACTIVE.includes(x.status))) await setBooking(o.id,{gender:g},null,null) }
+  toast(`${b.name}: ${g==="M"?"men's":g==="F"?"women's":"not set"}`);
+}
+// Players can't store men's/women's themselves (the database rules don't allow it), so while the organiser
+// has the page open, copy it from each player's profile onto their upcoming bookings that don't have it yet.
+const gSynced = new Set();
+setInterval(async ()=>{
+  if(!S.isAdmin || !S.loaded || !S.players.length) return;
+  const now = new Date();
+  for(const b of S.bookings){
+    if(b.gender || gSynced.has(b.id) || !ACTIVE.includes(b.status)) continue;
+    const s=S.sessions.find(x=>x.id===b.sessionId); if(!s || sessEnd(s)<now) continue;
+    const g=S.players.find(p=>p.id===b.playerId)?.gender; if(!g) continue;
+    gSynced.add(b.id); await setBooking(b.id,{gender:g},null,null);
+  }
+}, 15000);
+async function saveSessionPatch(sid, patch, msg){ const s=S.sessions.find(x=>x.id===sid); if(!s) return false; const {id,...body}=s; return save("sessions",id,{...body,...patch},msg) }
+document.addEventListener("click", async e=>{
+  const t=e.target.closest("button"); if(!t) return; const ds=t.dataset;
+  if(ds.pairwith){ const [sid,a]=ds.pairwith.split("|"); S.pairPick={sid,a}; render();
+    const pa=document.getElementById("pa-"+sid); if(pa) pa.value=a;
+    const card=document.getElementById("sess-"+sid); if(card) card.open=true;
+    const d=document.getElementById("pr-"+sid); if(d){ d.open=true; d.scrollIntoView({behavior:"smooth",block:"start"}); document.getElementById("pb-"+sid)?.focus() } return }
+  if(ds.addpair){ const sid=ds.addpair, s=S.sessions.find(x=>x.id===sid), a=$("#pa-"+sid).value, b=$("#pb-"+sid).value;
+    const from=Number($("#pf-"+sid).value)||null, to=Number($("#pt-"+sid).value)||null;
+    if(!a||!b){ toast("Choose both players"); return } if(a===b){ toast("Choose two different players"); return }
+    if(from&&to&&from>to){ toast("'Until' must be after 'From'"); return }
+    const clash=(s.pairs||[]).find(p=>[p.a,p.b].some(x=>x===a||x===b) && !((to&&p.from&&to<p.from)||(from&&p.to&&from>p.to)));
+    if(clash){ toast(`${pairName(s,clash.a)} & ${pairName(s,clash.b)} are already paired for those games. Remove that pair first.`); return }
+    const ba=S.bookings.find(x=>x.sessionId===sid&&x.playerId===a&&ACTIVE.includes(x.status)), bb=S.bookings.find(x=>x.sessionId===sid&&x.playerId===b&&ACTIVE.includes(x.status));
+    if(!await saveSessionPatch(sid,{pairs:[...(s.pairs||[]),{a,b,from,to}]},null)) return;
+    if(ba&&bb&&ba.court!==bb.court) await setBooking(bb.id,{court:ba.court},`Moved to Court ${ba.court} to partner ${ba.name}.`,null);
+    S.pairPick=null; toast(`${pairName(s,a)} & ${pairName(s,b)} paired${ba&&bb&&ba.court!==bb.court?` on Court ${ba.court}`:""}`); return }
+  if(ds.rmpair){ const [sid,i]=ds.rmpair.split("|"), s=S.sessions.find(x=>x.id===sid); const pairs=(s.pairs||[]).filter((_,k)=>k!==Number(i));
+    arm(t,"Tap again to remove",()=>saveSessionPatch(sid,{pairs},"Pair removed")); return }
+  if(ds.pairmove){ const [sid,i]=ds.pairmove.split("|"), s=S.sessions.find(x=>x.id===sid), p=(s.pairs||[])[Number(i)]; if(!p) return;
+    const ba=S.bookings.find(x=>x.sessionId===sid&&x.playerId===p.a&&ACTIVE.includes(x.status)), bb=S.bookings.find(x=>x.sessionId===sid&&x.playerId===p.b&&ACTIVE.includes(x.status));
+    if(ba&&bb) setBooking(bb.id,{court:ba.court},`Moved to Court ${ba.court} to partner ${ba.name}.`,`${bb.name} moved to Court ${ba.court}`); return }
+  if(ds.gset){ const [id,g]=ds.gset.split("|"); setGender(id,g); return }
+});
+document.addEventListener("change", e=>{
+  const t=e.target;
+  if(t.dataset?.gender!==undefined && t.classList.contains("gsel")){ setGender(t.dataset.gender, t.value); return }
+  if(t.dataset?.style){ const [sid,c]=t.dataset.style.split("|"), s=S.sessions.find(x=>x.id===sid); if(!s) return;
+    saveSessionPatch(sid,{style:{...(s.style||{}), [c]:t.value}},`Court ${c}: ${GAME_STYLES.find(x=>x[0]===t.value)?.[1]||t.value}`); return }
+  if(t.dataset?.pgender){ const p=S.players.find(x=>x.id===t.dataset.pgender); if(!p) return; const g=t.value;
+    savePlayer({...p, gender:g}).then(async ok=>{ if(!ok) return;
+      for(const o of S.bookings.filter(x=>x.playerId===p.id && ACTIVE.includes(x.status) && x.gender!==g)) await setBooking(o.id,{gender:g},null,null);
+      toast(`${p.name}: ${g==="M"?"men's":g==="F"?"women's":"not set"}`) }); return }
+});
+// remember which session cards the organiser left open, on this device
+function sessRemembered(id){ try{ return (ls.get("dsf:opensess",[])||[]).includes(id) }catch{ return false } }
+document.addEventListener("toggle", e=>{
+  const d=e.target; if(!d.classList?.contains("sesscard")) return;
+  const id=d.id.replace(/^sess-/,""); let list=[]; try{ list=ls.get("dsf:opensess",[])||[] }catch{}
+  list = d.open ? [...new Set([...list,id])] : list.filter(x=>x!==id);
+  ls.set("dsf:opensess", list.slice(-20));
+}, true);
+// styles for the session cards (kept here so only app.js needs uploading)
+document.head.insertAdjacentHTML("beforeend", `<style>
+.sesscard{border:1px solid var(--line);border-radius:var(--r,10px);background:var(--bg);overflow:hidden}
+.sesscard+.sesscard{margin-top:10px}
+.sesscard[open]{box-shadow:0 2px 10px rgba(0,0,0,.06);border-color:var(--accent)}
+.sess-sum{list-style:none;display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;padding:12px 14px;cursor:pointer}
+.sess-sum::-webkit-details-marker{display:none}
+.sess-sum:hover{background:var(--surface)}
+.sess-sum:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.sess-date{display:grid;justify-items:center;line-height:1.05;min-width:52px;padding:6px 4px;border-radius:8px;background:var(--accent);color:var(--accent-ink)}
+.sess-date b{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em}
+.sess-date .d{font-family:var(--display);font-size:1.5rem;font-weight:700}
+.sess-date span:last-child{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em}
+.sess-main{display:grid;gap:3px;min-width:0}
+.sess-main>b{font-family:var(--display);font-size:1.1rem}
+.sess-stats{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.chev{font-size:1.6rem;color:var(--muted);transition:transform .15s;line-height:1}
+.sesscard[open] .chev{transform:rotate(90deg)}
+.sess-body{display:grid;gap:10px;padding:4px 14px 14px;border-top:1px solid var(--line);background:var(--surface)}
+.sess-body>.row:first-child{padding-top:10px}
+.sub{border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.sub>summary{padding:10px 12px;cursor:pointer}
+.sub[open]>summary{border-bottom:1px solid var(--line)}
+.sub-body{padding:12px;display:grid;gap:10px;min-width:0}
+.grid2.sub-body{display:grid}
+.pp-block{display:grid;gap:8px}
+.pp-block+.pp-block{border-top:1px dashed var(--line);padding-top:12px}
+.pp-block h4{margin:0;font-family:var(--display);font-size:1rem}
+.pp-row{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);gap:8px}
+select.gsel{width:auto;padding:3px 6px;font-size:.8rem}
+@media (max-width:520px){.sess-sum{grid-template-columns:auto 1fr}.chev{display:none}}
+@media (prefers-reduced-motion:reduce){.chev{transition:none}}
+</style>`);
 function reminderText(s){
   const v=venueOf(s);
   let t=`🏸 Dropshot Folks reminder: ${fmtLong(s.date)}, ${s.start}–${s.end}\n${v.venue?v.venue+"\n":""}${v.address?v.address+"\n"+mapsFor(v)+"\n":""}\n`;
@@ -1007,6 +1212,24 @@ async function setBooking(id,patch,text,msg="Updated"){
   const {id:_,...body}=b; const next={...body,...patch}; return save("bookings",id,text?addLog(next,text):next,msg);
 }
 async function savePlayer(p){ const {id,...body}=p; return save("players",id,body) }
+// organiser's "Add a player": find a registered player from what was typed or picked
+const apLabel = p => `${p.name}${p.email?` · ${p.email}`:""}`;
+function apFind(typed){
+  const t=String(typed).trim().toLowerCase(); if(!t) return null;
+  const byLabel=S.players.find(p=>apLabel(p).toLowerCase()===t); if(byLabel) return byLabel;
+  const byEmail=S.players.find(p=>String(p.email||"").toLowerCase()===t); if(byEmail) return byEmail;
+  const byName=S.players.filter(p=>String(p.name||"").trim().toLowerCase()===t);
+  return byName.length===1 ? byName[0] : null;
+}
+document.addEventListener("input", e=>{
+  const sid=e.target.dataset?.apsearch; if(!sid) return;
+  const s=S.sessions.find(x=>x.id===sid), p=apFind(e.target.value), hint=$("#ap-hint-"+sid); if(!s||!hint) return;
+  if(!p){ hint.textContent = e.target.value.trim() ? "Not a registered player. They'll be added as a walk-in on the court you choose." : "Start typing a name or email to find a registered player."; return }
+  const ct=courtFor(s,p.level), lv=lvByCode(p.level);
+  if(ct){ const sel=$("#ap-court-"+sid); if(sel) sel.value=String(ct) }
+  const ex=S.bookings.find(b=>b.sessionId===sid && b.playerId===p.id && b.status!=="cancelled");
+  hint.textContent = ex ? `${p.name} is already booked on Court ${ex.court}.` : `${p.name} · ${lv?lv.code+" "+lv.name:"no level set"}${ct?` · Court ${ct} selected for their level`:" · no court for their level in this session, pick one"}.`;
+});
 async function savePhoto(id,img){ return save("photos",id,{img, updatedAt:nowIso()}) }
 async function downloadIcs(b){
   const s=S.sessions.find(x=>x.id===b.sessionId); if(!s) return;
@@ -1075,10 +1298,18 @@ document.addEventListener("click", async e=>{
   if(ds.pdel){ arm(t,"Tap again to delete",()=>Store.del("players",ds.pdel).then(()=>{ S.pedit=null; toast("Player deleted. Their bookings stay until you cancel them.") }).catch(()=>toast("Couldn't delete"))); return }
   if(ds.restore){ setBooking(ds.restore,{status:"awaiting"},"Booking restored by the organiser.","Booking restored"); return }
   if(ds.bdel){ arm(t,"Tap again to delete",()=>Store.del("bookings",ds.bdel).then(()=>toast("Booking deleted")).catch(()=>toast("Couldn't delete"))); return }
-  if(ds.addp){ const sid=ds.addp, s=S.sessions.find(x=>x.id===sid); const name=$("#ap-name-"+sid).value.trim(), court=Number($("#ap-court-"+sid).value), status=$("#ap-status-"+sid).value;
-    if(!name){ toast("Add the player's name"); return }
-    const ts=Date.now().toString(36), b={sessionId:sid, playerId:`walkin-${ts}`, name, level:courtLevels(s,court)[0], court, status, ref:payRef(name,s), createdAt:nowIso(), addedBy:"organiser", log:[]};
-    if(await save("bookings",`${sid}_w${ts}`, addLog(b,`Added to Court ${court} by the organiser.`), `${name} added to Court ${court}`)) $("#ap-name-"+sid).value="";
+  if(ds.addp){ const sid=ds.addp, s=S.sessions.find(x=>x.id===sid); const typed=$("#ap-name-"+sid).value.trim(), court=Number($("#ap-court-"+sid).value), status=$("#ap-status-"+sid).value;
+    if(!typed){ toast("Pick a registered player or type a name"); return }
+    const p=apFind(typed);
+    if(p){
+      // a registered player: book them under their own record so it shows in their My bookings
+      const id=`${sid}_${p.id}`, ex=S.bookings.find(b=>b.id===id);
+      if(ex && ex.status!=="cancelled"){ toast(`${p.name} is already booked on Court ${ex.court}`); return }
+      const b={sessionId:sid, playerId:p.id, name:p.name, level:p.level, gender:p.gender||"", court, status, ref:payRef(p.name,s), createdAt:nowIso(), addedBy:"organiser", log:[]};
+      if(await save("bookings",id, addLog(b,`Booked onto Court ${court} by the organiser.`), `${p.name} added to Court ${court}`)) $("#ap-name-"+sid).value="";
+      return }
+    const name=typed, ts=Date.now().toString(36), b={sessionId:sid, playerId:`walkin-${ts}`, name, gender:($("#ap-gender-"+sid)?.value||""), level:courtLevels(s,court)[0], court, status, ref:payRef(name,s), createdAt:nowIso(), addedBy:"organiser", log:[]};
+    if(await save("bookings",`${sid}_w${ts}`, addLog(b,`Added to Court ${court} by the organiser.`), `${name} added to Court ${court} as a walk-in`)) $("#ap-name-"+sid).value="";
     return }
   if(ds.savesess){ const sid=ds.savesess, s=S.sessions.find(x=>x.id===sid), v=k=>$(`#es-${k}-${sid}`).value.trim();
     if(!v("date")||!v("start")||!v("end")){ toast("Add a date, start and end time"); return }

@@ -106,18 +106,19 @@ function formatVisual(t){
   const g=glance(t), r=rules(t), ko=rules(t,{stage:"ko"}), fin=rules(t,{stage:"ko",roundName:"Final"}), adv=Number(t.advance)||2, wild=Number(t.koSize)>0||Number(t.wild)>0;
   const stat=(n,l)=>`<div class="fv-stat"><b>${n}</b><span>${l}</span></div>`;
   const rl=x=>`${x.bestOf===3?"Best of 3 · ":x.bestOf===2?"2 games · ":"1 game · "}to ${x.to}${x.deuce?` (deuce, max ${x.cap})`:""}`;
+  const two=[r,ko,fin].some(x=>x.bestOf===2);
   return `<div class="fmtv">
     <div class="fv-glance">${g.nT?stat(g.nT,"teams"):""}${stat(`${g.gs}`,"teams per group")}${stat(g.team?g.ties:g.ties, g.team?`ties for every team (min)`:"group matches for every team (min)")}${g.team?stat(g.matches,"matches for every team (min)"):""}${g.total?stat(g.total,"matches in total"):""}</div>
     ${g.team?`<div class="fv-box"><h4>🤝 Every tie = ${g.per} matches</h4><div class="fv-tie">
       <div><span>👨👨</span><b>Men's doubles</b></div><div><span>👩👩</span><b>Women's doubles</b></div><div><span>👨👩</span><b>Mixed doubles 1</b></div><div><span>👨👩</span><b>Mixed doubles 2</b></div></div>
-      <p>Win <b>3 of 4</b> to win the tie. At <b>2–2</b>, the team with more total points wins.</p></div>`:""}
+      <p>Win <b>3 of 4</b> to win the tie. At <b>2–2</b>, the team with more total points wins; still level → the winner of Mixed doubles 2.</p></div>`:""}
     <div class="fv-box"><h4>🗺️ The route to the final</h4><div class="fv-steps">
       <div><i>1</i><b>Groups</b><span>Groups of ${g.gs}. Everyone plays everyone in their group.</span></div>
       <div><i>2</i><b>${adv===1?"Winners through":`Top ${adv} through`}</b><span>${adv===1?"Each group winner":`The top ${adv} of each group`}${wild?", plus the best of the rest,":""} reach the knockouts.</span></div>
       <div><i>3</i><b>Knockouts</b><span>Quarter-finals → semi-finals → 🏆 final${bronzeOn(t)?" (+ 🥉 match for 3rd)":""}.</span></div></div></div>
-    ${g.team?`<div class="fv-box"><h4>📊 Group points</h4><div class="fv-pts"><div><b>4</b><span>win by 6+</span></div><div><b>3</b><span>win by 4–5</span></div><div><b>1</b><span>win by 1–3</span></div><div><b>0</b><span>loss</span></div></div><p class="muted">Margin = total points across the tie. Level on points → points difference, then head-to-head.</p></div>`
+    ${g.team?`<div class="fv-box"><h4>📊 Group points</h4><div class="fv-pts"><div><b>4</b><span>win by 6+</span></div><div><b>3</b><span>win by 4–5</span></div><div><b>1</b><span>win by 3 or less</span></div><div><b>0</b><span>loss</span></div></div><p class="muted">Margin = total points across the tie. Level on points → points difference, then head-to-head.</p></div>`
       :`<div class="fv-box"><h4>📊 Group places</h4><p>Most wins first. Level → head-to-head, then points difference, then points scored.</p></div>`}
-    <div class="fv-box"><h4>🏸 Scoring</h4><div class="fv-score"><div><span>🔁 Round robin (groups)</span><b>${rl(r)}</b></div><div><span>⚔️ Knockouts${ruleTxt(fin)!==ruleTxt(ko)?" (quarter & semi-finals)":""}</span><b>${rl(ko)}</b></div>${ruleTxt(fin)!==ruleTxt(ko)?`<div><span>🏆 Final${bronzeOn(t)?" & 3rd place":""}</span><b>${rl(fin)}</b></div>`:""}</div></div>
+    <div class="fv-box"><h4>🏸 Scoring</h4><div class="fv-score"><div><span>🔁 Round robin (groups)</span><b>${rl(r)}</b></div><div><span>⚔️ Knockouts${ruleTxt(fin)!==ruleTxt(ko)?" (quarter & semi-finals)":""}</span><b>${rl(ko)}</b></div>${ruleTxt(fin)!==ruleTxt(ko)?`<div><span>🏆 Final${bronzeOn(t)?" & 3rd place":""}</span><b>${rl(fin)}</b></div>`:""}</div>${two?`<p class="muted">2 games: both games are always played. At 1–1, the pair with more total points wins the match.</p>`:""}</div>
     ${t.format?`<div class="fv-box"><h4>📝 Good to know</h4>${richTxt(t.format)}</div>`:""}
   </div>`;
 }
@@ -136,11 +137,13 @@ function formatTxt(t){
   const r=rules(t);
   if(isTeam(t)){ const adv=Number(t.advance)||2, wild=Number(t.wild)||0;
     return [`Teams of 4: 2 men and 2 women.`,
-      `Every tie between two teams is 4 matches: men's doubles, women's doubles and two mixed doubles. Win 3 of the 4 to win the tie; at 2–2 the team with more total points wins.`,
+      `Every tie between two teams is 4 matches: men's doubles, women's doubles and two mixed doubles. Win 3 of the 4 to win the tie; at 2–2 the team with more total points wins, and if still level the winner of Mixed doubles 2.`,
       `Group stage: round robin in groups of about ${Number(t.groupSize)||3}.`,
-      `Group points: win by 6 or more points = 4, win by 4–5 = 3, win by 1–3 = 1, loss = 0. The margin is the total points across the tie's 4 matches. Level teams are split by points difference, then head-to-head.`,
+      `Group points: win by 6 or more points = 4, win by 4–5 = 3, win by 3 or less = 1, loss = 0. The margin is the total points across the tie's 4 matches. Level teams are split by points difference, then head-to-head.`,
       crossPairs(t,t.groups?.TC)?`Knockouts: the top ${adv} of each group go through. ${adv===2?"Quarter-finals cross the groups: Winner A v Runner-up C, Winner B v Runner-up D, Winner C v Runner-up A, Winner D v Runner-up B.":"Semi-finals: Winner A v Winner C, Winner B v Winner D."}`:`Knockouts: top ${adv} of each group${wild?` plus the best ${wild} third-placed team${wild>1?"s":""}`:""} go through, ranked by points. The top seeds get a bye if the bracket isn't full.${t.bronze!==false?" The final and the bronze medal match are played at the same time.":""}`,
-      `Each match: ${r.bestOf===1?"1 game ":""}${ruleTxt(r)}${r.deuce&&r.cap<(CAP_FOR[r.to]||0)?`, at ${r.cap-1}–${r.cap-1} the next point wins`:""}.`].join("\n")+(t.format?`\n\n${t.format}`:"") }
+      `Group matches: ${r.bestOf===1?"1 game ":""}${ruleTxt(r)}${r.deuce&&r.cap<(CAP_FOR[r.to]||0)?`, at ${r.cap-1}–${r.cap-1} the next point wins`:""}${r.bestOf===2?". Both games are always played; at 1–1 the pair with more total points wins":""}.`,
+      ...(()=>{ const ko=rules(t,{stage:"ko"}), fin=rules(t,{stage:"ko",roundName:"Final"});
+        return [...(ruleTxt(ko)!==ruleTxt(r)?[`Knockout matches: ${ko.bestOf===1?"1 game ":""}${ruleTxt(ko)}.`]:[]), ...(ruleTxt(fin)!==ruleTxt(ko)?[`Final${bronzeOn(t)?" and bronze medal match":""}: ${fin.bestOf===1?"1 game ":""}${ruleTxt(fin)}.`]:[])] })()].join("\n")+(t.format?`\n\n${t.format}`:"") }
   const adv=Number(t.advance)||2, ko=rules(t,{stage:"ko"}), fin=rules(t,{stage:"ko",roundName:"Final"}), same=(x,y)=>ruleTxt(x)===ruleTxt(y);
   const lines=[
     `Group stage: round robin in groups of about ${Number(t.groupSize)||4}. ${adv===1?"The group winner goes":`The top ${adv} from each group go`} through to the knockouts${Number(t.koSize)>0?`, and the best ${adv===1?"runners-up":"teams in the next place"} fill any spare places up to ${Number(t.koSize)}`:""}.`,

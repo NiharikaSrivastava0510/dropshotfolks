@@ -115,7 +115,7 @@ function formatVisual(t){
     <div class="fv-box"><h4>🗺️ The route to the final</h4><div class="fv-steps">
       <div><i>1</i><b>Groups</b><span>${g.nG?`${g.nG} groups`:`Groups of ${g.gs}`}. Everyone plays everyone in their group${legs(t)===2?" <b>twice, back to back</b>":""}.</span></div>
       <div><i>2</i><b>${adv===1?"Winners through":`Top ${adv} through`}</b><span>${adv===1?"Each group winner":`The top ${adv} of each group`}${wild?", plus the best of the rest,":""} reach the knockouts.${g.team&&new Set(Object.values(t.groups?.TC||{}).map(x=>x.length)).size>1?" Groups are different sizes, so teams from different groups are compared on <b>points per tie</b>.":""}</span></div>
-      <div><i>3</i><b>Knockouts</b><span>Quarter-finals → semi-finals → 🏆 final${bronzeOn(t)?" (+ 🥉 match for 3rd)":""}.</span></div></div></div>
+      <div><i>3</i><b>Knockouts</b><span>${koPath(t)}${bronzeOn(t)?" (+ 🥉 match for 3rd)":""}.</span></div></div></div>
     ${g.team?`<div class="fv-box"><h4>📊 Group points</h4><div class="fv-pts"><div><b>4</b><span>win by 6+</span></div><div><b>3</b><span>win by 4–5</span></div><div><b>1</b><span>win by 3 or less</span></div><div><b>0</b><span>loss</span></div></div><p class="muted">Margin = total points across the tie. Level on points → points difference, then head-to-head.</p></div>`
       :`<div class="fv-box"><h4>📊 Group places</h4><p>Most wins first. Level → head-to-head, then points difference, then points scored.</p></div>`}
     <div class="fv-box"><h4>🏸 Scoring</h4><div class="fv-score"><div><span>🔁 Round robin (groups)</span><b>${rl(r)}</b></div><div><span>⚔️ Knockouts${ruleTxt(fin)!==ruleTxt(ko)?" (quarter & semi-finals)":""}</span><b>${rl(ko)}</b></div>${ruleTxt(fin)!==ruleTxt(ko)?`<div><span>🏆 Final${bronzeOn(t)?" & 3rd place":""}</span><b>${rl(fin)}</b></div>`:""}</div>${two?`<p class="muted">2 games: both games are always played. At 1–1, the pair with more total points wins the match.</p>`:""}</div>
@@ -851,11 +851,11 @@ function viewFix(){
     ${catBar(t)}</section>`;
   const groups=t.groups?.[S.cat], ms=matchesOf(t,S.cat), edit=canRef(t);
   if(!groups && !ms.length) return head+`<section class="panel"><div class="empty">Fixtures appear here once the organiser makes the groups.</div></section>`;
-  const hasKo=ms.some(m=>m.stage==="ko"), fx=S.isAdmin && S.fxTab==="time" ? "time" : hasKo && (S.fxTab==="ko" || !groups) ? "ko" : "groups";
-  const tabs=`<div class="fxtabs"><button data-fxtab="groups" aria-pressed="${fx==="groups"}">Groups</button><button data-fxtab="ko" aria-pressed="${fx==="ko"}" ${hasKo?"":"disabled"}>Knockouts</button>${S.isAdmin?`<button data-fxtab="time" aria-pressed="${fx==="time"}">🕒 Timings</button>`:""}</div>`;
+  const hasKo=ms.some(m=>m.stage==="ko"), canKo=hasKo || (S.isAdmin && !!groups), fx=S.isAdmin && S.fxTab==="time" ? "time" : canKo && (S.fxTab==="ko" || !groups) ? "ko" : "groups";
+  const tabs=`<div class="fxtabs"><button data-fxtab="groups" aria-pressed="${fx==="groups"}">Groups</button><button data-fxtab="ko" aria-pressed="${fx==="ko"}" ${canKo?"":"disabled"}>Knockouts</button>${S.isAdmin?`<button data-fxtab="time" aria-pressed="${fx==="time"}">🕒 Timings</button>`:""}</div>`;
   if(fx==="time" && S.isAdmin) return head+`<section class="panel">${tabs}${timingsView(t)}</section>`;
   if(fx==="ko"){ const koList=ms.filter(m=>m.stage==="ko" && !m.bye).sort((a,b)=>a.round-b.round||a.slot-b.slot||(a.order||0)-(b.order||0));
-    return head+`<section class="panel">${tabs}${bracket(t,S.cat)}
+    return head+`<section class="panel">${tabs}${koBar(t)}${hasKo?bracket(t,S.cat):`<div class="empty">No knockout bracket yet. Pick where the knockouts start above, or <button class="btn small primary" data-genko="${esc(S.cat||"")}">Make knockout bracket</button></div>`}
       <details class="vm" id="vm-${esc(S.cat)}-ko"><summary>${isTeam(t)?"View every knockout match":"View knockout matches"} (${isTeam(t)?new Set(koList.map(m=>m.tie)).size+" ties":koList.length})</summary><div class="mlist">${fixList(t,koList,{edit, plan:true})}</div></details></section>` }
   const adv=Number(t.advance)||2;
   return head+`<section class="panel">${tabs}
@@ -1030,6 +1030,31 @@ function viewOrg(only){
     ${only?"":`<section class="panel"><h2>4 · Scores & changes</h2><p class="muted">Open the <b>Fixtures</b> tab and tap any match to fix its score, court or order. Referees score live from their phones.</p><button class="btn small" data-tab="fix">Open Fixtures</button></section>`}`;
   return only ? body : `${list}${preset}${head}${body}`;
 }
+// the knockout rounds in words, from the bracket if it's made, else from the settings: "Semi-finals → 🏆 final"
+function koPath(t){
+  const ko=matchesOf(t).filter(m=>m.stage==="ko" && !m.bye && m.roundName!=="Bronze medal match");
+  let P=ko.length?2**Math.max(...ko.map(m=>m.round||1)):0;
+  if(!P){ const gs=Object.values(t.groups||{})[0]; if(!gs) return "Quarter-finals → semi-finals → 🏆 final";
+    const adv=Math.max(1,Number(t.advance)||2), cur=Object.values(gs).reduce((s,g)=>s+Math.min(adv,g.length),0)+nWild(t,gs); P=1; while(P<cur) P*=2 }
+  const names=[]; for(let k=P/2;k>=1;k/=2) names.push(roundName(k)); return names.map((n,i)=>i===names.length-1?"🏆 final":i?n.toLowerCase():n).join(" → ");
+}
+// organiser, on the Knockouts tab: which round the knockouts start with, and the 3rd-place match on or off; either re-makes the bracket
+function koBar(t){
+  if(!S.isAdmin) return ""; const groups=t.groups?.[S.cat]||{}, G=Object.keys(groups).length; if(G<2) return "";
+  const adv=Math.max(1,Number(t.advance)||2), cur=Object.values(groups).reduce((s,g)=>s+Math.min(adv,g.length),0)+nWild(t,groups), n=Object.values(groups).flat().length;
+  let P=1; while(P<cur) P*=2;
+  const opts=[[2,"Final only"],[4,"Semi-finals"],[8,"Quarter-finals"],[16,"Round of 16"],[32,"Round of 32"]].filter(([k])=>k>=G && k<2*n), w=nWild(t,groups);
+  return `<div class="kobar"><span class="lbl">🏆 Organiser: knockouts start with</span><div class="row">${opts.map(([k,l])=>`<button class="btn small ${k===P?"primary":""}" data-kosize="${k}" aria-pressed="${k===P}">${l}</button>`).join("")}
+    <button class="btn small ${bronzeOn(t)?"primary":"ghost"}" data-kobronze="${bronzeOn(t)?0:1}" aria-pressed="${bronzeOn(t)}">🥉 3rd-place match: ${bronzeOn(t)?"On":"Off"}</button></div>
+    <p class="muted">Now: ${cur} teams go through (${adv===1?"group winners":`top ${adv} per group`}${w?` + best ${w} ${adv===1?"runner"+(w>1?"s":"")+"-up":"of the rest"}`:""})${cur<P?`, ${P-cur} bye${P-cur>1?"s":""}`:""}. Tap a round to change it: the bracket is made again straight away.</p></div>`;
+}
+async function setKo(t, upd){
+  await db.collection("tourneys").doc(t.id).set(upd,{merge:true});
+  if(!t.groups?.[S.cat]){ toast("Saved"); return }
+  if(matchesOf(t,S.cat).some(m=>m.stage==="ko" && !m.bye && m.status!=="scheduled") && !confirm("Some knockout matches already have results. Re-make the bracket anyway?")){ toast("Saved. Press Re-make knockout bracket when you're ready."); return }
+  await generateKnockouts({...t, ...upd}, S.cat); S.fxTab="ko"; render();
+}
+const koSizeUpd = (t, k) => { const G=Object.keys(t.groups?.[S.cat]||{}).length||1, adv=Math.max(1,Math.min(4,Math.floor(k/G))); return {advance:adv, koSize:adv*G===k?0:k, wild:0} };
 // organiser: how big the knockouts are, in one choice (sets teams through per group + best runners-up)
 function koStartPick(t){
   const groups=t.groups?.[S.cat]||{}, G=Object.keys(groups).length; if(G<2) return "";
@@ -1359,6 +1384,8 @@ document.addEventListener("click", async e=>{
     await scheduleAll({...t, startTime:start, matchMins:mins, courts, timed, poolCourts:poolOn}); return }
   if(ds.sched){ if(matchesOf(t).some(m=>m.pcourt) && !confirm("Re-do the court and order for every match?")) return; await scheduleAll(t); return }
   if(ds.eplan){ const c=Number($("#ep-court").value)||0, tm=$("#ep-time")?.value, n=Number($("#ep-num")?.value)||0; await db.collection("tmatches").doc(ds.eplan).update({pcourt:c||null, ...($("#ep-time")?{ptime:tm||null}:{pnum:n||null, pslot:Math.max(0,n-1)})}).then(()=>toast("Court & time saved"),()=>toast("Couldn't save")); return }
+  if(ds.kosize && S.isAdmin){ await setKo(t, koSizeUpd(t, Number(ds.kosize))); return }
+  if(ds.kobronze && S.isAdmin){ await setKo(t, {bronze:ds.kobronze==="1"}); return }
   if(ds.genko){
     if(matchesOf(t,ds.genko).some(m=>m.stage==="ko") && !confirm("Replace the current knockout bracket and its results?")) return;
     await generateKnockouts(t, ds.genko); return }
@@ -1374,11 +1401,7 @@ function shrinkImage(file, max=1400){
 document.addEventListener("input", e=>{ if(e.target.id!=="ci-find") return; S.ciFilter=e.target.value; const q=S.ciFilter.toLowerCase();
   document.querySelectorAll(".ci-row").forEach(r=>{ r.hidden=!!q && !r.textContent.toLowerCase().includes(q) }) });
 document.addEventListener("change", async e=>{
-  if(e.target.dataset?.kostart && S.isAdmin){ const t=T(), k=Number(e.target.value), G=Object.keys(t?.groups?.[S.cat]||{}).length; if(!t||!k||!G) return;
-    const adv=Math.max(1,Math.min(4,Math.floor(k/G))), upd={advance:adv, koSize:adv*G===k?0:k, wild:0};
-    await db.collection("tourneys").doc(t.id).set(upd,{merge:true});
-    if(matchesOf(t,S.cat).some(m=>m.stage==="ko" && !m.bye && m.status!=="scheduled") && !confirm("Some knockout matches already have results. Re-make the bracket anyway?")){ toast("Saved. Press Re-make knockout bracket when you're ready."); return }
-    await generateKnockouts({...t, ...upd}, S.cat); return }
+  if(e.target.dataset?.kostart && S.isAdmin){ const t=T(), k=Number(e.target.value); if(!t||!k||!t.groups?.[S.cat]) return; await setKo(t, koSizeUpd(t,k)); return }
   if(e.target.dataset?.timerset && S.isAdmin){ const t=T(), k=e.target.dataset.timerset, v=Math.min(1800,Math.max(5,Number(e.target.value)||TIMERS[k][2]));
     if(t) await db.collection("tourneys").doc(t.id).set({timers:{...(t.timers||{}), [k]:v}},{merge:true}).then(()=>toast(`${TIMERS[k][1]}: ${fmtSecs(v)}`),()=>toast("Couldn't save")); return }
   if(e.target.dataset?.tiestart && S.isAdmin){ const tie=e.target.dataset.tiestart, v=e.target.value, ms=S.matches.filter(x=>(x.tie===tie||x.tie===tie+"L2") && x.status==="scheduled"); if(!v||!ms.length) return;

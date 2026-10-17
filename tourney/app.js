@@ -663,6 +663,38 @@ function courtOrder(t, c){
   ms.slice().sort(byPlan).forEach((m,i)=>{ const k=key(m); if(rank[k]==null) rank[k]=i });
   return ms.sort((x,y)=>rank[key(x)]-rank[key(y)] || D.indexOf(x.disc)-D.indexOf(y.disc) || (x.leg||1)-(y.leg||1));
 }
+// a court's ties (or single matches) in playing order; a tie that has started stays where it is
+function courtTies(t, c){
+  const out=[], at={};
+  courtOrder(t,c).forEach(m=>{ const k=m.tie?tieBase(m.tie):m.id; if(at[k]==null){ at[k]=out.length; out.push({k, ms:[]}) } out[at[k]].ms.push(m) });
+  return out.map(x=>{ const f=x.ms[0], a=sideTeam(f,"a"), b=sideTeam(f,"b");
+    return {...x, started:x.ms.some(m=>m.status!=="scheduled"), ko:f.stage==="ko", teams:[a,b].filter(Boolean),
+      name:`${a?tName(a):sideLabel(f,"a")} v ${b?tName(b):sideLabel(f,"b")}`, stage:f.stage==="ko"?(f.roundName||"Knockout"):`Group ${f.group}`,
+      time:x.ms.filter(m=>m.status==="scheduled").map(m=>m.ptime).filter(Boolean).sort()[0]||"" } });
+}
+// times for one court: matches not yet played from `start`, every `gap` minutes; ties in the order of `keys` when given
+async function timeCourt(t, c, start, gap, keys){
+  let ties=courtTies(t,c);
+  if(keys){ const pos=Object.fromEntries(keys.map((k,i)=>[k,i])); ties=[...ties.filter(x=>x.started), ...ties.filter(x=>!x.started).sort((x,y)=>(pos[x.k]??1e9)-(pos[y.k]??1e9))] }
+  const ups=[]; let n=0, j=0;
+  ties.forEach(x=>x.ms.forEach(m=>ups.push([m.id, {pnum:++n, ...(m.status==="scheduled"?{ptime:hm(start,(j++)*gap)}:{})}])));
+  for(let i=0;i<ups.length;i+=400){ const b=db.batch(); ups.slice(i,i+400).forEach(([id,u])=>b.update(db.collection("tmatches").doc(id),u)); await b.commit() }
+}
+// a random new order for the group ties not yet started, preferring one where teams play as few ties in a row as possible; knockouts stay last
+function shuffleTies(ties){
+  const free=ties.filter(x=>!x.started && !x.ko), ko=ties.filter(x=>!x.started && x.ko), last=ties.filter(x=>x.started).slice(-1);
+  const cost=list=>[...last,...list].reduce((n,x,i,a)=>n+(i && x.teams.some(id=>a[i-1].teams.includes(id))?1:0),0), now=free.map(x=>x.k).join();
+  let best=free, bc=1e9;
+  for(let k=0;k<400;k++){ const p=[...free]; for(let i=p.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [p[i],p[j]]=[p[j],p[i]] }
+    const c=cost(p)+(p.map(x=>x.k).join()===now?100:0); if(c<bc){ best=p; bc=c } }
+  return [...best, ...ko].map(x=>x.k);
+}
+function courtOrderList(t, c){
+  const ties=courtTies(t,c), open=S.coOpen?.[c], n=ties.filter(x=>!x.started && !x.ko).length;
+  return `<div class="co"><div class="row"><button class="btn small ghost" data-coopen="${c}" aria-expanded="${!!open}">${open?"▾":"▸"} Order of play · ${ties.length} ${isTeam(t)?"ties":"matches"}</button>${n>1?`<button class="btn small" data-cshuffle="${c}">🔀 Shuffle order</button>`:""}</div>
+    ${open?`<ol class="co-list">${ties.map((x,i)=>`<li class="${x.started?"done":""}"><span class="co-t">${esc(x.time||"–")}</span><span class="co-n"><b>${esc(x.name)}</b> <span class="muted">${esc(x.stage)}</span></span>${x.started?`<span class="muted">${x.ms.every(m=>m.status==="done")?"✓ Played":"Started"}</span>`
+      :`<span class="co-b"><button class="btn small ghost" data-cmove="${c}" data-ck="${esc(x.k)}" data-cdir="-1" aria-label="Earlier"${i===0||ties[i-1].started?" disabled":""}>↑</button><button class="btn small ghost" data-cmove="${c}" data-ck="${esc(x.k)}" data-cdir="1" aria-label="Later"${i===ties.length-1?" disabled":""}>↓</button></span>`}</li>`).join("")}</ol>`:""}</div>`;
+}
 function courtTimes(t){
   const C=[...new Set(matchesOf(t).filter(m=>!m.bye && m.pcourt).map(m=>Number(m.pcourt)))].sort((a,b)=>a-b); if(!C.length) return "";
   const gap=Number(t.gapMins)||Number(t.matchMins)||10;
@@ -671,7 +703,7 @@ function courtTimes(t){
       const gs=[...new Set(ms.map(m=>m.stage==="ko"?"Knockouts":`Group ${m.group}`))].join(", ");
       return `<div class="tm-court" data-court="${c}"><b>Court ${c}</b><span class="muted">${esc(gs)} · ${left.length} to play</span>
         <label>First match <input type="time" data-cstart="${c}" value="${esc(first)}"></label><label>Every <input type="number" data-cgap="${c}" min="3" max="90" value="${gap}"> min</label>
-        <button class="btn small primary" data-ctimes="${c}"${left.length?"":" disabled"}>Set times</button></div>` }).join("")}
+        <button class="btn small primary" data-ctimes="${c}"${left.length?"":" disabled"}>Set times</button>${courtOrderList(t,c)}</div>` }).join("")}
     ${C.length>1?`<button class="btn small" data-ctimes="all">Set times on all courts</button>`:""}</div>`;
 }
 function timingsView(t){
@@ -1183,10 +1215,19 @@ document.addEventListener("click", async e=>{
     if(matchesOf(t).some(m=>m.pcourt) && !confirm("Move every group match onto its group's court and set new times for all matches?")) return;
     const upd={groupCourts:gc, poolCourts:true, startTime:start, matchMins:mins, gapMins:mins, timed:true, courts:Math.min(12,Math.max(...Object.values(gc)))};
     await db.collection("tourneys").doc(t.id).set(upd,{merge:true}); await scheduleAll({...t, ...upd}); return }
-  if(ds.ctimes && S.isAdmin){ const C=ds.ctimes==="all"?[...document.querySelectorAll("[data-ctimes]")].map(b=>b.dataset.ctimes).filter(x=>x!=="all"):[ds.ctimes], ups=[]; let gap=10;
-    for(const c of C){ const start=$(`[data-cstart="${c}"]`)?.value, g=Math.min(90,Math.max(3,Number($(`[data-cgap="${c}"]`)?.value)||10)); if(!start){ toast(`Pick the first match time for Court ${c}`); return } gap=g;
-      courtOrder(t,Number(c)).forEach((m,i,all)=>{ const j=all.slice(0,i).filter(x=>x.status==="scheduled").length; ups.push([m.id, {pnum:i+1, ...(m.status==="scheduled"?{ptime:hm(start,j*g)}:{})}]) }) }
-    for(let i=0;i<ups.length;i+=400){ const b=db.batch(); ups.slice(i,i+400).forEach(([id,u])=>b.update(db.collection("tmatches").doc(id),u)); await b.commit() }
+  if(ds.coopen){ S.coOpen={...(S.coOpen||{}), [ds.coopen]:!S.coOpen?.[ds.coopen]}; render(); return }
+  if((ds.cmove||ds.cshuffle) && S.isAdmin){ const c=Number(ds.cmove||ds.cshuffle), ties=courtTies(t,c);
+    const start=$(`[data-cstart="${c}"]`)?.value||ties.find(x=>!x.started)?.time||t.startTime||"09:00", gap=Math.min(90,Math.max(3,Number($(`[data-cgap="${c}"]`)?.value)||Number(t.gapMins)||10));
+    let keys=ties.filter(x=>!x.started).map(x=>x.k);
+    if(ds.cshuffle) keys=shuffleTies(ties);
+    else { const i=keys.indexOf(ds.ck), j=i+Number(ds.cdir); if(i<0||j<0||j>=keys.length) return; [keys[i],keys[j]]=[keys[j],keys[i]] }
+    S.coOpen={...(S.coOpen||{}), [c]:true}; await timeCourt(t,c,start,gap,keys);
+    toast(ds.cshuffle?`Court ${c} reshuffled ✓ New times from ${start}`:"Moved ✓ Times updated"); return }
+  if(ds.ctimes && S.isAdmin){ const C=ds.ctimes==="all"?[...document.querySelectorAll("[data-ctimes]")].map(b=>b.dataset.ctimes).filter(x=>x!=="all"):[ds.ctimes]; let gap=10;
+    // read every row first: saving one court redraws the page
+    const rows=C.map(c=>[Number(c), $(`[data-cstart="${c}"]`)?.value, Math.min(90,Math.max(3,Number($(`[data-cgap="${c}"]`)?.value)||10))]);
+    const miss=rows.find(r=>!r[1]); if(miss){ toast(`Pick the first match time for Court ${miss[0]}`); return }
+    for(const [c,start,g] of rows){ gap=g; await timeCourt(t, c, start, g) }
     await db.collection("tourneys").doc(t.id).set({gapMins:gap, ...(clockOn(t)?{}:{timed:true})},{merge:true});
     toast(`Times set on ${C.length>1?`${C.length} courts`:`Court ${C[0]}`} ✓`); return }
   if(ds.shift && S.isAdmin){ const d=Number(ds.shift), t=T(), ms=matchesOf(t).filter(m=>m.status==="scheduled"&&m.ptime);

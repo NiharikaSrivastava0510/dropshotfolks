@@ -1604,8 +1604,14 @@ const APP_VERSION = (document.currentScript?.src.match(/[?&]v=(\d+)/)||[])[1] ||
 async function checkVersion(){
   try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); if(!r.ok) return; const {v}=await r.json();
     if(!v || !APP_VERSION || v===APP_VERSION) return;
-    const busy = S.tab==="ref" || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName||"");
-    if(busy) toast("A new version is ready. Reload the page when you can."); else location.reload() }catch{}
+    const live = S.tab==="ref" && matchesOf(T()).some(m=>m.status==="live"), typing=/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName||"");
+    if(live || typing){ if(!checkVersion.told){ checkVersion.told=true; toast("A new version of the page is ready. It will load when you're between matches.") } return }
+    freshLoad(v) }catch{}
+}
+// load the new version past the browser's saved copy (a new address can't come from the cache)
+function freshLoad(v){
+  try{ if(sessionStorage.getItem("dsf:tried")===v) return; sessionStorage.setItem("dsf:tried",v) }catch{}
+  const q=new URLSearchParams(location.search); q.set("v",v); location.replace(location.pathname+"?"+q.toString()+location.hash);
 }
 setTimeout(checkVersion, 4000); setInterval(checkVersion, 120000);
 

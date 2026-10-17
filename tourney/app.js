@@ -516,9 +516,17 @@ function planTxt(m, short){
   return short ? `C${m.pcourt}${m.pnum?` #${m.pnum}`:""}` : `Court ${m.pcourt}${m.pnum?` · ${ordinal(Number(m.pnum))} on court`:""}`;
 }
 const hm = (start, mins) => { const [h,m]=String(start||"10:00").split(":").map(Number), x=h*60+m+mins; return `${String(Math.floor(x/60)%24).padStart(2,"0")}:${String(x%60).padStart(2,"0")}` };
-// one court per group: Group A on Court 1, B on Court 2… (categories follow on: a second category's groups take the next courts)
+// one court per group: the organiser's choice (t.groupCourts), else Group A on Court 1, B on Court 2… (a second category's groups take the next courts)
 function poolCourts(t){ if(!t?.poolCourts) return null; const map={}; let n=0;
-  (cats(t).length?cats(t):[{id:""}]).forEach(c=>Object.keys(t.groups?.[c.id]||{}).sort().forEach(G=>{ map[c.id+"|"+G]=++n })); return n?map:null }
+  (cats(t).length?cats(t):[{id:""}]).forEach(c=>Object.keys(t.groups?.[c.id]||{}).sort().forEach(G=>{ const k=c.id+"|"+G; n++; map[k]=Number(t.groupCourts?.[k])||n })); return n?map:null }
+function groupCourtsBox(t){
+  const map=poolCourts({...t, poolCourts:true}); if(!map) return "";
+  const top=Math.min(12,Math.max(6,Number(t.courts)||0,...Object.values(map))), multi=cats(t).length>1;
+  return `<div class="tm-courts tm-gc"><span class="lbl">🏸 Which group plays on which court</span><p class="muted">Choose a court for each group. All that group's matches are played on it, each tie straight through (match 1 and match 2 of each discipline back to back). Knockouts then use any of these courts.</p>
+    <div class="gc-row">${Object.entries(map).map(([k,c])=>{ const G=k.split("|")[1]; return `<label class="gc"><b>${multi?esc(catName(t,k.split("|")[0]))+" · ":""}Group ${esc(G)}</b><select data-gcourt="${esc(k)}">${Array.from({length:top},(_,i)=>`<option value="${i+1}" ${i+1===c?"selected":""}>Court ${i+1}</option>`).join("")}</select></label>` }).join("")}</div>
+    <div class="tm-court"><label>First match <input type="time" data-gcstart="1" value="${esc(t.startTime||"09:00")}"></label><label>Every <input type="number" data-gcgap="1" min="3" max="90" value="${Number(t.gapMins)||Number(t.matchMins)||10}"> min</label><button class="btn small primary" data-gcapply="1">Put groups on these courts &amp; set times</button></div>
+    ${t.poolCourts?`<p class="muted" style="margin:4px 0 0">✓ Now: ${Object.entries(map).map(([k,c])=>`Group ${esc(k.split("|")[1])} → Court ${c}`).join(" · ")}</p>`:""}</div>`;
+}
 async function scheduleAll(t, koOnly){
   const pool=poolCourts(t), home=m=>pool&&m.stage==="group"?pool[m.cat+"|"+m.group]||0:0;
   const C=Math.max(1,Number(t.courts)||4,...Object.values(pool||{})), mins=Math.max(5,Number(t.matchMins)||15), ms=matchesOf(t).filter(m=>!m.bye);
@@ -682,7 +690,7 @@ function timingsView(t){
       ${done?`<span class="bdone">✓ Played</span>`:live?`<span class="livebadge">Live</span>`:m.tie?`<label class="tm-start">Starts <input type="time" data-tiestart="${esc(keyOf(m))}" value="${esc(f)}"></label>`:""}</div>
       ${done||live?"":`<div class="tm-parts">${ps.map(x=>`<div class="bk-er">${x.disc?`<span>${esc(DISC[x.disc])}${x.leg?` · match ${x.leg}`:""}</span>`:""}${planPick(t,x)}</div>`).join("")}</div>`}</div>` }).join("");
   return `<div class="tm-top"><div><b>🕒 Timings & courts</b><p class="muted">Set or change any match's court and time here, any time. Players, referees and the big screen see changes straight away. The fixtures themselves don't change.</p></div>
-      ${courtTimes(t)}<details class="tm-plan"${matchesOf(t).some(m=>m.pcourt)?"":" open"}><summary>🏸 Courts, match length & one court per group</summary>${schedForm(t)}</details><div class="tm-shift"><span class="lbl">Running late or early? Move all ${left} matches not yet started</span><div class="row">${[-10,-5,5,10,15,30].map(d=>`<button class="btn small ${d>0?"":"ghost"}" data-shift="${d}">${d>0?"+":"−"}${Math.abs(d)} min</button>`).join("")}</div></div></div>
+      ${groupCourtsBox(t)}${courtTimes(t)}<details class="tm-plan"${matchesOf(t).some(m=>m.pcourt)?"":" open"}><summary>🏸 Courts, match length & one court per group</summary>${schedForm(t)}</details><div class="tm-shift"><span class="lbl">Running late or early? Move all ${left} matches not yet started</span><div class="row">${[-10,-5,5,10,15,30].map(d=>`<button class="btn small ${d>0?"":"ghost"}" data-shift="${d}">${d>0?"+":"−"}${Math.abs(d)} min</button>`).join("")}</div></div></div>
     ${rows.length?`<div class="tm-list">${list}</div>`:`<div class="empty">No fixtures yet. Make them in ⚙️ Organiser tools first.</div>`}`;
 }
 // the knockout draw, drawn like on paper: rounds left to right, lines joining each pair to the next round, champion at the end
@@ -843,7 +851,7 @@ function schedForm(t){
       <label class="row" style="gap:6px;align-self:end;flex-wrap:nowrap"><input type="checkbox" style="width:auto" data-f="timed" ${on?"checked":""}> Show start times</label>
       ${on?`<label class="f" style="width:140px">First match<input data-f="start" type="time" value="${esc(t.startTime||"10:00")}"></label>
       <label class="f" style="width:150px">Minutes per match<input data-f="mins" type="number" min="5" max="60" value="${esc(t.matchMins||15)}"></label>`:""}
-      ${G.length?`<label class="row" style="gap:6px;align-self:end;flex-wrap:nowrap" title="Every group match is played on its group's own court"><input type="checkbox" style="width:auto" data-f="pool" ${t.poolCourts?"checked":""}> One court per group <span class="muted">(${G.slice(0,4).map((g,i)=>`${g} → Court ${i+1}`).join(", ")}${G.length>4?"…":""})</span></label>`:""}
+      ${G.length?`<label class="row" style="gap:6px;align-self:end;flex-wrap:nowrap" title="Every group match is played on its group's own court"><input type="checkbox" style="width:auto" data-f="pool" ${t.poolCourts?"checked":""}> One court per group <span class="muted">(${Object.entries(poolCourts({...t, poolCourts:true})).slice(0,4).map(([k,c])=>`${esc(k.split("|")[1])} → Court ${c}`).join(", ")}${G.length>4?"…":""})</span></label>`:""}
       <button class="btn primary" data-fxsched="1">${has?`Update courts & ${on?"times":"order"}`:`Assign courts & ${on?"times":"order"}`}</button></div>`;
 }
 function schedPanel(t){
@@ -1170,6 +1178,11 @@ document.addEventListener("click", async e=>{
   if(ds.grpedit && S.isAdmin){ const t=T(), c=S.cat; S.grpOn=true; S.fxTab="groups"; S.fxTools=false; S.gExtra=[]; S.gDraft={}; Object.entries(t?.groups?.[c]||{}).forEach(([G,ids])=>ids.forEach(id=>S.gDraft[id]=G)); render(); document.querySelector(".ge-bar")?.scrollIntoView({behavior:"smooth",block:"center"}); return }
   if(ds.gadd && S.isAdmin){ const t=T(), have=new Set([...Object.keys(t?.groups?.[S.cat]||{}), ...Object.values(S.gDraft||{}), ...(S.gExtra||[])]); const L=[..."ABCDEFGHIJKLMNOP"].find(x=>!have.has(x)); if(L){ S.gExtra=[...(S.gExtra||[]), L]; render() } return }
   if(ds.gsave!==undefined && S.isAdmin){ const t=T(); if(t) await saveGroupEdit(t, S.cat); return }
+  if(ds.gcapply && S.isAdmin){ const gc={}; document.querySelectorAll("[data-gcourt]").forEach(x=>{ gc[x.dataset.gcourt]=Number(x.value)||1 });
+    const start=$("[data-gcstart]")?.value||t.startTime||"09:00", mins=Math.min(90,Math.max(3,Number($("[data-gcgap]")?.value)||10));
+    if(matchesOf(t).some(m=>m.pcourt) && !confirm("Move every group match onto its group's court and set new times for all matches?")) return;
+    const upd={groupCourts:gc, poolCourts:true, startTime:start, matchMins:mins, gapMins:mins, timed:true, courts:Math.min(12,Math.max(...Object.values(gc)))};
+    await db.collection("tourneys").doc(t.id).set(upd,{merge:true}); await scheduleAll({...t, ...upd}); return }
   if(ds.ctimes && S.isAdmin){ const C=ds.ctimes==="all"?[...document.querySelectorAll("[data-ctimes]")].map(b=>b.dataset.ctimes).filter(x=>x!=="all"):[ds.ctimes], ups=[]; let gap=10;
     for(const c of C){ const start=$(`[data-cstart="${c}"]`)?.value, g=Math.min(90,Math.max(3,Number($(`[data-cgap="${c}"]`)?.value)||10)); if(!start){ toast(`Pick the first match time for Court ${c}`); return } gap=g;
       courtOrder(t,Number(c)).forEach((m,i,all)=>{ const j=all.slice(0,i).filter(x=>x.status==="scheduled").length; ups.push([m.id, {pnum:i+1, ...(m.status==="scheduled"?{ptime:hm(start,j*g)}:{})}]) }) }

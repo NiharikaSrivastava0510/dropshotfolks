@@ -499,8 +499,12 @@ function planTxt(m, short){
   return short ? `C${m.pcourt}${m.pnum?` #${m.pnum}`:""}` : `Court ${m.pcourt}${m.pnum?` · ${ordinal(Number(m.pnum))} on court`:""}`;
 }
 const hm = (start, mins) => { const [h,m]=String(start||"10:00").split(":").map(Number), x=h*60+m+mins; return `${String(Math.floor(x/60)%24).padStart(2,"0")}:${String(x%60).padStart(2,"0")}` };
+// one court per group: Group A on Court 1, B on Court 2… (categories follow on: a second category's groups take the next courts)
+function poolCourts(t){ if(!t?.poolCourts) return null; const map={}; let n=0;
+  (cats(t).length?cats(t):[{id:""}]).forEach(c=>Object.keys(t.groups?.[c.id]||{}).sort().forEach(G=>{ map[c.id+"|"+G]=++n })); return n?map:null }
 async function scheduleAll(t, koOnly){
-  const C=Math.max(1,Number(t.courts)||4), mins=Math.max(5,Number(t.matchMins)||15), ms=matchesOf(t).filter(m=>!m.bye);
+  const pool=poolCourts(t), home=m=>pool&&m.stage==="group"?pool[m.cat+"|"+m.group]||0:0;
+  const C=Math.max(1,Number(t.courts)||4,...Object.values(pool||{})), mins=Math.max(5,Number(t.matchMins)||15), ms=matchesOf(t).filter(m=>!m.bye);
   if(!ms.length){ toast("Make the fixtures first"); return }
   const slotOf={}, teamsIn=m=>m.stage==="group"?resOf(m,m.a,m.b):m.tie?resOf(m,m.tie+"a",m.tie+"b"):[];
   const ready=m=>{
@@ -525,8 +529,8 @@ async function scheduleAll(t, koOnly){
     // back to back: the second meeting of a discipline takes the same court straight after the first
     Object.entries(forced[slot]||{}).forEach(([c,m])=>{ const i=pending.indexOf(m); if(i<0) return; pending.splice(i,1); slotOf[m.id]=slot; m._c=Number(c); m._n=(perCourt[c]=(perCourt[c]||0)+1); used.add(Number(c)); teamsIn(m).forEach(x=>now.add(x)) });
     for(let c=1;c<=C;c++){ if(used.has(c)) continue;
-      const ok=(m,rest)=>{ if(m.after && byId[m.after]) return false; const r=ready(m); if(r==null||r>slot) return false; const tm=teamsIn(m); return tm.every(x=>!now.has(x)) && (!rest || tm.every(x=>!last.has(x))) };
-      let i=pending.findIndex(m=>ok(m,true)); if(i<0) i=pending.findIndex(m=>ok(m,false)); if(i<0) break;
+      const ok=(m,rest)=>{ if(m.after && byId[m.after]) return false; if(home(m) && home(m)!==c) return false; const r=ready(m); if(r==null||r>slot) return false; const tm=teamsIn(m); return tm.every(x=>!now.has(x)) && (!rest || tm.every(x=>!last.has(x))) };
+      let i=pending.findIndex(m=>ok(m,true)); if(i<0) i=pending.findIndex(m=>ok(m,false)); if(i<0){ if(pool) continue; break }
       const m=pending.splice(i,1)[0]; slotOf[m.id]=slot; m._c=c; m._n=(perCourt[c]=(perCourt[c]||0)+1); teamsIn(m).forEach(x=>now.add(x));
       if(follow[m.id]) (forced[slot+1]=forced[slot+1]||{})[c]=follow[m.id];
     }
@@ -534,7 +538,7 @@ async function scheduleAll(t, koOnly){
   }
   for(let i=0;i<ms.length;i+=400){ const b=db.batch();
     ms.slice(i,i+400).forEach(m=>{ if(slotOf[m.id]!=null && (!koOnly || m.stage!=="group")) b.update(db.collection("tmatches").doc(m.id),{pcourt:m._c, pslot:slotOf[m.id], pnum:m._n, ptime:clockOn(t)?hm(t.startTime,slotOf[m.id]*mins):null}) }); await b.commit() }
-  toast(clockOn(t) ? `Courts and times set: ${slot} rounds of ${mins} min on ${C} court${C>1?"s":""}, finishing about ${hm(t.startTime,slot*mins)}` : `Courts and order of play set on ${C} court${C>1?"s":""}: about ${slot} matches per court`);
+  toast(clockOn(t) ? `Courts and times set: ${pool?`${Object.entries(pool).map(([k,c])=>`Group ${k.split("|")[1]} on Court ${c}`).join(", ")}; `:""}${mins} min per match, finishing about ${hm(t.startTime,slot*mins)}` : `Courts and order of play set on ${C} court${C>1?"s":""}: about ${slot} matches per court`);
 }
 
 /* ---------- court queue ---------- */
@@ -642,7 +646,7 @@ function timingsView(t){
       ${done?`<span class="bdone">✓ Played</span>`:live?`<span class="livebadge">Live</span>`:m.tie?`<label class="tm-start">Starts <input type="time" data-tiestart="${esc(keyOf(m))}" value="${esc(f)}"></label>`:""}</div>
       ${done||live?"":`<div class="tm-parts">${ps.map(x=>`<div class="bk-er">${x.disc?`<span>${esc(DISC[x.disc])}${x.leg?` · match ${x.leg}`:""}</span>`:""}${planPick(t,x)}</div>`).join("")}</div>`}</div>` }).join("");
   return `<div class="tm-top"><div><b>🕒 Timings & courts</b><p class="muted">Set or change any match's court and time here, any time. Players, referees and the big screen see changes straight away. The fixtures themselves don't change.</p></div>
-      <div class="tm-shift"><span class="lbl">Running late or early? Move all ${left} matches not yet started</span><div class="row">${[-10,-5,5,10,15,30].map(d=>`<button class="btn small ${d>0?"":"ghost"}" data-shift="${d}">${d>0?"+":"−"}${Math.abs(d)} min</button>`).join("")}</div></div></div>
+      <details class="tm-plan"${matchesOf(t).some(m=>m.pcourt)?"":" open"}><summary>🏸 Courts, match length & one court per group</summary>${schedForm(t)}</details><div class="tm-shift"><span class="lbl">Running late or early? Move all ${left} matches not yet started</span><div class="row">${[-10,-5,5,10,15,30].map(d=>`<button class="btn small ${d>0?"":"ghost"}" data-shift="${d}">${d>0?"+":"−"}${Math.abs(d)} min</button>`).join("")}</div></div></div>
     ${rows.length?`<div class="tm-list">${list}</div>`:`<div class="empty">No fixtures yet. Make them in ⚙️ Organiser tools first.</div>`}`;
 }
 // the knockout draw, drawn like on paper: rounds left to right, lines joining each pair to the next round, champion at the end
@@ -796,15 +800,20 @@ function viewLive(){
 }
 
 // organiser: courts & times right on the Fixtures tab
+function schedForm(t){
+  const has=matchesOf(t).some(m=>m.pcourt), on=clockOn(t), G=Object.keys(poolCourts({...t, poolCourts:true})||{}).map(k=>k.split("|")[1]);
+  return `<div class="row schedf" style="align-items:flex-end">
+      <label class="f" style="width:110px">Courts<input data-f="courts" type="number" min="1" max="12" value="${esc(t.courts||4)}"></label>
+      <label class="row" style="gap:6px;align-self:end;flex-wrap:nowrap"><input type="checkbox" style="width:auto" data-f="timed" ${on?"checked":""}> Show start times</label>
+      ${on?`<label class="f" style="width:140px">First match<input data-f="start" type="time" value="${esc(t.startTime||"10:00")}"></label>
+      <label class="f" style="width:150px">Minutes per match<input data-f="mins" type="number" min="5" max="60" value="${esc(t.matchMins||15)}"></label>`:""}
+      ${G.length?`<label class="row" style="gap:6px;align-self:end;flex-wrap:nowrap" title="Every group match is played on its group's own court"><input type="checkbox" style="width:auto" data-f="pool" ${t.poolCourts?"checked":""}> One court per group <span class="muted">(${G.slice(0,4).map((g,i)=>`${g} → Court ${i+1}`).join(", ")}${G.length>4?"…":""})</span></label>`:""}
+      <button class="btn primary" data-fxsched="1">${has?`Update courts & ${on?"times":"order"}`:`Assign courts & ${on?"times":"order"}`}</button></div>`;
+}
 function schedPanel(t){
   const has=matchesOf(t).some(m=>m.pcourt), on=clockOn(t), last=on&&has?matchesOf(t).filter(m=>m.ptime).map(m=>m.ptime).sort().slice(-1)[0]:"";
   return `<section class="panel"><h2>🏸 Courts & order of play</h2>
-    <div class="row" style="align-items:flex-end">
-      <label class="f" style="width:110px">Courts<input id="fx-courts" type="number" min="1" max="12" value="${esc(t.courts||4)}"></label>
-      <label class="row" style="gap:6px;align-self:end;flex-wrap:nowrap"><input type="checkbox" style="width:auto" id="fx-timed" ${on?"checked":""}> Show start times</label>
-      ${on?`<label class="f" style="width:140px">First match<input id="fx-start" type="time" value="${esc(t.startTime||"10:00")}"></label>
-      <label class="f" style="width:150px">Minutes per match<input id="fx-mins" type="number" min="5" max="60" value="${esc(t.matchMins||15)}"></label>`:""}
-      <button class="btn primary" data-fxsched="1">${has?`Update courts & ${on?"times":"order"}`:`Assign courts & ${on?"times":"order"}`}</button></div>
+    ${schedForm(t)}
     <p class="muted" style="font-size:.85rem">${on?"Each match gets a court and a start time.":"Matches run on points, not the clock: each match gets a court and its place in that court's queue (1st, 2nd, 3rd…). When a court's match finishes, the next one for that court starts."} Covers every category. Nobody plays twice at once, and knockouts come after their groups${matchesOf(t).some(m=>m.stage==="ko")?"":" (make the knockout bracket first, in step 2 above, so it's included)"}. ${last?`Last match at <b>${esc(last)}</b>. `:""}To move one match, change its court or ${on?"time":"order"} right on the match below.</p></section>`;
 }
 
@@ -1237,10 +1246,12 @@ document.addEventListener("click", async e=>{
       for(let i=0;i<docs.length;i+=400){ const b=db.batch(); docs.slice(i,i+400).forEach(d=>b.delete(d)); await b.commit() }
       if(S.tid===x.id){ S.tid=null; ls.set("dsf:tid",null) } toast(`${x.name} deleted`) }catch{ toast("Couldn't delete it all. Try again.") } return }
   if(ds.gen){ if(matchesOf(t,ds.gen).length && !confirm("This replaces all fixtures and results for this category. Carry on?")) return; await generateGroups(t, ds.gen); return }
-  if(ds.fxsched){ const timed=!!$("#fx-timed")?.checked, start=$("#fx-start")?.value||t.startTime||"10:00", mins=Math.min(60,Math.max(5,Number($("#fx-mins")?.value||t.matchMins)||15)), courts=Math.min(12,Math.max(1,Number($("#fx-courts").value)||4));
-    if(matchesOf(t).some(m=>m.pcourt) && !confirm("Re-do the court and order for every match?")) return;
-    await db.collection("tourneys").doc(t.id).set({startTime:start, matchMins:mins, courts, timed},{merge:true});
-    await scheduleAll({...t, startTime:start, matchMins:mins, courts, timed}); return }
+  if(ds.fxsched){ const box=t0.closest(".schedf")||document, f=k=>box.querySelector(`[data-f="${k}"]`);
+    const timed=!!f("timed")?.checked, start=f("start")?.value||t.startTime||"10:00", mins=Math.min(60,Math.max(5,Number(f("mins")?.value||t.matchMins)||15)), poolOn=f("pool")?!!f("pool").checked:!!t.poolCourts;
+    const nG=Object.keys(poolCourts({...t, poolCourts:true})||{}).length, courts=Math.min(12,Math.max(1,Number(f("courts")?.value)||4, poolOn?nG:1));
+    if(matchesOf(t).some(m=>m.pcourt) && !confirm("Re-do the court and time for every match?")) return;
+    await db.collection("tourneys").doc(t.id).set({startTime:start, matchMins:mins, courts, timed, poolCourts:poolOn},{merge:true});
+    await scheduleAll({...t, startTime:start, matchMins:mins, courts, timed, poolCourts:poolOn}); return }
   if(ds.sched){ if(matchesOf(t).some(m=>m.pcourt) && !confirm("Re-do the court and order for every match?")) return; await scheduleAll(t); return }
   if(ds.eplan){ const c=Number($("#ep-court").value)||0, tm=$("#ep-time")?.value, n=Number($("#ep-num")?.value)||0; await db.collection("tmatches").doc(ds.eplan).update({pcourt:c||null, ...($("#ep-time")?{ptime:tm||null}:{pnum:n||null, pslot:Math.max(0,n-1)})}).then(()=>toast("Court & time saved"),()=>toast("Couldn't save")); return }
   if(ds.genko){
@@ -1272,7 +1283,7 @@ document.addEventListener("change", async e=>{
   if(e.target.id==="imp-file" && e.target.files?.[0] && S.isAdmin){ const f=e.target.files[0]; e.target.value="";
     try{ const list=teamsFromRows(await readSheet(f)); if(!list.length){ toast("No teams found. Is there a 'Team Name' column?"); return } await importTeams(T(), list) }
     catch(err){ console.error(err); toast("Couldn't read that file. Save it as .xlsx or .csv and try again.") } return }
-  if(e.target.id==="fx-timed" && S.isAdmin){ const t=T(); if(t) await db.collection("tourneys").doc(t.id).set({timed:e.target.checked},{merge:true}); return }
+  if(e.target.dataset?.f==="timed" && S.isAdmin){ const t=T(); if(t) await db.collection("tourneys").doc(t.id).set({timed:e.target.checked},{merge:true}); return }
   if(e.target.id!=="to-poster" || !e.target.files?.[0]) return;
   try{ S.posterDraft=await shrinkImage(e.target.files[0]); render(); toast("Poster ready. Press Save to publish it.") }catch{ toast("Couldn't read that image") }
 });

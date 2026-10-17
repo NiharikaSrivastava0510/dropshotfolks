@@ -417,6 +417,23 @@ async function saveGroupEdit(t, cat){
   if(hadPlan){ for(let i=0;i<30 && matchesOf(t,cat).filter(m=>m.stage==="group" && changed.includes(m.group)).length<made;i++) await new Promise(r=>setTimeout(r,100));
     await scheduleAll(S.tourneys.find(x=>x.id===t.id)||t) }
 }
+// once / twice back to back: re-make the group matches straight away (same groups), then courts & times again
+async function setLegs(t, n){
+  if(!await db.collection("tourneys").doc(t.id).set({legs:n},{merge:true}).then(()=>true,()=>false)){ toast("Couldn't save"); return }
+  const t2={...t, legs:n}, todo=(cats(t).length?cats(t):[{id:""}]).filter(c=>t.groups?.[c.id] && matchesOf(t,c.id).some(m=>m.stage==="group" && (n===2)!==!!m.leg));
+  const say=n===2?"each pair plays twice, back to back":"each pair plays once";
+  if(!todo.length){ toast(`Saved: ${say}`); render(); return }
+  const gone=todo.flatMap(c=>matchesOf(t,c.id).filter(m=>m.stage==="group")), played=gone.filter(m=>m.status!=="scheduled").length;
+  if(played && !confirm(`${played} group match${played>1?"es have":" has"} already started or been played. Changing to "${say}" re-makes the group matches and clears those scores. Carry on?`)){ render(); return }
+  const hadPlan=matchesOf(t).some(m=>m.pcourt);
+  for(let i=0;i<gone.length;i+=400){ const b=db.batch(); gone.slice(i,i+400).forEach(m=>b.delete(db.collection("tmatches").doc(m.id))); await b.commit() }
+  S.matches=S.matches.filter(m=>!gone.includes(m));
+  const batch=db.batch(); let made=0; todo.forEach(c=>{ made+=groupFixtures(t2, c.id, t.groups[c.id], batch) }); await batch.commit();
+  toast(`Done: ${say}. Same groups, ${made} ${isTeam(t)?"ties":"matches"}${hadPlan?". Setting courts & times…":""}`);
+  if(hadPlan){ const want=made*(isTeam(t)?4:1), have=()=>todo.reduce((s,c)=>s+matchesOf(t,c.id).filter(m=>m.stage==="group").length,0);
+    for(let i=0;i<50 && have()<want;i++) await new Promise(r=>setTimeout(r,100));
+    await scheduleAll({...(S.tourneys.find(x=>x.id===t.id)||t), legs:n}) }
+}
 async function clearMatches(t, cat, stage){
   const ms=matchesOf(t,cat).filter(m=>!stage || m.stage===stage);
   for(let i=0;i<ms.length;i+=400){ const b=db.batch(); ms.slice(i,i+400).forEach(m=>b.delete(db.collection("tmatches").doc(m.id))); await b.commit() }
@@ -517,7 +534,7 @@ async function scheduleAll(t, koOnly){
     return 0;
   };
   let pending=[...ms].sort((a,b)=>(a.stage==="ko")-(b.stage==="ko") || (a.round||0)-(b.round||0) || (a.order||0)-(b.order||0));
-  let slot=0, last=new Set(); const perCourt={};
+  let slot=0, last=new Set(); const perCourt={}, onCourt={};
   // knockouts only: group matches keep their courts and times, knockouts follow on after them
   if(koOnly){ const gm=ms.filter(m=>m.stage==="group"); if(gm.some(m=>m.pslot==null)) koOnly=false;
     else { gm.forEach(m=>{ slotOf[m.id]=m.pslot; perCourt[m.pcourt]=Math.max(perCourt[m.pcourt]||0, Number(m.pnum)||0) });
@@ -530,8 +547,10 @@ async function scheduleAll(t, koOnly){
     Object.entries(forced[slot]||{}).forEach(([c,m])=>{ const i=pending.indexOf(m); if(i<0) return; pending.splice(i,1); slotOf[m.id]=slot; m._c=Number(c); m._n=(perCourt[c]=(perCourt[c]||0)+1); used.add(Number(c)); teamsIn(m).forEach(x=>now.add(x)) });
     for(let c=1;c<=C;c++){ if(used.has(c)) continue;
       const ok=(m,rest)=>{ if(m.after && byId[m.after]) return false; if(home(m) && home(m)!==c) return false; const r=ready(m); if(r==null||r>slot) return false; const tm=teamsIn(m); return tm.every(x=>!now.has(x)) && (!rest || tm.every(x=>!last.has(x))) };
-      let i=pending.findIndex(m=>ok(m,true)); if(i<0) i=pending.findIndex(m=>ok(m,false)); if(i<0){ if(pool) continue; break }
-      const m=pending.splice(i,1)[0]; slotOf[m.id]=slot; m._c=c; m._n=(perCourt[c]=(perCourt[c]||0)+1); teamsIn(m).forEach(x=>now.add(x));
+      // one court per group: finish the tie on this court before the next one starts
+      let i=pool&&onCourt[c]?pending.findIndex(m=>m.tie && tieBase(m.tie)===onCourt[c] && ok(m,false)):-1;
+      if(i<0) i=pending.findIndex(m=>ok(m,true)); if(i<0) i=pending.findIndex(m=>ok(m,false)); if(i<0){ if(pool) continue; break }
+      const m=pending.splice(i,1)[0]; slotOf[m.id]=slot; m._c=c; if(m.tie) onCourt[c]=tieBase(m.tie); m._n=(perCourt[c]=(perCourt[c]||0)+1); teamsIn(m).forEach(x=>now.add(x));
       if(follow[m.id]) (forced[slot+1]=forced[slot+1]||{})[c]=follow[m.id];
     }
     last=now; slot++;
@@ -1275,7 +1294,7 @@ document.addEventListener("change", async e=>{
     const base=ms.map(x=>toMin(x.ptime)).filter(x=>x!=null), d=base.length?toMin(v)-Math.min(...base):0, b=db.batch();
     ms.forEach(x=>b.update(db.collection("tmatches").doc(x.id),{ptime:x.ptime?hm(x.ptime,d):v})); await b.commit().then(()=>toast(`Tie moved to ${v}`),()=>toast("Couldn't save")); return }
   if(e.target.dataset?.gmove && S.isAdmin){ S.gDraft={...(S.gDraft||{}), [e.target.dataset.gmove]:e.target.value}; render(); return }
-  if(e.target.dataset?.legs && S.isAdmin){ const t=T(); if(t) await db.collection("tourneys").doc(t.id).set({legs:Number(e.target.value)===2?2:1},{merge:true}).then(()=>toast("Saved. Press Re-make groups to use it."),()=>toast("Couldn't save")); return }
+  if(e.target.dataset?.legs && S.isAdmin){ const t=T(); if(t) await setLegs(t, Number(e.target.value)===2?2:1); return }
   if(e.target.dataset?.numgroups && S.isAdmin){ const t=T(); if(t) await db.collection("tourneys").doc(t.id).set({numGroups:Number(e.target.value)||0},{merge:true}).then(()=>toast("Saved. Press Re-make groups to use it."),()=>toast("Couldn't save")); return }
   const pc=e.target.dataset?.plcourt, pt=e.target.dataset?.pltime, pn=e.target.dataset?.plnum;
   if((pc||pt||pn) && S.isAdmin){ const id=pc||pt||pn, data=pc?{pcourt:Number(e.target.value)||null}:pt?{ptime:e.target.value||null}:{pnum:Number(e.target.value)||null, pslot:Math.max(0,(Number(e.target.value)||1)-1)};

@@ -514,7 +514,7 @@ nav.tabs button[data-tab="org"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='http:
 .fv-steps div{display:grid;gap:4px;padding:12px;border-radius:12px;background:var(--tint);position:relative}
 .fv-steps i{font-style:normal;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:#fff;font-weight:800}
 .fv-steps span{font-size:.9rem;color:var(--muted)}
-.fv-pts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.fv-pts{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
 .fv-pts div{display:grid;justify-items:center;padding:10px 6px;border-radius:12px;background:var(--tint);text-align:center}
 .fv-pts b{font-family:var(--display);font-size:1.7rem;color:var(--accent);line-height:1}
 .fv-pts span{font-size:.8rem}
@@ -841,5 +841,5 @@ nav.tabs button[aria-selected="true"]::before{animation:tabPop .35s ease}
 <div class="toast" id="toast" hidden></div>
 
 <script src="qrcode.js?v=1"></script>
-<script src="app.js?v=202610181000"></script>
+<script src="app.js?v=202610181100"></script>
 </body></html>

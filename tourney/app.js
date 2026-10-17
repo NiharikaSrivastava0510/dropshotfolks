@@ -116,7 +116,7 @@ function formatVisual(t){
       <div><i>1</i><b>Groups</b><span>${g.nG?`${g.nG} groups`:`Groups of ${g.gs}`}. Everyone plays everyone in their group${legs(t)===2?" <b>twice, back to back</b>":""}.</span></div>
       <div><i>2</i><b>${adv===1?"Winners through":`Top ${adv} through`}</b><span>${adv===1?"Each group winner":`The top ${adv} of each group`}${wild?", plus the best of the rest,":""} reach the knockouts.${g.team&&new Set(Object.values(t.groups?.TC||{}).map(x=>x.length)).size>1?" Groups are different sizes, so teams from different groups are compared on <b>points per tie</b>.":""}</span></div>
       <div><i>3</i><b>Knockouts</b><span>${koPath(t)}${bronzeOn(t)?" (+ 🥉 match for 3rd)":""}.</span></div></div></div>
-    ${g.team?`<div class="fv-box"><h4>📊 Group points</h4><div class="fv-pts"><div><b>4</b><span>win by 6+</span></div><div><b>3</b><span>win by 4–5</span></div><div><b>1</b><span>win by 3 or less</span></div><div><b>0</b><span>loss</span></div></div><p class="muted">Margin = total points across the tie. Level on points → points difference, then head-to-head.</p></div>`
+    ${g.team?`<div class="fv-box"><h4>📊 Group points</h4><div class="fv-pts"><div><b>5</b><span>win by 6+<br>(1 + 4 bonus)</span></div><div><b>4</b><span>win by 4–5<br>(1 + 3 bonus)</span></div><div><b>2</b><span>win by 3 or less<br>(1 + 1 bonus)</span></div><div><b>1</b><span>win in deuce<br>(no bonus)</span></div><div><b>0</b><span>loss</span></div></div><p class="muted">Points for every match: men's, women's and both mixed. Level on points → points difference, then head-to-head.</p></div>`
       :`<div class="fv-box"><h4>📊 Group places</h4><p>Most wins first. Level → head-to-head, then points difference, then points scored.</p></div>`}
     <div class="fv-box"><h4>🏸 Scoring</h4><div class="fv-score"><div><span>🔁 Round robin (groups)</span><b>${rl(r)}</b></div><div><span>⚔️ Knockouts${ruleTxt(fin)!==ruleTxt(ko)?" (quarter & semi-finals)":""}</span><b>${rl(ko)}</b></div>${ruleTxt(fin)!==ruleTxt(ko)?`<div><span>🏆 Final${bronzeOn(t)?" & 3rd place":""}</span><b>${rl(fin)}</b></div>`:""}</div>${two?`<p class="muted">2 games: both games are always played. At 1–1, the pair with more total points wins the match.</p>`:""}</div>
     ${t.format?`<div class="fv-box"><h4>📝 Good to know</h4>${richTxt(t.format)}</div>`:""}
@@ -140,7 +140,7 @@ function formatTxt(t){
     return [`Teams of 4: 2 men and 2 women.`,
       `Every tie between two teams is 4 matches: men's doubles, women's doubles and two mixed doubles. Win 3 of the 4 to win the tie; at 2–2 the team with more total points wins, and if still level the winner of Mixed doubles 2.`,
       `Group stage: round robin in ${Number(t.numGroups)>0?`${Number(t.numGroups)} groups`:`groups of about ${Number(t.groupSize)||3}`}.${legs(t)===2?" Every pair of teams in a group meets twice, back to back: each discipline plays its second match on the same court straight after the first.":""}`,
-      `Group points: win by 6 or more points = 4, win by 4–5 = 3, win by 3 or less = 1, loss = 0. The margin is the total points across the tie's 4 matches. Level teams are split by points difference, then head-to-head.`,
+      `Group points, for every match (men's, women's and both mixed): a win is 1 point plus a bonus for the winning margin: win by 6 or more = 5 (1 + 4), win by 4–5 = 4 (1 + 3), win by 3 or less = 2 (1 + 1). A win that went to deuce = 1 point, no bonus. Loss = 0. Level teams are split by points difference, then head-to-head.`,
       crossPairs(t,t.groups?.TC)?`Knockouts: the top ${adv} of each group go through. ${adv===2?"Quarter-finals cross the groups: Winner A v Runner-up C, Winner B v Runner-up D, Winner C v Runner-up A, Winner D v Runner-up B.":"Semi-finals: Winner A v Winner C, Winner B v Winner D."}`:`Knockouts: top ${adv} of each group${wild?` plus the best ${wild} third-placed team${wild>1?"s":""}`:""} go through. Seeding: group winners first, then runners-up; teams from different groups are compared on points per tie, so groups of different sizes are fair. The top seeds get a bye if the bracket isn't full.${t.bronze!==false?" The final and the bronze medal match are played at the same time.":""}`,
       `Group matches: ${r.bestOf===1?"1 game ":""}${ruleTxt(r)}${r.deuce&&r.cap<(CAP_FOR[r.to]||0)?`, at ${r.cap-1}–${r.cap-1} the next point wins`:""}${r.bestOf===2?". Both games are always played; at 1–1 the pair with more total points wins":""}.`,
       ...(()=>{ const ko=rules(t,{stage:"ko"}), fin=rules(t,{stage:"ko",roundName:"Final"});
@@ -269,7 +269,14 @@ const bronzeOn = t => t?.bronze===true || (isTeam(t) && t?.bronze!==false);
 function nWild(t, groups){ const adv=Math.max(1,Number(t.advance)||2), G=Object.values(groups||{}), spare=G.filter(g=>g.length>adv).length;
   const w = Number(t.koSize)>0 ? Number(t.koSize)-G.reduce((s,g)=>s+Math.min(adv,g.length),0) : Number(t.wild)||0;
   return Math.max(0, Math.min(spare, w)) }
-const tiePts = margin => margin>=6?4 : margin>=4?3 : 1;
+const tiePts = margin => margin>=6?4 : margin>=4?3 : 1;   // the bonus by winning margin
+// Team Cup group points, match by match: a win is 1 point + the bonus for its margin (6+ → 4, 4–5 → 3, 3 or less → 1); a win that went to deuce is 1 point, no bonus; a loss 0
+const wentDeuce = (t, m) => { const r=rules(t,m); return r.deuce && (m.games||[]).some(g=>Math.min(g[0],g[1])>=r.to-1 && Math.max(g[0],g[1])>r.to) };   // both reached 20-all (in a game to 21)
+function matchPts(t, m){
+  if(m.status!=="done" || !m.winner) return {a:0, b:0};
+  const p=pts(m), margin=Math.abs(p.a-p.b), won=wentDeuce(t,m) ? 1 : 1+tiePts(margin);
+  return m.winner==="a" ? {a:won, b:0} : {a:0, b:won};
+}
 // players a match ties up: Team Cup men's and women's doubles can run side by side, mixed needs both
 function resOf(m, a, b){
   const sides=[a,b].filter(Boolean); if(!m.disc) return sides;
@@ -316,10 +323,12 @@ function teamStandings(t, cat, group){
   const ids=(t.groups?.[cat]?.[group])||[], row={}, res={};
   ids.forEach(id=>row[id]={id, p:0, w:0, l:0, pts:0, pf:0, pa:0});
   const ties=[...new Set(matchesOf(t,cat).filter(m=>m.stage==="group" && m.group===group && m.tie).map(m=>m.tie))];
-  ties.forEach(tie=>{ const m=S.matches.find(x=>x.tie===tie), r=tieResult(tie), A=row[m.a], B=row[m.b]; if(!A||!B||!r.complete||!r.winner) return;
-    A.p++; B.p++; A.pf+=r.pa; A.pa+=r.pb; B.pf+=r.pb; B.pa+=r.pa;
-    const W=r.winner==="a"?A:B, L=r.winner==="a"?B:A, margin=r.winner==="a"?r.pa-r.pb:r.pb-r.pa;
-    W.w++; L.l++; W.pts+=tiePts(margin); const k=[m.a,m.b].sort().join("|")+"|"+W.id; res[k]=(res[k]||0)+1 });
+  ties.forEach(tie=>{ const ms=S.matches.filter(x=>x.tie===tie), m=ms[0], r=tieResult(tie), A=row[m.a], B=row[m.b]; if(!A||!B) return;
+    // points and points difference count match by match, as soon as each match is played
+    ms.forEach(x=>{ if(x.status!=="done") return; const q=matchPts(t,x), p=pts(x); A.pts+=q.a; B.pts+=q.b; A.pf+=p.a; A.pa+=p.b; B.pf+=p.b; B.pa+=p.a });
+    if(!r.complete||!r.winner) return;
+    const W=r.winner==="a"?A:B, L=r.winner==="a"?B:A;
+    A.p++; B.p++; W.w++; L.l++; const k=[m.a,m.b].sort().join("|")+"|"+W.id; res[k]=(res[k]||0)+1 });
   const h2h=(x,y)=>{ const p=[x,y].sort().join("|"), wx=res[p+"|"+x]||0, wy=res[p+"|"+y]||0; return wx>wy?-1:wy>wx?1:0 };
   return Object.values(row).sort((x,y)=>y.pts-x.pts || (y.pf-y.pa)-(x.pf-x.pa) || h2h(x.id,y.id) || y.pf-x.pf || String(tName(x.id)).localeCompare(tName(y.id)));
 }

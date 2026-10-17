@@ -114,7 +114,7 @@ function formatVisual(t){
       <p>Win <b>3 of 4</b> to win the tie. At <b>2–2</b>, the team with more total points wins; still level → the winner of Mixed doubles 2.</p></div>`:""}
     <div class="fv-box"><h4>🗺️ The route to the final</h4><div class="fv-steps">
       <div><i>1</i><b>Groups</b><span>${g.nG?`${g.nG} groups`:`Groups of ${g.gs}`}. Everyone plays everyone in their group${legs(t)===2?" <b>twice, back to back</b>":""}.</span></div>
-      <div><i>2</i><b>${adv===1?"Winners through":`Top ${adv} through`}</b><span>${adv===1?"Each group winner":`The top ${adv} of each group`}${wild?", plus the best of the rest,":""} reach the knockouts.</span></div>
+      <div><i>2</i><b>${adv===1?"Winners through":`Top ${adv} through`}</b><span>${adv===1?"Each group winner":`The top ${adv} of each group`}${wild?", plus the best of the rest,":""} reach the knockouts.${g.team&&new Set(Object.values(t.groups?.TC||{}).map(x=>x.length)).size>1?" Groups are different sizes, so teams from different groups are compared on <b>points per tie</b>.":""}</span></div>
       <div><i>3</i><b>Knockouts</b><span>Quarter-finals → semi-finals → 🏆 final${bronzeOn(t)?" (+ 🥉 match for 3rd)":""}.</span></div></div></div>
     ${g.team?`<div class="fv-box"><h4>📊 Group points</h4><div class="fv-pts"><div><b>4</b><span>win by 6+</span></div><div><b>3</b><span>win by 4–5</span></div><div><b>1</b><span>win by 3 or less</span></div><div><b>0</b><span>loss</span></div></div><p class="muted">Margin = total points across the tie. Level on points → points difference, then head-to-head.</p></div>`
       :`<div class="fv-box"><h4>📊 Group places</h4><p>Most wins first. Level → head-to-head, then points difference, then points scored.</p></div>`}
@@ -141,7 +141,7 @@ function formatTxt(t){
       `Every tie between two teams is 4 matches: men's doubles, women's doubles and two mixed doubles. Win 3 of the 4 to win the tie; at 2–2 the team with more total points wins, and if still level the winner of Mixed doubles 2.`,
       `Group stage: round robin in ${Number(t.numGroups)>0?`${Number(t.numGroups)} groups`:`groups of about ${Number(t.groupSize)||3}`}.${legs(t)===2?" Every pair of teams in a group meets twice, back to back: each discipline plays its second match on the same court straight after the first.":""}`,
       `Group points: win by 6 or more points = 4, win by 4–5 = 3, win by 3 or less = 1, loss = 0. The margin is the total points across the tie's 4 matches. Level teams are split by points difference, then head-to-head.`,
-      crossPairs(t,t.groups?.TC)?`Knockouts: the top ${adv} of each group go through. ${adv===2?"Quarter-finals cross the groups: Winner A v Runner-up C, Winner B v Runner-up D, Winner C v Runner-up A, Winner D v Runner-up B.":"Semi-finals: Winner A v Winner C, Winner B v Winner D."}`:`Knockouts: top ${adv} of each group${wild?` plus the best ${wild} third-placed team${wild>1?"s":""}`:""} go through, ranked by points. The top seeds get a bye if the bracket isn't full.${t.bronze!==false?" The final and the bronze medal match are played at the same time.":""}`,
+      crossPairs(t,t.groups?.TC)?`Knockouts: the top ${adv} of each group go through. ${adv===2?"Quarter-finals cross the groups: Winner A v Runner-up C, Winner B v Runner-up D, Winner C v Runner-up A, Winner D v Runner-up B.":"Semi-finals: Winner A v Winner C, Winner B v Winner D."}`:`Knockouts: top ${adv} of each group${wild?` plus the best ${wild} third-placed team${wild>1?"s":""}`:""} go through. Seeding: group winners first, then runners-up; teams from different groups are compared on points per tie, so groups of different sizes are fair. The top seeds get a bye if the bracket isn't full.${t.bronze!==false?" The final and the bronze medal match are played at the same time.":""}`,
       `Group matches: ${r.bestOf===1?"1 game ":""}${ruleTxt(r)}${r.deuce&&r.cap<(CAP_FOR[r.to]||0)?`, at ${r.cap-1}–${r.cap-1} the next point wins`:""}${r.bestOf===2?". Both games are always played; at 1–1 the pair with more total points wins":""}.`,
       ...(()=>{ const ko=rules(t,{stage:"ko"}), fin=rules(t,{stage:"ko",roundName:"Final"});
         return [...(ruleTxt(ko)!==ruleTxt(r)?[`Knockout matches: ${ko.bestOf===1?"1 game ":""}${ruleTxt(ko)}.`]:[]), ...(ruleTxt(fin)!==ruleTxt(ko)?[`Final${bronzeOn(t)?" and bronze medal match":""}: ${fin.bestOf===1?"1 game ":""}${ruleTxt(fin)}.`]:[])] })()].join("\n")+(t.format?`\n\n${t.format}`:"") }
@@ -327,16 +327,20 @@ const allGroupsDone = (t, cat) => { const g=t.groups?.[cat]; return !!g && Objec
 // everyone through to the knockouts, best first: top places in each group plus the best wildcards
 function qualifiers(t, cat){
   if(!allGroupsDone(t,cat)) return null;
-  const g=t.groups[cat], adv=Math.max(1,Number(t.advance)||2), wild=nWild(t,g), rank=(x,y)=>(y.pts??y.w)-(x.pts??x.w) || (y.pf-y.pa)-(x.pf-x.pa) || y.pf-x.pf;
+  const g=t.groups[cat], adv=Math.max(1,Number(t.advance)||2), wild=nWild(t,g), rank=acrossGroups;
   const tables=Object.keys(g).sort().map(G=>standings(t,cat,G));
   const through=tables.flatMap(tb=>tb.slice(0,adv)), extra=tables.map(tb=>tb[adv]).filter(Boolean).sort(rank).slice(0,wild);
-  return [...through, ...extra].sort(rank).map(x=>x.id);
+  const band=x=>tables.findIndex(tb=>tb.includes(x))>=0 ? tables.find(tb=>tb.includes(x)).indexOf(x) : adv;
+  return [...through, ...extra].sort((x,y)=>band(x)-band(y) || rank(x,y)).map(x=>x.id);
 }
 // doubles events: the best teams in the next place down (e.g. best runners-up), best first
+// comparing teams from different groups (groups can be different sizes): points per tie, then point difference per tie, then points scored per tie
+const per = (x, k) => x.p ? x[k]/x.p : 0;
+const acrossGroups = (x, y) => (per(y,y.pts!=null?"pts":"w")-per(x,x.pts!=null?"pts":"w")) || (per(y,"pf")-per(y,"pa"))-(per(x,"pf")-per(x,"pa")) || per(y,"pf")-per(x,"pf");
 function wildTeams(t, cat){
   if(!allGroupsDone(t,cat)) return null;
   const g=t.groups[cat], adv=Math.max(1,Number(t.advance)||2);
-  return Object.keys(g).sort().map(G=>standings(t,cat,G)[adv]).filter(Boolean).sort((x,y)=>y.w-x.w || (y.pf-y.pa)-(x.pf-x.pa) || y.pf-x.pf).slice(0,nWild(t,g)).map(x=>x.id);
+  return Object.keys(g).sort().map(G=>standings(t,cat,G)[adv]).filter(Boolean).sort(acrossGroups).slice(0,nWild(t,g)).map(x=>x.id);
 }
 
 /* ---------- fixture generation (organiser) ---------- */
@@ -655,7 +659,7 @@ function viewFix(){
       <details class="vm" id="vm-${esc(S.cat)}-ko"><summary>${isTeam(t)?"View every knockout match":"View knockout matches"} (${isTeam(t)?new Set(koList.map(m=>m.tie)).size+" ties":koList.length})</summary><div class="mlist">${fixList(t,koList,{edit, plan:true})}</div></details></section>` }
   const adv=Number(t.advance)||2;
   return head+`<section class="panel">${tabs}
-    <p class="muted" style="margin:0 0 4px">${adv===1?"The group winner goes":`The top ${adv} in each group go`} through${Number(t.koSize)>0||Number(t.wild)?", plus the best of the rest":""}. Green = going through.</p>
+    <p class="muted" style="margin:0 0 4px">${adv===1?"The group winner goes":`The top ${adv} in each group go`} through${Number(t.koSize)>0||Number(t.wild)?", plus the best of the rest":""}. Green = going through.${new Set(Object.values(t.groups?.[S.cat]||{}).map(x=>x.length)).size>1?` Groups are different sizes: knockout seeds compare teams from different groups on points per ${isTeam(t)?"tie":"match"}.`:""}</p>
     <div class="groups">${Object.keys(groups||{}).sort().map(G=>{ const gm=ms.filter(m=>m.stage==="group"&&m.group===G), n=isTeam(t)?new Set(gm.map(m=>m.tie)).size:gm.length, played=isTeam(t)?new Set(gm.filter(m=>m.tie&&tieResult(m.tie).complete).map(m=>m.tie)).size:gm.filter(m=>m.status==="done").length;
       return `<div class="grp"><h3>Group ${G}<span class="muted" style="font-size:.8rem;font-family:var(--body)">${played} of ${n} played</span></h3>${standTable(t,S.cat,G)}
         <details class="vm" id="vm-${esc(S.cat)}-${G}"><summary>View all ${n} ${isTeam(t)?"ties":"matches"}</summary><div class="mlist">${fixList(t,gm,{edit, plan:true})}</div></details></div>` }).join("")}</div></section>`;

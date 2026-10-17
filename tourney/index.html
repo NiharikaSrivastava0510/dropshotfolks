@@ -809,6 +809,11 @@ nav.tabs button[aria-selected="true"]::before{animation:tabPop .35s ease}
 .fc-tmr .tmr{font-size:3.4vh;padding:1vh 2vw}.fc-idle .tmr{font-size:4vh;margin-top:2vh}
 .tset{display:grid;gap:6px}.tset .row{display:flex;flex-wrap:wrap;gap:10px}.tset input{width:110px}
 @media (prefers-reduced-motion:reduce){.call{animation:none}.tbar.soon,.tmr.soon{animation:none}}
+.rb2{display:grid;grid-template-columns:minmax(110px,1fr) 1fr 1fr;gap:6px;align-items:center;padding:6px 8px;border-radius:12px;background:var(--surface)}
+.rb2-d{font-weight:600;font-size:.9rem}.rb2-m{display:grid;gap:2px;padding:6px 8px;border-radius:10px;background:var(--bg);font-size:.85rem;min-width:0}
+.rb2-m i{font-style:normal;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.rb2-m.live{outline:2px solid var(--accent)}
+.rb2-m .plan{display:flex;flex-wrap:wrap;gap:4px}.rb2-m select,.rb2-m input{width:auto;padding:3px 5px;border-radius:7px;font-size:.8rem}
+@media (max-width:560px){.rb2{grid-template-columns:1fr 1fr}.rb2-d{grid-column:1/-1}}
 </style>
 
 <div class="wrap">
@@ -830,5 +835,5 @@ nav.tabs button[aria-selected="true"]::before{animation:tabPop .35s ease}
 <div class="toast" id="toast" hidden></div>
 
 <script src="qrcode.js?v=1"></script>
-<script src="app.js?v=202610172330"></script>
+<script src="app.js?v=202610180100"></script>
 </body></html>

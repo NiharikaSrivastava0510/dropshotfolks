@@ -561,16 +561,27 @@ function matchRow(t, m, opts={}){
 // organiser: court and start time (or order) right on a match
 const planPick = (t, m) => `<span class="plan"><label>Court <select data-plcourt="${esc(m.id)}" aria-label="Court">${Array.from({length:Math.max(10,Number(t.courts)||4)},(_,i)=>`<option value="${i+1}" ${Number(m.pcourt)===i+1?"selected":""}>${i+1}</option>`).join("")}<option value="" ${m.pcourt?"":"selected"}>–</option></select></label>${clockOn(t)?`<label>🕒 <input type="time" data-pltime="${esc(m.id)}" value="${esc(m.ptime||"")}" aria-label="Start time"></label>`:`<label># <input type="number" min="1" max="99" data-plnum="${esc(m.id)}" value="${esc(m.pnum||"")}" aria-label="Order on court" style="width:4.2em"></label>`}</span>`;
 // a list of matches; Team Cup matches sit under their tie with the tie score
+// two meetings of the same pair (group stage, "twice, back to back") show as one card: each discipline's two matches side by side
+const tieBase = id => String(id||"").replace(/L2$/,"");
 function fixList(t, ms, opts={}){
-  const seen=new Set();
-  return ms.map(m=>{ if(!m.tie) return matchRow(t,m,opts); if(seen.has(m.tie)) return ""; seen.add(m.tie);
-    const r=tieResult(m.tie), rs=S.matches.filter(x=>x.tie===m.tie).sort((x,y)=>Object.keys(DISC).indexOf(x.disc)-Object.keys(DISC).indexOf(y.disc));
-    const mine=opts.me&&(sideTeam(m,"a")===opts.me||sideTeam(m,"b")===opts.me), stage=m.stage==="ko"?(m.roundName||"Knockout"):`Group ${m.group}${m.leg?` · ${m.leg===1?"1st":"2nd"} meeting`:""}`;
-    const line=x=>{ const g=(x.games||[]).slice(-1)[0], live=x.status==="live", done=x.status==="done";
-      const right = done ? `<b class="${x.winner==="a"?"wa":"wb"}">${esc(gamesTxt(x))}</b>` : live ? `<span class="livebadge">Court ${esc(x.court)}</span> <b>${g?`${g[0]}–${g[1]}`:"0–0"}</b>`
-        : opts.plan && S.isAdmin ? planPick(t,x) : `<span class="muted">${esc(planTxt(x))}</span>`;
-      return `<div class="rb ${live?"live":""}" ${opts.edit?`data-medit="${esc(x.id)}" role="button" tabindex="0"`:""}><span>${esc(DISC[x.disc]||x.disc)}</span><span>${right}</span></div>` };
-    return `<div class="tie ${mine?"me":""}"><div class="tie-s">${esc(stage)}${r.onPoints?" · won on total points":""}</div><div class="tie-h"><span class="${r.winner==="a"?"win":""}">${sideName(m,"a")}</span><b>${r.done?`${r.a}–${r.b}`:"vs"}</b><span class="${r.winner==="b"?"win":""}">${sideName(m,"b")}</span></div>${rs.map(line).join("")}</div>` }).join("");
+  const seen=new Set(), DO=Object.keys(DISC);
+  return ms.map(m=>{ if(!m.tie) return matchRow(t,m,opts); const key=m.leg?tieBase(m.tie):m.tie; if(seen.has(key)) return ""; seen.add(key);
+    const legs2=!!m.leg, t1=legs2?key:m.tie, t2=legs2?key+"L2":null, first=S.matches.find(x=>x.tie===t1)||m;
+    const r1=tieResult(t1), r2=t2?tieResult(t2):null;
+    const mine=opts.me&&(sideTeam(first,"a")===opts.me||sideTeam(first,"b")===opts.me), stage=m.stage==="ko"?(m.roundName||"Knockout"):`Group ${m.group}${legs2?" · plays twice, back to back":""}`;
+    // flip = the 2nd meeting has the teams the other way round, so its scores are turned to match the card
+    const cell=(x,flip)=>{ if(!x) return ""; const g=(x.games||[]).slice(-1)[0], live=x.status==="live", done=x.status==="done", gs=(x.games||[]).filter(y=>y[0]||y[1]).map(y=>flip?`${y[1]}–${y[0]}`:`${y[0]}–${y[1]}`).join(", "), w=flip?(x.winner==="a"?"b":x.winner==="b"?"a":null):x.winner;
+      return done ? `<b class="${w==="a"?"wa":"wb"}">${esc(gs)}</b>` : live ? `<span class="livebadge">Court ${esc(x.court)}</span> <b>${g?(flip?`${g[1]}–${g[0]}`:`${g[0]}–${g[1]}`):"0–0"}</b>`
+        : opts.plan && S.isAdmin ? planPick(t,x) : `<span class="muted">${esc(planTxt(x))}</span>` };
+    const row=(d)=>{ const x1=S.matches.find(x=>x.tie===t1&&x.disc===d), x2=t2&&S.matches.find(x=>x.tie===t2&&x.disc===d); if(!x1) return "";
+      const ed=x=>opts.edit&&x?`data-medit="${esc(x.id)}" role="button" tabindex="0"`:"";
+      if(!legs2) return `<div class="rb ${x1.status==="live"?"live":""}" ${ed(x1)}><span>${esc(DISC[d]||d)}</span><span>${cell(x1)}</span></div>`;
+      return `<div class="rb2"><span class="rb2-d">${esc(DISC[d]||d)}</span><div class="rb2-m ${x1.status==="live"?"live":""}" ${ed(x1)}><i>Match 1</i>${cell(x1)}</div><div class="rb2-m ${x2?.status==="live"?"live":""}" ${ed(x2)}><i>Match 2</i>${cell(x2,true)}</div></div>` };
+    const sc = legs2 ? [r1,r2].map((r,i)=>r&&r.done?(i?`${r.b}–${r.a}`:`${r.a}–${r.b}`):"–").join(" · ") : (r1.done?`${r1.a}–${r1.b}`:"vs");
+    const w1=r1.winner, w2=r2?.winner==="a"?"b":r2?.winner==="b"?"a":null, won=q=>legs2?[w1,w2].filter(x=>x===q).length:(w1===q?1:0);
+    return `<div class="tie ${mine?"me":""} ${legs2?"twice":""}"><div class="tie-s">${esc(stage)}${r1.onPoints||r2?.onPoints?" · decided on total points":""}</div>
+      <div class="tie-h"><span class="${won("a")>won("b")?"win":""}">${sideName(first,"a")}</span><b>${legs2&&!(r1.done||r2?.done)?"vs":sc}</b><span class="${won("b")>won("a")?"win":""}">${sideName(first,"b")}</span></div>
+      ${DO.map(row).join("")}</div>` }).join("");
 }
 function standTable(t, cat, G){
   const adv=Number(t.advance)||2, rows=standings(t,cat,G);
@@ -617,18 +628,19 @@ const callBox = (t, x, big) => { const a=sideTeam(x.m,"a"), b=sideTeam(x.m,"b");
 const toMin = h => { const [a,b]=String(h||"").split(":").map(Number); return Number.isFinite(a)&&Number.isFinite(b) ? a*60+b : null };
 function timingsView(t){
   const ms=matchesOf(t).filter(m=>!m.bye), seen=new Set(), rows=[];
-  ms.slice().sort(byPlan).forEach(m=>{ const k=m.tie||m.id; if(seen.has(k)) return; seen.add(k); rows.push(m) });
-  const parts=m=>m.tie?ms.filter(x=>x.tie===m.tie).sort((x,y)=>Object.keys(DISC).indexOf(x.disc)-Object.keys(DISC).indexOf(y.disc)):[m];
+  const keyOf=m=>m.tie?(m.leg?tieBase(m.tie):m.tie):m.id;
+  ms.slice().sort(byPlan).forEach(m=>{ const k=keyOf(m); if(seen.has(k)) return; seen.add(k); rows.push(m) });
+  const parts=m=>m.tie?ms.filter(x=>keyOf(x)===keyOf(m)).sort((x,y)=>Object.keys(DISC).indexOf(x.disc)-Object.keys(DISC).indexOf(y.disc)||(x.leg||1)-(y.leg||1)):[m];
   const first=m=>parts(m).map(x=>x.ptime).filter(Boolean).sort()[0]||"";
   rows.sort((a,b)=>(first(a)||"99").localeCompare(first(b)||"99") || byPlan(a,b));
   const left=ms.filter(m=>m.status==="scheduled"&&m.ptime).length; let last=null;
-  const list=rows.map(m=>{ const ps=parts(m), st=m.tie?tieResult(m.tie):null, done=st?st.complete:m.status==="done", live=ps.some(x=>x.status==="live"), f=first(m);
+  const list=rows.map(m=>{ const ps=parts(m), st=m.tie?tieResult(m.tie):null, done=m.tie?ps.every(x=>x.status==="done"):m.status==="done", live=ps.some(x=>x.status==="live"), f=first(m);
     const head=f!==last?`<h4 class="tm-slot">${f?`🕒 ${esc(f)}`:"No time yet"}</h4>`:""; last=f;
-    const who=`${sideTeam(m,"a")?esc(tName(sideTeam(m,"a"))):esc(sideLabel(m,"a"))} <span class="muted">v</span> ${sideTeam(m,"b")?esc(tName(sideTeam(m,"b"))):esc(sideLabel(m,"b"))}`;
-    const lab=m.stage==="ko"?(m.roundName||"Knockout"):`Group ${m.group}${m.leg?` · ${m.leg===1?"1st":"2nd"} meeting`:""}`;
+    const lab=m.stage==="ko"?(m.roundName||"Knockout"):`Group ${m.group}${m.leg?" · plays twice, back to back":""}`, fm=m.leg?(S.matches.find(x=>x.tie===keyOf(m))||m):m;
+    const who=`${sideTeam(fm,"a")?esc(tName(sideTeam(fm,"a"))):esc(sideLabel(fm,"a"))} <span class="muted">v</span> ${sideTeam(fm,"b")?esc(tName(sideTeam(fm,"b"))):esc(sideLabel(fm,"b"))}`;
     return `${head}<div class="tm-row ${done?"done":""} ${live?"live":""}"><div class="tm-h"><div><span class="lbl">${esc(lab)}${!m.tie&&cats(t).length>1?` · ${esc(catName(t,m.cat))}`:""}</span><b>${who}</b></div>
-      ${done?`<span class="bdone">✓ Played</span>`:live?`<span class="livebadge">Live</span>`:m.tie?`<label class="tm-start">Starts <input type="time" data-tiestart="${esc(m.tie)}" value="${esc(f)}"></label>`:""}</div>
-      ${done||live?"":`<div class="tm-parts">${ps.map(x=>`<div class="bk-er">${x.disc?`<span>${esc(DISC[x.disc])}</span>`:""}${planPick(t,x)}</div>`).join("")}</div>`}</div>` }).join("");
+      ${done?`<span class="bdone">✓ Played</span>`:live?`<span class="livebadge">Live</span>`:m.tie?`<label class="tm-start">Starts <input type="time" data-tiestart="${esc(keyOf(m))}" value="${esc(f)}"></label>`:""}</div>
+      ${done||live?"":`<div class="tm-parts">${ps.map(x=>`<div class="bk-er">${x.disc?`<span>${esc(DISC[x.disc])}${x.leg?` · match ${x.leg}`:""}</span>`:""}${planPick(t,x)}</div>`).join("")}</div>`}</div>` }).join("");
   return `<div class="tm-top"><div><b>🕒 Timings & courts</b><p class="muted">Set or change any match's court and time here, any time. Players, referees and the big screen see changes straight away. The fixtures themselves don't change.</p></div>
       <div class="tm-shift"><span class="lbl">Running late or early? Move all ${left} matches not yet started</span><div class="row">${[-10,-5,5,10,15,30].map(d=>`<button class="btn small ${d>0?"":"ghost"}" data-shift="${d}">${d>0?"+":"−"}${Math.abs(d)} min</button>`).join("")}</div></div></div>
     ${rows.length?`<div class="tm-list">${list}</div>`:`<div class="empty">No fixtures yet. Make them in ⚙️ Organiser tools first.</div>`}`;
@@ -1245,7 +1257,7 @@ document.addEventListener("input", e=>{ if(e.target.id!=="ci-find") return; S.ci
 document.addEventListener("change", async e=>{
   if(e.target.dataset?.timerset && S.isAdmin){ const t=T(), k=e.target.dataset.timerset, v=Math.min(1800,Math.max(5,Number(e.target.value)||TIMERS[k][2]));
     if(t) await db.collection("tourneys").doc(t.id).set({timers:{...(t.timers||{}), [k]:v}},{merge:true}).then(()=>toast(`${TIMERS[k][1]}: ${fmtSecs(v)}`),()=>toast("Couldn't save")); return }
-  if(e.target.dataset?.tiestart && S.isAdmin){ const tie=e.target.dataset.tiestart, v=e.target.value, ms=S.matches.filter(x=>x.tie===tie && x.status==="scheduled"); if(!v||!ms.length) return;
+  if(e.target.dataset?.tiestart && S.isAdmin){ const tie=e.target.dataset.tiestart, v=e.target.value, ms=S.matches.filter(x=>(x.tie===tie||x.tie===tie+"L2") && x.status==="scheduled"); if(!v||!ms.length) return;
     const base=ms.map(x=>toMin(x.ptime)).filter(x=>x!=null), d=base.length?toMin(v)-Math.min(...base):0, b=db.batch();
     ms.forEach(x=>b.update(db.collection("tmatches").doc(x.id),{ptime:x.ptime?hm(x.ptime,d):v})); await b.commit().then(()=>toast(`Tie moved to ${v}`),()=>toast("Couldn't save")); return }
   if(e.target.dataset?.gmove && S.isAdmin){ S.gDraft={...(S.gDraft||{}), [e.target.dataset.gmove]:e.target.value}; render(); return }

@@ -581,6 +581,38 @@ function standTable(t, cat, G){
     ${rows.map((x,i)=>`<tr class="${i<adv?"qual":""}"><td>${i+1}</td><td>${esc(tName(x.id))}</td><td>${x.p}</td><td>${x.w}</td><td>${x.l}</td><td>${x.pf-x.pa>0?"+":""}${x.pf-x.pa}</td></tr>`).join("")}
   </tbody></table></div>`;
 }
+/* ---------- referee timers: waiting for the teams, warm-up, break between games ---------- */
+const TIMERS = {wait:["⏳","Waiting for teams",180], warm:["🔥","Warm-up",120], brk:["☕","Break",20]};
+const timerSecs = (t,k) => Number(t?.timers?.[k]) > 0 ? Number(t.timers[k]) : TIMERS[k][2];
+const fmtSecs = n => n>=60 ? `${Math.floor(n/60)}:${String(n%60).padStart(2,"0")}` : `0:${String(n).padStart(2,"0")}`;
+const timerOf = m => { const x=S.localTimers?.[m?.id] || m?.timer; return x && x.end && x.end > Date.now()-15000 ? x : null };
+const cd = x => `<span class="cd" data-end="${x.end}">${fmtSecs(Math.max(0,Math.ceil((x.end-Date.now())/1000)))}</span>`;
+function timerChip(m){ const x=timerOf(m); if(!x) return ""; const [i,l]=TIMERS[x.k]||["⏱","Timer"]; return `<span class="tmr ${x.k}">${i} ${l} ${cd(x)}</span>` }
+function timerBar(t, m, hint){
+  if(!m) return ""; const x=timerOf(m);
+  if(x){ const [i,l]=TIMERS[x.k]||["⏱","Timer"]; return `<div class="tbar on ${x.k}"><div class="tbar-big">${i} ${l}<b>${cd(x)}</b></div><button class="btn small ghost" data-timer="stop" data-mid="${esc(m.id)}">Stop timer</button></div>` }
+  const order=hint==="brk"?["brk","warm","wait"]:hint==="wait"?["wait","warm","brk"]:["warm","brk","wait"];
+  return `<div class="tbar"><span class="lbl">⏱ Timer</span><div class="cats">${order.map((k,j)=>`<button type="button" class="${j===0?"first":""}" data-timer="${k}" data-mid="${esc(m.id)}">${TIMERS[k][0]} ${TIMERS[k][1]} · ${fmtSecs(timerSecs(t,k))}</button>`).join("")}</div></div>`;
+}
+async function setTimer(t, m, k){
+  const data = k==="stop" ? {timer:null} : {timer:{k, end:Date.now()+timerSecs(t,k)*1000, s:timerSecs(t,k)}};
+  S.localTimers=S.localTimers||{}; delete S.localTimers[m.id];
+  await db.collection("tmatches").doc(m.id).update(data).catch(()=>{ if(k!=="stop") S.localTimers[m.id]=data.timer; toast("Timer runs on this phone only until the organiser publishes the latest Firebase rules") });
+  render();
+}
+// the next match due on a court (its own queue first)
+const nextOn = (t, c) => upNext(t,60).find(x=>Number(x.pcourt)===c) || null;
+// "call to court": a court just came free (or the referee started the waiting timer) and the next teams are wanted
+function courtCalls(t){
+  const n=Math.max(1,Number(t.courts)||4), out=[];
+  for(let c=1;c<=n;c++){ if(liveOn(t,c)) continue; const nx=nextOn(t,c); if(!nx) continue;
+    const lastDone=matchesOf(t).filter(m=>m.status==="done"&&Number(m.court)===c).map(m=>Date.parse(m.updatedAt)||0).sort((a,b)=>b-a)[0]||0;
+    const tm=timerOf(nx); if(tm?.k==="wait" || (lastDone && Date.now()-lastDone<180000)) out.push({c, m:nx}) }
+  return out;
+}
+const callBox = (t, x, big) => { const a=sideTeam(x.m,"a"), b=sideTeam(x.m,"b");
+  return `<div class="call ${big?"big":""}"><span class="call-c">📣 Court ${x.c}</span><b>${esc(a?tName(a):sideLabel(x.m,"a"))}</b><i>v</i><b>${esc(b?tName(b):sideLabel(x.m,"b"))}</b><span class="call-d">${esc(x.m.disc?DISC[x.m.disc]:catName(t,x.m.cat))}${x.m.leg?` · ${x.m.leg===1?"1st":"2nd"} meeting`:""} · please come to Court ${x.c}</span>${timerChip(x.m)}</div>` };
+
 // organiser: every match's court and time in one place, in order; change any of it at any time
 const toMin = h => { const [a,b]=String(h||"").split(":").map(Number); return Number.isFinite(a)&&Number.isFinite(b) ? a*60+b : null };
 function timingsView(t){
@@ -636,12 +668,12 @@ function bracket(t, cat){
 function courtCard(t, c){
   const m=liveOn(t,c), r=rules(t,m);
   const fb=`<a class="focusbtn" href="#court=${c}" target="_blank" rel="noopener" title="Open Court ${c} full screen in a new tab">⛶ Focus</a>`;
-  if(!m) return `<div class="ct idle"><div class="cn"><span>Court ${c}</span><span>free ${fb}</span></div><div class="muted">Waiting for the next match</div></div>`;
+  if(!m){ const nx=nextOn(t,c); return `<div class="ct idle"><div class="cn"><span>Court ${c}</span><span>free ${fb}</span></div>${nx?`<div class="ct-next"><span class="lbl">Next on court</span><b>${esc(tName(sideTeam(nx,"a")))} <i>v</i> ${esc(tName(sideTeam(nx,"b")))}</b><small>${esc(nx.disc?DISC[nx.disc]:catName(t,nx.cat))}${nx.leg?` · ${nx.leg===1?"1st":"2nd"} meeting`:""}</small>${timerChip(nx)}</div>`:`<div class="muted">Waiting for the next match</div>`}</div>` }
   const g=(m.games||[]).slice(-1)[0]||[0,0], w=gamesWon(m,r), need=Math.floor(r.bestOf/2)+1, sv=svcState(m,Math.max(0,(m.games||[]).length-1));
   const side=(s,i)=>{ const id=sideTeam(m,s), tm=teamById(id), srv=sv&&sv.serving===s;
     const pl=k=>esc(tm?(k===1?tm.p1:tm.p2):""), names=m.disc?esc(DISC[m.disc]):tm?(srv?(sv.server===1?`🏸 ${pl(1)} & ${pl(2)}`:`${pl(1)} & 🏸 ${pl(2)}`):`${pl(1)} & ${pl(2)}`):"";
     return `<div class="row2"><div class="nm">${srv?"🏸 ":""}${esc(tName(id))}<small>${names}</small>${r.bestOf>1?`<span class="gw">${Array.from({length:need},(_,k)=>`<i class="${k<w[s]?"on":""}"></i>`).join("")}</span>`:""}</div><div class="pt">${g[i]}</div></div>` };
-  return `<div class="ct"><div class="cn"><span>Court ${c} · ${esc(catName(t,m.cat))}</span><span>${esc(stageTxt(m))} ${fb}</span></div>${side("a",0)}${side("b",1)}${m.ref?`<div class="ctref">🧑‍⚖️ Referee: ${esc(m.ref)}</div>`:""}</div>`;
+  return `<div class="ct"><div class="cn"><span>Court ${c} · ${esc(catName(t,m.cat))}</span><span>${esc(stageTxt(m))} ${fb}</span></div>${timerChip(m)?`<div class="ct-tmr">${timerChip(m)}</div>`:""}${side("a",0)}${side("b",1)}${m.ref?`<div class="ctref">🧑‍⚖️ Referee: ${esc(m.ref)}</div>`:""}</div>`;
 }
 
 /* ---------- views ---------- */
@@ -745,6 +777,7 @@ function viewLive(){
   const t=T(); if(!t) return noTourney();
   const n=Math.max(1,Number(t.courts)||4), nx=upNext(t,6), done=matchesOf(t).filter(m=>m.status==="done"&&!m.bye).sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))).slice(0,6);
   return `${pickBar(t)}<section class="panel"><div class="row" style="justify-content:space-between"><div><h2>Live courts</h2><p class="muted">Scores update the moment the referee taps.</p></div><a class="btn small" href="#screen" data-screen="1">📺 Big screen</a></div>
+    ${(()=>{ const calls=courtCalls(t); return calls.length?`<div class="calls">${calls.map(x=>callBox(t,x)).join("")}</div>`:"" })()}
     <div class="courts">${Array.from({length:n},(_,i)=>courtCard(t,i+1)).join("")}</div></section>
     <section class="panel"><h2>Up next</h2>${nx.length?`<div class="mlist">${nx.map(m=>matchRow(t,m,{cat:true})).join("")}</div>`:`<div class="empty">Nothing waiting.</div>`}</section>
     ${done.length?`<section class="panel"><h2>Latest results</h2><div class="mlist">${done.map(m=>matchRow(t,m,{cat:true})).join("")}</div></section>`:""}`;
@@ -776,8 +809,10 @@ function viewRefInner(t){
     <button class="btn primary" data-refopen="1">Start refereeing →</button></div></section>`;
   const n=Math.max(1,Number(t.courts)||4), c=Math.min(n,Math.max(1,S.refCourt)), m=liveOn(t,c), r=rules(t,m);
   const courtPick=`<div class="cats">${Array.from({length:n},(_,i)=>`<button data-refcourt="${i+1}" aria-pressed="${i+1===c}">Court ${i+1}${liveOn(t,i+1)?" 🔴":""}</button>`).join("")}</div>`;
-  if(!m){ const nx=upNext(t,30).sort((x,y)=>(x.pcourt===c?0:1)-(y.pcourt===c?0:1)).slice(0,6);
+  if(!m){ const nx=upNext(t,30).sort((x,y)=>(x.pcourt===c?0:1)-(y.pcourt===c?0:1)).slice(0,6), lastHere=matchesOf(t).filter(x=>x.status==="done"&&Number(x.court)===c).sort((x,y)=>String(y.updatedAt).localeCompare(String(x.updatedAt)))[0];
+    const backToBack = nx[0] && lastHere && nx[0].after && nx[0].after===lastHere.id;
     return `<section class="panel"><div class="refhi">👋 <b>${esc(ls.get("dsf:refname","")||S.unlock?.name||"Referee")}</b><button class="btn small ghost" data-refname="1">Change name</button></div><h2>Referee · Court ${c}</h2>${courtPick}
+      ${nx[0]?`<div class="refnext"><span class="lbl">${backToBack?"Next · same pairs, 2nd meeting":"Next on this court"}</span><b>${esc(tName(sideTeam(nx[0],"a")))} v ${esc(tName(sideTeam(nx[0],"b")))}</b><span class="muted">${esc(nx[0].disc?DISC[nx[0].disc]:"")}</span>${timerBar(t,nx[0],backToBack?"brk":"wait")}</div>`:""}
       ${nx.length?`<p class="muted">Pick the next match for Court ${c}. The first one is next in line.</p><div class="mlist">${nx.map((x,i)=>`<div style="display:grid;gap:6px">${matchRow(t,x,{cat:true})}<button class="btn ${i?"small":"primary"}" data-start="${esc(x.id)}" data-court="${c}">Start on Court ${c}</button></div>`).join("")}</div>`:`<div class="empty">No matches waiting. 🎉</div>`}
       <div class="row">${S.unlock?`<button class="btn small ghost" data-refexit="1">Close referee mode</button>`:""}${S.refOnly?`<button class="btn small ghost" data-refleave="1">See the full tournament page</button>`:""}</div></section>`;
   }
@@ -789,6 +824,7 @@ function viewRefInner(t){
     const tid = x => x==="a"?a:b, pick=(field,val,label,on)=>`<button type="button" data-toss="${field}" data-v="${val}" aria-pressed="${on}">${esc(label)}</button>`;
     return `<section class="panel refbox"><div class="row" style="justify-content:space-between"><h2>Court ${c} · ${gi?`Game ${gi+1}`:"Toss"}</h2><span class="livebadge">Live</span></div>${courtPick}
       <p class="muted">${esc(tName(a))} vs ${esc(tName(b))} · ${esc(m.disc?DISC[m.disc]:catName(t,m.cat))}${gi?` · ${esc(tName(tid(prevWin)))} won the last game, so they serve first`:""}</p>
+      ${timerBar(t,m,gi?"brk":"warm")}
       ${gi?"":`<div><span class="lbl">🪙 Who won the toss?</span><div class="cats">${pick("won","a",tName(a),d.won==="a")}${pick("won","b",tName(b),d.won==="b")}</div></div>`}
       <div><span class="lbl">🏸 Serving first</span><div class="cats">${pick("s","a",tName(a),d.s==="a")}${pick("s","b",tName(b),d.s==="b")}</div></div>
       ${d.s?`<div><span class="lbl">Who serves? (${esc(tName(tid(d.s)))})</span><div class="cats">${pick("sp",1,pName(tid(d.s),1),d.sp===1)}${pick("sp",2,pName(tid(d.s),2),d.sp===2)}</div></div>
@@ -875,6 +911,7 @@ function viewOrg(only){
         return `<div class="refshare"><div class="pass-qr">${qrSvg(link)}</div><div><span class="lbl">One-tap referee sign-in</span><p>Referees scan this QR code or open the link, type their name, and they're in. They stay signed in on that phone.</p>
           <div class="row"><button class="btn small" data-copy="${esc(link)}">Copy link</button><a class="btn small primary" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">💬 Send to referees on WhatsApp</a></div></div></div>` })()}
       ${(()=>{ const refs=(S.refs||[]).filter(x=>x.tid===t.id && x.code===S.secret); return `<div><span class="lbl">Signed-in referees · ${refs.length}</span>${refs.length?`<div class="chips">${refs.map(x=>{ const on=matchesOf(t).find(m=>m.status==="live"&&m.ref&&m.ref===x.name); return `<span class="chip ${on?"st-confirmed":""}">🧑‍⚖️ ${esc(x.name||"No name")}${on?` · Court ${esc(on.court)}`:""}</span>` }).join("")}</div>`:`<p class="muted">Nobody yet.</p>`}</div>` })()}
+      <div class="tset"><span class="lbl">⏱ Referee timers (seconds)</span><div class="row">${Object.entries(TIMERS).map(([k,[i,l]])=>`<label class="f">${i} ${l}<input type="number" min="5" max="1800" step="5" data-timerset="${k}" value="${timerSecs(t,k)}"></label>`).join("")}</div></div>
       <p class="muted" style="font-size:.85rem">Referees only see the scoring screen, nothing else. A new code signs out every phone using the old one.</p>
       <div class="row"><a class="btn small" href="#screen" data-screen="1">📺 Open big screen</a><span class="muted" style="font-size:.85rem">Put it on the projector and press F for full screen.</span></div></section>`;
   if(ot==="teams") body=`<section class="panel"><div class="row" style="justify-content:space-between"><h2>Teams</h2><div class="row"><button class="btn small" data-scanqr="1">📷 Scan QR</button><label class="btn small" for="imp-file">📥 Import spreadsheet</label><input id="imp-file" type="file" accept=".xlsx,.csv" hidden><button class="btn small primary" data-oaddopen="1">➕ Add a team</button></div></div>${catBar(t)}
@@ -941,14 +978,14 @@ function viewFocus(c){
   const nextHere = upNext(t,40).find(x=>x.pcourt===c) || upNext(t,1)[0];
   const head=`<div class="scr-h"><img src="../images/logo-mark.png" alt=""><h1>${esc(t.name||"Tournament")}</h1><span class="fc-court">Court ${c}</span><span class="clock" id="clock"></span></div>`;
   const foot=`<div class="scr-f">${nextHere?`<b>Next on Court ${c}:</b> ${esc(tName(sideTeam(nextHere,"a")))} vs ${esc(tName(sideTeam(nextHere,"b")))} <span>(${esc(catName(t,nextHere.cat))})</span>`:"<b>dropshotfolks.co.uk/tourney</b> · live scores on your phone"}</div>`;
-  if(!m) return `<div class="scr fc">${head}<div class="fc-idle"><div>🏸</div><p>Court ${c} is free</p>${nextHere?`<small>Up next: ${esc(tName(sideTeam(nextHere,"a")))} vs ${esc(tName(sideTeam(nextHere,"b")))}</small>`:""}</div>${foot}</div>`;
+  if(!m) return `<div class="scr fc">${head}<div class="fc-idle"><div>${nextHere?"📣":"🏸"}</div><small>Court ${c} is free</small>${nextHere?`<p>${esc(tName(sideTeam(nextHere,"a")))} v ${esc(tName(sideTeam(nextHere,"b")))}</p><small>${esc(nextHere.disc?DISC[nextHere.disc]:catName(t,nextHere.cat))} · please come to Court ${c}</small>${timerChip(nextHere)}`:`<p>Court ${c} is free</p>`}</div>${foot}</div>`;
   const gi=Math.max(0,(m.games||[]).length-1), g=(m.games||[])[gi]||[0,0], w=gamesWon(m,r), sv=svcState(m,gi), need=r.bestOf===2?2:Math.floor(r.bestOf/2)+1;
   const row=(s,i)=>{ const id=sideTeam(m,s), tm=teamById(id), srv=sv&&sv.serving===s;
     const pl=k=>esc(tm?(k===1?tm.p1:tm.p2):""), who=m.disc?esc(DISC[m.disc]):tm?`${srv&&sv.server===1?"🏸 ":""}${pl(1)} & ${srv&&sv.server===2?"🏸 ":""}${pl(2)}`:"";
     return `<div class="fc-row ${srv?"srv":""} ${s}"><div class="fc-nm"><b>${esc(tName(id))}</b><span>${who}</span>${r.bestOf>1?`<span class="gw">${Array.from({length:need},(_,k)=>`<i class="${k<w[s]?"on":""}"></i>`).join("")}</span>`:""}</div><div class="fc-pt">${g[i]}</div></div>` };
   const svLine = sv ? `🏸 ${esc(pName(sideTeam(m,sv.serving),sv.server))} serves from the ${sv.court==="R"?"right":"left"} → ${esc(pName(sideTeam(m,otherSide(sv.serving)),sv.receiver))}` : "";
   return `<div class="scr fc">${head}
-    <div class="fc-main"><div class="fc-meta">${esc(catName(t,m.cat))} · ${esc(stageTxt(m))} · Game ${gi+1}${(m.games||[]).length>1?` · earlier: ${esc((m.games||[]).slice(0,-1).map(x=>`${x[0]}–${x[1]}`).join(", "))}`:""}</div>
+    <div class="fc-main">${timerChip(m)?`<div class="fc-tmr">${timerChip(m)}</div>`:""}<div class="fc-meta">${esc(catName(t,m.cat))} · ${esc(stageTxt(m))} · Game ${gi+1}${(m.games||[]).length>1?` · earlier: ${esc((m.games||[]).slice(0,-1).map(x=>`${x[0]}–${x[1]}`).join(", "))}`:""}</div>
       ${row("a",0)}${row("b",1)}${svLine?`<div class="fc-svc">${svLine}</div>`:""}</div>${foot}</div>`;
 }
 
@@ -963,6 +1000,7 @@ function viewScreen(){
   if(done.length) panels.push(`<h2>Latest results</h2><div class="mlist">${done.map(m=>matchRow(t,m,{cat:true})).join("")}</div>`);
   const side = panels.length ? panels[S.scrIdx % panels.length] : `<h2>Welcome!</h2><p>Fixtures will appear here.</p>`;
   return `<div class="scr"><div class="scr-h"><img src="../images/logo-mark.png" alt=""><h1>${esc(t.name||"Tournament")}</h1><span class="clock" id="clock"></span></div>
+    ${(()=>{ const calls=courtCalls(t); return calls.length?`<div class="scr-calls">${calls.map(x=>callBox(t,x,true)).join("")}</div>`:"" })()}
     <div class="scr-b"><div class="scr-courts">${Array.from({length:n},(_,i)=>courtCard(t,i+1)).join("")}</div><div class="scr-side scr-fade">${side}</div></div>
     <div class="scr-f">${nx.length?`<b>Up next:</b> ${nx.map(m=>`${m.pcourt?`<b>${esc(planTxt(m,true))}</b> `:""}${esc(tName(sideTeam(m,"a")))} vs ${esc(tName(sideTeam(m,"b")))} <span>(${esc(catName(t,m.cat))})</span>`).join(" · ")}`:"<b>dropshotfolks.co.uk/tourney</b> · scores live on your phone"}</div></div>`;
 }
@@ -992,6 +1030,11 @@ function render(){
 }
 function tickClock(){ const c=$("#clock"); if(c) c.textContent=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}) }
 setInterval(()=>{ if(S.tab==="screen"){ tickClock() } },15000);
+// countdowns tick every half second without redrawing the page
+setInterval(()=>{ document.querySelectorAll(".cd[data-end]").forEach(el=>{ const left=Math.ceil((Number(el.dataset.end)-Date.now())/1000);
+  el.textContent = left>0 ? fmtSecs(left) : "Time!"; const box=el.closest(".tbar,.tmr,.call");
+  if(left<=0 && box && !box.classList.contains("over")){ box.classList.add("over"); if(el.closest(".refbox,.panel") && S.tab==="ref") navigator.vibrate?.([200,100,200]) }
+  else if(left>0 && left<=5 && box) box.classList.add("soon") }) },500);
 setInterval(()=>{ if(S.tab==="screen"){ S.scrIdx++; render() } },12000);
 addEventListener("hashchange",()=>{ S.refOnly = location.hash==="#ref";
   S.tab = /^#(screen|court=\d+)$/.test(location.hash) ? "screen" : S.refOnly ? "ref" : location.hash==="#checkin" ? "checkin" : (S.tab==="screen"?"live":S.tab); render() });
@@ -1106,7 +1149,8 @@ document.addEventListener("click", async e=>{
   if(ds.start){ const m=S.matches.find(x=>x.id===ds.start); if(!m) return; const c=Number(ds.court); keepAwake();
     if(liveOn(t,c)){ toast(`Court ${c} already has a match`); return }
     const rn=S.isAdmin?"":(ls.get("dsf:refname","")||""), base={status:"live", court:c, games:m.games?.length?m.games:[[0,0]], winner:null};
-    if(rn){ const ok=await db.collection("tmatches").doc(m.id).update({...base, games:toDb(base.games), ref:rn, updatedAt:nowIso()}).then(()=>true,()=>false); if(ok) return }
+    // the teams are here: the "waiting for teams" timer ends when the match starts
+    const ok=await db.collection("tmatches").doc(m.id).update({...base, games:toDb(base.games), ...(rn?{ref:rn}:{}), ...(m.timer?.k==="wait"?{timer:null}:{}), updatedAt:nowIso()}).then(()=>true,()=>false); if(ok){ if(S.localTimers) delete S.localTimers[m.id]; return }
     await upd(m.id,base); return }
   if(ds.toss){ const m=liveOn(t,Math.min(Math.max(1,Number(t.courts)||4),S.refCourt)); if(!m) return; const gi=Math.max(0,(m.games||[]).length-1), d=S.toss[m.id+"#"+gi]||(S.toss[m.id+"#"+gi]={});
     const v=ds.toss==="sp"||ds.toss==="rp"?Number(ds.v):ds.v; d[ds.toss]=v; if(ds.toss==="s"){ d.sp=null; d.rp=null } render(); return }
@@ -1120,6 +1164,7 @@ document.addEventListener("click", async e=>{
   if(ds.undo){ const m=liveOn(t,Math.min(Math.max(1,Number(t.courts)||4),S.refCourt)); if(m) point(m, ds.undo, -1); return }
   if(ds.finish){ const m=S.matches.find(x=>x.id===ds.finish), w=matchWinner(m,rules(t,m)); if(!w) return;
     await upd(m.id,{status:"done", winner:w, games:(m.games||[]).filter(g=>g[0]||g[1])}); toast(`Result saved: ${tName(sideTeam(m,w))} win`); return }
+  if(ds.timer){ const m=S.matches.find(x=>x.id===ds.mid); if(m && canRef(T())) await setTimer(T(), m, ds.timer); return }
   if(ds.stop){ if(!confirm("Stop this match and put it back in the queue? The score so far is kept.")) return; await upd(ds.stop,{status:"scheduled", court:0}); return }
   if(ds.medit){ if(!canRef(t)) return; S.edit=ds.medit; render(); scrollTo({top:0,behavior:"smooth"}); return }
   if(ds.eclose){ S.edit=null; render(); return }
@@ -1198,6 +1243,8 @@ function shrinkImage(file, max=1400){
 document.addEventListener("input", e=>{ if(e.target.id!=="ci-find") return; S.ciFilter=e.target.value; const q=S.ciFilter.toLowerCase();
   document.querySelectorAll(".ci-row").forEach(r=>{ r.hidden=!!q && !r.textContent.toLowerCase().includes(q) }) });
 document.addEventListener("change", async e=>{
+  if(e.target.dataset?.timerset && S.isAdmin){ const t=T(), k=e.target.dataset.timerset, v=Math.min(1800,Math.max(5,Number(e.target.value)||TIMERS[k][2]));
+    if(t) await db.collection("tourneys").doc(t.id).set({timers:{...(t.timers||{}), [k]:v}},{merge:true}).then(()=>toast(`${TIMERS[k][1]}: ${fmtSecs(v)}`),()=>toast("Couldn't save")); return }
   if(e.target.dataset?.tiestart && S.isAdmin){ const tie=e.target.dataset.tiestart, v=e.target.value, ms=S.matches.filter(x=>x.tie===tie && x.status==="scheduled"); if(!v||!ms.length) return;
     const base=ms.map(x=>toMin(x.ptime)).filter(x=>x!=null), d=base.length?toMin(v)-Math.min(...base):0, b=db.batch();
     ms.forEach(x=>b.update(db.collection("tmatches").doc(x.id),{ptime:x.ptime?hm(x.ptime,d):v})); await b.commit().then(()=>toast(`Tie moved to ${v}`),()=>toast("Couldn't save")); return }

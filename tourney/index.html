@@ -792,6 +792,23 @@ nav.tabs button[aria-selected="true"]::before{animation:tabPop .35s ease}
 .refshare{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center}.refshare .pass-qr svg{width:130px;height:130px}.refshare p{margin:4px 0 8px}
 @media (max-width:520px){.refshare{grid-template-columns:1fr}}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.ctref{font-size:.75rem;opacity:.85;padding-top:4px}
+.tbar{display:grid;gap:6px;padding:10px 12px;border-radius:14px;background:var(--tint)}.tbar .cats button.first{background:var(--grad);color:#fff}
+.tbar.on{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px;background:#FFF0C7;color:#5b3a00}
+.tbar-big{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;font-weight:700;font-size:1.05rem}.tbar-big b{font-size:2.4rem;line-height:1}.tbar-big .cd{font-family:var(--mono);letter-spacing:.04em}
+.tbar.soon,.tmr.soon{animation:ncPulse .8s infinite}.tbar.over{background:#fde8e6;color:#7a1712}
+.tmr{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:99px;background:#FFF0C7;color:#5b3a00;font-weight:700;font-size:.85rem}.tmr .cd{font-family:var(--mono)}
+.tmr.over{background:#fde8e6;color:#7a1712}
+.refnext{display:grid;gap:6px;padding:12px;border:1.5px dashed var(--accent);border-radius:14px}.refnext>b{font-size:1.15rem;color:var(--ink)}
+.ct-next{display:grid;gap:3px;padding-top:4px}.ct-next b{font-size:1rem}.ct-next i{font-style:normal;opacity:.6}.ct-tmr{margin:4px 0}
+.calls{display:grid;gap:8px;margin:4px 0 12px}
+.call{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:12px 14px;border-radius:16px;background:var(--grad);color:#fff;box-shadow:0 14px 30px -18px rgba(90,22,32,.9);animation:callIn .5s ease}
+.call b{font-size:1.15rem}.call i{opacity:.75;font-style:normal}.call-c{background:#fff;color:var(--accent);border-radius:99px;padding:3px 10px;font-weight:800}
+.call-d{flex-basis:100%;font-size:.85rem;opacity:.9}.call .tmr{background:#fff}
+@keyframes callIn{0%{transform:translateY(-8px) scale(.98);opacity:0}100%{transform:none;opacity:1}}
+.scr-calls{display:grid;gap:1vh;margin:0 0 1.5vh}.call.big{padding:1.6vh 2vw}.call.big b{font-size:3.6vh}.call.big .call-c{font-size:2.4vh}.call.big .call-d{font-size:2.2vh}
+.fc-tmr .tmr{font-size:3.4vh;padding:1vh 2vw}.fc-idle .tmr{font-size:4vh;margin-top:2vh}
+.tset{display:grid;gap:6px}.tset .row{display:flex;flex-wrap:wrap;gap:10px}.tset input{width:110px}
+@media (prefers-reduced-motion:reduce){.call{animation:none}.tbar.soon,.tmr.soon{animation:none}}
 </style>
 
 <div class="wrap">
@@ -813,5 +830,5 @@ nav.tabs button[aria-selected="true"]::before{animation:tabPop .35s ease}
 <div class="toast" id="toast" hidden></div>
 
 <script src="qrcode.js?v=1"></script>
-<script src="app.js?v=202610172000"></script>
+<script src="app.js?v=202610172200"></script>
 </body></html>

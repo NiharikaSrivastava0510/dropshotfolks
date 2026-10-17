@@ -201,7 +201,8 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
       allow update: if refOk(resource.data.tid)
-        && onlyChanges(['games', 'status', 'winner', 'court', 'updatedAt', 'svc', 'seq', 'ref'])
+        && onlyChanges(['games', 'status', 'winner', 'court', 'updatedAt', 'svc', 'seq', 'ref', 'timer'])
+        && (request.resource.data.get('timer', null) == null || request.resource.data.timer is map)
         && shortText(request.resource.data.get('ref', ''), 40)
         && request.resource.data.get('svc', []) is list && request.resource.data.get('svc', []).size() <= 5
         && request.resource.data.get('seq', []) is list && request.resource.data.get('seq', []).size() <= 5

@@ -291,7 +291,7 @@ function sideLabel(m, side){
 // Team Cup seeds in words: group winners first (best record first), then runners-up
 function seedLabel(t, cat, k){
   const G=Object.keys(t?.groups?.[cat]||{}).length||1, adv=Math.max(1,Number(t?.advance)||2), place=Math.ceil(k/G), i=k-(place-1)*G;
-  if(place>adv) return `Best ${PLACE(adv+1)} place`;
+  if(place>adv){ const w=k-adv*G, who=adv===1?"runner-up":`${PLACE(adv+1)} place`; return w>1?`${ordinal(w)} best ${who}`:`Best ${who}` }
   const who=place===1?"group winner":place===2?"runner-up":`${PLACE(place)} place`;
   return i===1?`Best ${who}`:`${ordinal(i)} best ${who}`;
 }
@@ -1024,10 +1024,19 @@ function viewOrg(only){
       <div class="row"><label class="f" style="margin:0">Number of groups <select data-numgroups="1">${[0,2,3,4,5,6,8].map(n=>`<option value="${n}" ${(Number(t.numGroups)||0)===n?"selected":""}>${n?n:"Auto"}</option>`).join("")}</select></label><label class="f" style="margin:0">Each pair of teams plays <select data-legs="1"><option value="1" ${legs(t)===1?"selected":""}>once</option><option value="2" ${legs(t)===2?"selected":""}>twice, back to back</option></select></label><button class="btn primary" data-gen="${esc(S.cat||"")}">${t.groups?.[S.cat]?"Re-make groups":"Make groups"}</button>${t.groups?.[S.cat]?`<button class="btn small" data-grpedit="1">✏️ Move teams between groups</button>`:""}${matchesOf(t,S.cat).length?`<button class="btn small ghost danger" data-clearfix="${esc(S.cat||"")}">Clear all fixtures</button>`:""}</div>
       <p class="muted" style="font-size:.85rem">${(()=>{ const g=matchesOf(t,S.cat).filter(m=>m.stage==="group"); return g.length?`${g.filter(m=>m.status==="done").length} of ${g.length} group matches played.`:"No groups yet." })()}</p></section>
     <section class="panel"><h2>2 · Knockouts</h2><p class="muted">Make it any time: the places read "Winner Group A" and so on, and fill in by themselves as groups finish.</p>
+      ${koStartPick(t)}
       <button class="btn primary" data-genko="${esc(S.cat||"")}">${matchesOf(t,S.cat).some(m=>m.stage==="ko")?"Re-make knockout bracket":"Make knockout bracket"}</button></section>
     ${schedPanel(t).replace("🏸 Courts & order of play","3 · Courts & order of play")}
     ${only?"":`<section class="panel"><h2>4 · Scores & changes</h2><p class="muted">Open the <b>Fixtures</b> tab and tap any match to fix its score, court or order. Referees score live from their phones.</p><button class="btn small" data-tab="fix">Open Fixtures</button></section>`}`;
   return only ? body : `${list}${preset}${head}${body}`;
+}
+// organiser: how big the knockouts are, in one choice (sets teams through per group + best runners-up)
+function koStartPick(t){
+  const groups=t.groups?.[S.cat]||{}, G=Object.keys(groups).length; if(G<2) return "";
+  const adv=Math.max(1,Number(t.advance)||2), cur=Object.values(groups).reduce((s,g)=>s+Math.min(adv,g.length),0)+nWild(t,groups), n=Object.values(groups).flat().length;
+  const opts=[[2,"Final"],[4,"Semi-finals"],[8,"Quarter-finals"],[16,"Round of 16"]].filter(([k])=>k>=G && k<=n);
+  const say=k=>{ const a=Math.floor(k/G), w=k-a*G; return `${a===1?"group winners":`top ${a} per group`}${w?` + best ${w} ${a===1?"runner"+(w>1?"s":"")+"-up":"of the rest"}`:""}` };
+  return `<div class="row" style="margin:0 0 10px"><label class="f" style="margin:0">Knockouts start with <select data-kostart="1">${opts.map(([k,l])=>`<option value="${k}" ${cur===k?"selected":""}>${l}: ${k} teams (${say(k)})</option>`).join("")}${opts.some(([k])=>k===cur)?"":`<option value="" selected>${cur} teams go through (custom)</option>`}</select></label></div>`;
 }
 // organiser bar on every tab: switch / add / delete tournaments, one-tap official details
 function orgBar(t){
@@ -1365,6 +1374,11 @@ function shrinkImage(file, max=1400){
 document.addEventListener("input", e=>{ if(e.target.id!=="ci-find") return; S.ciFilter=e.target.value; const q=S.ciFilter.toLowerCase();
   document.querySelectorAll(".ci-row").forEach(r=>{ r.hidden=!!q && !r.textContent.toLowerCase().includes(q) }) });
 document.addEventListener("change", async e=>{
+  if(e.target.dataset?.kostart && S.isAdmin){ const t=T(), k=Number(e.target.value), G=Object.keys(t?.groups?.[S.cat]||{}).length; if(!t||!k||!G) return;
+    const adv=Math.max(1,Math.min(4,Math.floor(k/G))), upd={advance:adv, koSize:adv*G===k?0:k, wild:0};
+    await db.collection("tourneys").doc(t.id).set(upd,{merge:true});
+    if(matchesOf(t,S.cat).some(m=>m.stage==="ko" && !m.bye && m.status!=="scheduled") && !confirm("Some knockout matches already have results. Re-make the bracket anyway?")){ toast("Saved. Press Re-make knockout bracket when you're ready."); return }
+    await generateKnockouts({...t, ...upd}, S.cat); return }
   if(e.target.dataset?.timerset && S.isAdmin){ const t=T(), k=e.target.dataset.timerset, v=Math.min(1800,Math.max(5,Number(e.target.value)||TIMERS[k][2]));
     if(t) await db.collection("tourneys").doc(t.id).set({timers:{...(t.timers||{}), [k]:v}},{merge:true}).then(()=>toast(`${TIMERS[k][1]}: ${fmtSecs(v)}`),()=>toast("Couldn't save")); return }
   if(e.target.dataset?.tiestart && S.isAdmin){ const tie=e.target.dataset.tiestart, v=e.target.value, ms=S.matches.filter(x=>(x.tie===tie||x.tie===tie+"L2") && x.status==="scheduled"); if(!v||!ms.length) return;

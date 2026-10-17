@@ -932,7 +932,7 @@ function viewOrg(only){
       ${(()=>{ const ts=teamsOf(t,S.cat); if(!ts.length) return `<div class="empty">No teams in this category yet.</div>`;
         return `<div class="row"><span class="muted">${ts.length} teams · ${ts.filter(x=>x.status==="confirmed").length} confirmed</span>${ts.some(x=>x.status!=="confirmed")?`<button class="btn small" data-confirmall="${esc(S.cat)}">Confirm all</button>`:""}</div>
         <div class="otl">${ts.map(x=>teamCard(t,x)).join("")}</div>` })()}
-      ${mailPanel(t)}
+      ${mailPanel(t)}${recordsPanel()}
       <p class="muted" style="font-size:.82rem">📥 Import takes Google Form responses (.xlsx or .csv): teams already here get their contact details filled in, new teams are added.</p></section>`;
   if(ot==="fixtures") body=`<section class="panel"><h2>1 · Groups</h2>${catBar(t)}
       <p class="muted">${isTeam(t)?`${Number(t.numGroups)>0?`${Number(t.numGroups)} groups`:`Groups of about ${Number(t.groupSize)||3}`}; every tie is men's, women's and two mixed doubles. Top ${Number(t.advance)||2} per group go through.`:`Groups of about ${Number(t.groupSize)||4}; everyone plays everyone in their group. ${Number(t.advance)===1?"The winner":`The top ${Number(t.advance)||2}`} of each group go${Number(t.advance)===1?"es":""} through.`} Only confirmed teams are included. Change group sizes in 📝 Details.</p>
@@ -1133,9 +1133,11 @@ document.addEventListener("click", async e=>{
   if(ds.mailteam){ const x=teamById(ds.mailteam); if(x) await mailTeam(t,x); return }
   if(ds.mailall){ await mailAll(t); return }
   if(ds.mailsave){ const url=($("#mail-url")?.value||"").trim(); if(url && !/^https:\/\/script\.google\.com\/(a\/macros\/[\w.-]+|macros)\/s\/[\w-]+\/exec$/.test(url)){ toast("Paste the Web app URL: it starts https://script.google.com/macros/s/ and ends /exec"); return }
-    const saved=await db.collection("config").doc("mail").set({url, updatedAt:nowIso()}).then(()=>{ S.mail=url?{url}:null; render(); return true },()=>{ toast("Couldn't save"); return false });
+    const saved=await db.collection("config").doc("mail").set({url, updatedAt:nowIso()},{merge:true}).then(()=>{ S.mail=url?{...S.mail, url}:null; render(); return true },()=>{ toast("Couldn't save"); return false });
     if(!saved) return; if(!url){ toast("Automatic emails turned off"); return } toast("Saved ✓ Sending a test email…"); const r=await mailPost({test:true});
     toast(r.ok?`Test email sent to ${DSF_ORG} ✓ Check your inbox`:`Test email didn't send: ${r.error}`); return }
+  if(ds.xlsx){ downloadRecords(); return }
+  if(ds.sheetsync){ await syncSheet(); return }
   if(ds.mailtest){ const r=await mailPost({test:true}); toast(r.ok?`Test email sent to ${DSF_ORG} ✓ Check your inbox`:`Didn't work: ${r.error}`); return }
   if(ds.copyscript){ try{ const txt=await (await fetch("mailer.gs?v="+Date.now())).text(); await navigator.clipboard.writeText(txt); toast("Script copied ✓ Paste it into script.google.com") }catch{ window.open("mailer.gs","_blank") } return }
   if(ds.sendqr){ const x=teamById(ds.sendqr), t=S.tourneys.find(y=>y.id===x?.tid); if(x&&t) await sendQr(t,x); return }
@@ -1230,6 +1232,7 @@ document.addEventListener("click", async e=>{
   if(ds.tnewx){ S.newT=false; render(); return }
   if(ds.tdelt){ const x=S.tourneys.find(y=>y.id===ds.tdelt); if(!x) return;
     const typed=prompt(`This deletes ${x.name} with all ${teamsOf(x).length} teams, fixtures and results. It can't be undone.\n\nType DELETE to confirm.`); if(typed!=="DELETE") return;
+    if(S.mail?.sheetUrl){ toast("Saving it to your Google Sheet first…"); await syncSheet(true) }
     try{ const docs=[...matchesOf(x).map(m=>db.collection("tmatches").doc(m.id)), ...teamsOf(x).flatMap(tm=>[db.collection("tcontacts").doc(tm.id), db.collection("tteams").doc(tm.id)]), db.collection("tsecrets").doc(x.id), db.collection("tourneys").doc(x.id)];
       for(let i=0;i<docs.length;i+=400){ const b=db.batch(); docs.slice(i,i+400).forEach(d=>b.delete(d)); await b.commit() }
       if(S.tid===x.id){ S.tid=null; ls.set("dsf:tid",null) } toast(`${x.name} deleted`) }catch{ toast("Couldn't delete it all. Try again.") } return }
@@ -1480,6 +1483,81 @@ async function mailAll(t){
   if(S.mailing) return; const todo=teamsOf(t).filter(x=>x.status==="confirmed"&&S.codes[x.id]&&!S.codes[x.id].mailedAt&&S.contacts[x.id]?.email); if(!todo.length){ toast("Nobody left to email"); return }
   S.mailing=true; render(); let n=0; for(const x of todo){ toast(`Emailing ${x.name} (${n+1}/${todo.length})…`); if(await mailTeam(t,x,true)) n++; else break }
   S.mailing=false; render(); toast(n===todo.length?`Emailed ${n} team${n>1?"s":""} ✓`:`Emailed ${n} of ${todo.length}. Check the message above and try again.`);
+}
+/* ---------- records: every tournament, team, contact, match and table in one spreadsheet (Excel download, or a Google Sheet kept up to date through mailer.gs) ---------- */
+const when = s => s ? new Date(s).toLocaleString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}) : "";
+function buildRecords(){
+  const ts=[...S.tourneys].sort((a,b)=>String(a.date||"").localeCompare(String(b.date||""))), plain=id=>id?tName(id):"";
+  const tour=[["Tournament ID","Tournament","Date","Venue","Type","Categories","Teams","Confirmed","Matches played","Matches","Champions"]];
+  const team=[["Tournament ID","Tournament","Date","Category","Team","Status","Group",...[1,2,3,4].flatMap(n=>[`Player ${n}`,`P${n} gender`,`P${n} level`,`P${n} phone`,`P${n} email`]),"Emergency contact","Emergency phone","Notes","WhatsApp group","Says paid","Paid as","Team code","Emailed","Checked in","Registered"]];
+  const match=[["Tournament ID","Tournament","Date","Category","Stage","Group / round","Meeting","Discipline","Team A","Team B","Court","Time","Status","Score","Points A","Points B","Winner","Referee"]];
+  const table=[["Tournament ID","Tournament","Category","Group","Position","Team","Played","Won","Lost","Points","Points for","Points against","Difference"]];
+  ts.forEach(t=>{ const head=[t.id, t.name||"Tournament"], cs=cats(t).length?cats(t):[{id:"",name:""}];
+    const finals=matchesOf(t).filter(m=>m.stage==="ko" && m.roundName==="Final"), champs=[...new Set(finals.map(m=>[m.cat,winnerTeam(m)]).filter(x=>x[1]).map(([c,w])=>`${cats(t).length>1?catName(t,c)+": ":""}${tName(w)}`))].join("; ");
+    const ms=matchesOf(t).filter(m=>!m.bye);
+    tour.push([...head, t.date||"", t.venue||"", isTeam(t)?"Team Cup":"Doubles", cats(t).map(c=>c.name).join(", "), teamsOf(t).length, teamsOf(t).filter(x=>x.status==="confirmed").length, ms.filter(m=>m.status==="done").length, ms.length, champs]);
+    teamsOf(t).forEach(x=>{ const c=S.contacts[x.id]||{}, k=S.codes[x.id]||{}, G=Object.entries(t.groups?.[x.cat]||{}).find(([,ids])=>ids.includes(x.id))?.[0]||"";
+      team.push([...head, t.date||"", catName(t,x.cat)||"", x.name||"", x.status==="confirmed"?"Confirmed":"Pending", G,
+        ...[1,2,3,4].flatMap(n=>[x["p"+n]||"", c["g"+n]||"", c["lv"+n]||"", (n===1?c.phone:c["phone"+n])||"", (n===1?c.email:c["email"+n])||""]),
+        c.emName||"", c.emPhone||"", c.notes||"", c.wa?"Yes":"", c.paid?"Yes":"", c.payName||"", k.code||"", k.mailedAt?`${when(k.mailedAt)}${k.mailedTo?` (${k.mailedTo})`:""}`:"", x.checkedIn?(when(x.checkedInAt)||"Yes"):"", when(x.createdAt)]) });
+    ms.forEach(m=>{ const p=pts(m), A=sideTeam(m,"a"), B=sideTeam(m,"b");
+      match.push([...head, t.date||"", catName(t,m.cat)||"", m.stage==="ko"?"Knockout":"Group", m.stage==="ko"?(m.roundName||""):`Group ${m.group||""}`, m.leg?`Match ${m.leg}`:"", m.disc?DISC[m.disc]:"",
+        A?plain(A):sideLabel(m,"a"), B?plain(B):sideLabel(m,"b"), m.pcourt||m.court||"", m.ptime||"", m.status==="done"?"Played":m.status==="live"?"Live":"To play", gamesTxt(m), m.games?.length?p.a:"", m.games?.length?p.b:"",
+        m.status==="done"&&m.winner?plain(sideTeam(m,m.winner)):"", m.ref||""]) });
+    cs.forEach(c=>Object.keys(t.groups?.[c.id]||{}).sort().forEach(G=>standings(t,c.id,G).forEach((r,i)=>
+      table.push([...head, c.name||"", `Group ${G}`, i+1, plain(r.id), r.p, r.w, r.l, r.pts??r.w, r.pf, r.pa, r.pf-r.pa]))));
+  });
+  return {tids:ts.map(t=>t.id), tabs:[{name:"Tournaments",rows:tour},{name:"Teams",rows:team},{name:"Matches",rows:match},{name:"Standings",rows:table}]};
+}
+// a small .xlsx writer: plain zip (no compression) of the spreadsheet XML parts
+const CRC = (()=>{ const tb=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=c&1?0xEDB88320^(c>>>1):c>>>1; tb[n]=c>>>0 } return u=>{ let c=0xFFFFFFFF; for(let i=0;i<u.length;i++) c=tb[(c^u[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0 } })();
+function zip(files){
+  const enc=new TextEncoder(), parts=[], cd=[]; let off=0;
+  const u16=n=>[n&255,(n>>>8)&255], u32=n=>[n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255];
+  files.forEach(([name,txt])=>{ const nm=enc.encode(name), data=enc.encode(txt), crc=CRC(data), same=[...u16(20),...u16(0x0800),...u16(0),...u16(0),...u16(0x21),...u32(crc),...u32(data.length),...u32(data.length),...u16(nm.length),...u16(0)];
+    const local=new Uint8Array([...u32(0x04034b50),...same]); parts.push(local,nm,data);
+    cd.push(new Uint8Array([...u32(0x02014b50),...u16(20),...same,...u16(0),...u16(0),...u16(0),...u32(0),...u32(off)]),nm); off+=local.length+nm.length+data.length });
+  const size=cd.reduce((s,x)=>s+x.length,0);
+  return new Blob([...parts,...cd,new Uint8Array([...u32(0x06054b50),0,0,0,0,...u16(files.length),...u16(files.length),...u32(size),...u32(off),0,0])],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+function xlsx(tabs){
+  const x=s=>String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  const col=i=>{ let s=""; for(i++;i>0;i=Math.floor((i-1)/26)) s=String.fromCharCode(65+(i-1)%26)+s; return s };
+  const sheet=rows=>{ const w=Math.max(1,...rows.map(r=>r.length)), wd=Array.from({length:w},(_,i)=>Math.min(45,Math.max(8,...rows.map(r=>String(r[i]??"").length+2))));
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${wd.map((v,i)=>`<col min="${i+1}" max="${i+1}" width="${v}" customWidth="1"/>`).join("")}</cols><sheetData>${rows.map((r,ri)=>`<row r="${ri+1}">${r.map((v,ci)=>v==null||v===""?"":`<c r="${col(ci)}${ri+1}"${ri?"":' s="1"'}${typeof v==="number"&&isFinite(v)?`><v>${v}</v>`:` t="inlineStr"><is><t xml:space="preserve">${x(v)}</t></is>`}</c>`).join("")}</row>`).join("")}</sheetData>${rows.length>1?`<autoFilter ref="A1:${col(w-1)}${rows.length}"/>`:""}</worksheet>` };
+  const S_="http://schemas.openxmlformats.org", R=`${S_}/officeDocument/2006/relationships`;
+  return zip([
+    ["[Content_Types].xml",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="${S_}/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${tabs.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}</Types>`],
+    ["_rels/.rels",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${S_}/package/2006/relationships"><Relationship Id="rId1" Type="${R}/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
+    ["xl/workbook.xml",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="${S_}/spreadsheetml/2006/main" xmlns:r="${R}"><sheets>${tabs.map((s,i)=>`<sheet name="${x(String(s.name).replace(/[\[\]:*?\/\\]/g," ").slice(0,31))}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join("")}</sheets>${tabs.some(s=>s.rows.length>1)?`<definedNames>${tabs.map((s,i)=>s.rows.length>1?`<definedName name="_xlnm._FilterDatabase" localSheetId="${i}" hidden="1">'${x(String(s.name).replace(/'/g,"''"))}'!$A$1:$${col(Math.max(1,...s.rows.map(r=>r.length))-1)}$${s.rows.length}</definedName>`:"").join("")}</definedNames>`:""}</workbook>`],
+    ["xl/_rels/workbook.xml.rels",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${S_}/package/2006/relationships">${tabs.map((_,i)=>`<Relationship Id="rId${i+1}" Type="${R}/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join("")}<Relationship Id="rId${tabs.length+1}" Type="${R}/styles" Target="styles.xml"/></Relationships>`],
+    ["xl/styles.xml",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="${S_}/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF3E9D9"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`],
+    ...tabs.map((s,i)=>[`xl/worksheets/sheet${i+1}.xml`, sheet(s.rows)])]);
+}
+function downloadRecords(){
+  const a=document.createElement("a"); a.href=URL.createObjectURL(xlsx(buildRecords().tabs)); a.download=`dropshot-folks-records-${new Date().toISOString().slice(0,10)}.xlsx`;
+  document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),5000); toast("Excel file downloaded ✓");
+}
+// the Google Sheet lives in the organiser's Google Drive; tournaments deleted here stay in it
+async function syncSheet(quiet){
+  if(!S.mail?.url){ if(!quiet) toast("Set up 📧 Automatic emails first: the Google Sheet uses the same script"); return false }
+  if(S.syncing) return false; S.syncing=true; if(!quiet){ toast("Updating the Google Sheet…"); render() }
+  const rec=buildRecords(), sig=JSON.stringify(rec), r=await mailPost({sheet:rec}); S.syncing=false;
+  if(r.ok && r.url){ S.sheetSig=sig; S.mail={...S.mail, sheetUrl:r.url, sheetAt:r.at||nowIso()};
+    await db.collection("config").doc("mail").set({sheetUrl:r.url, sheetAt:r.at||nowIso()},{merge:true}).catch(()=>{}); render();
+    if(!quiet) toast("Google Sheet updated ✓"); return true }
+  render(); if(!quiet) toast(r.error==="No valid email for this team."?"Your Google script is the old version. Follow the 3 update steps under 📊 Records.":`Google Sheet didn't update: ${r.error||"unknown error"}`); return false;
+}
+// while the organiser has the page open, keep the sheet in step (only when something changed)
+setInterval(()=>{ if(S.isAdmin && S.loaded && S.mail?.url && S.mail?.sheetUrl && !S.syncing && !document.hidden && JSON.stringify(buildRecords())!==S.sheetSig) syncSheet(true) }, 120000);
+function recordsPanel(){
+  const u=S.mail?.sheetUrl;
+  return `<details class="mailset recset ${u?"on":""}"><summary>📊 Records spreadsheet${u?` · <b>Google Sheet ✓</b> <span class="muted">· updated ${esc(when(S.mail.sheetAt))}</span>`:` <span class="muted">· every team, contact, match and result, kept for the future</span>`}</summary>
+    <div class="row">${u?`<a class="btn small primary" href="${esc(u)}" target="_blank" rel="noopener">📊 Open Google Sheet</a>`:""}<button class="btn small ${u?"":"primary"}" data-sheetsync="1"${S.syncing?" disabled":""}>${S.syncing?"Updating…":u?"🔄 Update now":"📊 Make my Google Sheet"}</button><button class="btn small" data-xlsx="1">⬇️ Download Excel</button>${u?`<button class="btn small ghost" data-copy="${esc(u)}">Copy link</button>`:""}</div>
+    <p class="muted" style="font-size:.85rem">Four tabs: Tournaments, Teams (players, phones, emails, levels, codes, check-in), Matches (courts, times, scores, referees) and Standings. The Google Sheet is private to <b>${DSF_ORG}</b>, updates itself every couple of minutes while this page is open, and keeps tournaments even after you delete them here.</p>
+    ${u?"":S.mail?.url?`<p class="muted" style="font-size:.85rem"><b>First time?</b> Your Google script needs the new version:</p><ol class="mailsteps"><li><button class="btn small" data-copyscript="1">📋 Copy the script</button> In <a href="https://script.google.com/home" target="_blank" rel="noopener">script.google.com</a> open your Dropshot Folks project, select all the code, paste over it, press 💾 Save.</li>
+      <li>Pick <b>authorise</b> in the function menu at the top and press <b>▶ Run</b>. Allow access (Advanced → Go to … → Allow).</li>
+      <li><b>Deploy → Manage deployments</b> → ✏️ → Version: <b>New version</b> → <b>Deploy</b>. The URL stays the same. Then press <b>📊 Make my Google Sheet</b> above.</li></ol>`:`<p class="muted" style="font-size:.85rem">For a Google Sheet link, set up 📧 Automatic emails above first (it uses the same script). The Excel download works now.</p>`}</details>`;
 }
 // organiser: what a scanned team code shows
 function scanCard(){

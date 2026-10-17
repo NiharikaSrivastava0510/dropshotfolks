@@ -168,7 +168,7 @@ function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; cle
 /* ---------- state ---------- */
 const S = {
   tab: /^#(screen|court=\d+)$/.test(location.hash) ? "screen" : location.hash==="#ref" ? "ref" : location.hash==="#checkin" ? "checkin" : new URLSearchParams(location.search).get("tab") || ls.get("dsf:ttab","reg"),
-  refOnly: location.hash==="#ref",
+  refOnly: location.hash==="#ref", refPre: (new URLSearchParams(location.search).get("ref")||"").toUpperCase().replace(/[^A-Z0-9]/g,"")||null,
   tourneys:[], teams:[], matches:[], contacts:{}, secret:null, unlock:null,
   uid:null, isAdmin:false, loaded:false, tid: new URLSearchParams(location.search).get("t") || ls.get("dsf:tid",null),
   cat: null, toss: {}, newT:false, codes:{}, codesLoaded:false, rulesOld:false, desk:null, deskCode:null, mail:null, mailing:false, scan:null, otab: ls.get("dsf:otab","details"), editTeam:null, addTeam:false, myTeam: ls.get("dsf:myteam",null), refCourt: ls.get("dsf:refcourt",1), edit:null, scrIdx:0
@@ -581,6 +581,26 @@ function standTable(t, cat, G){
     ${rows.map((x,i)=>`<tr class="${i<adv?"qual":""}"><td>${i+1}</td><td>${esc(tName(x.id))}</td><td>${x.p}</td><td>${x.w}</td><td>${x.l}</td><td>${x.pf-x.pa>0?"+":""}${x.pf-x.pa}</td></tr>`).join("")}
   </tbody></table></div>`;
 }
+// organiser: every match's court and time in one place, in order; change any of it at any time
+const toMin = h => { const [a,b]=String(h||"").split(":").map(Number); return Number.isFinite(a)&&Number.isFinite(b) ? a*60+b : null };
+function timingsView(t){
+  const ms=matchesOf(t).filter(m=>!m.bye), seen=new Set(), rows=[];
+  ms.slice().sort(byPlan).forEach(m=>{ const k=m.tie||m.id; if(seen.has(k)) return; seen.add(k); rows.push(m) });
+  const parts=m=>m.tie?ms.filter(x=>x.tie===m.tie).sort((x,y)=>Object.keys(DISC).indexOf(x.disc)-Object.keys(DISC).indexOf(y.disc)):[m];
+  const first=m=>parts(m).map(x=>x.ptime).filter(Boolean).sort()[0]||"";
+  rows.sort((a,b)=>(first(a)||"99").localeCompare(first(b)||"99") || byPlan(a,b));
+  const left=ms.filter(m=>m.status==="scheduled"&&m.ptime).length; let last=null;
+  const list=rows.map(m=>{ const ps=parts(m), st=m.tie?tieResult(m.tie):null, done=st?st.complete:m.status==="done", live=ps.some(x=>x.status==="live"), f=first(m);
+    const head=f!==last?`<h4 class="tm-slot">${f?`🕒 ${esc(f)}`:"No time yet"}</h4>`:""; last=f;
+    const who=`${sideTeam(m,"a")?esc(tName(sideTeam(m,"a"))):esc(sideLabel(m,"a"))} <span class="muted">v</span> ${sideTeam(m,"b")?esc(tName(sideTeam(m,"b"))):esc(sideLabel(m,"b"))}`;
+    const lab=m.stage==="ko"?(m.roundName||"Knockout"):`Group ${m.group}${m.leg?` · ${m.leg===1?"1st":"2nd"} meeting`:""}`;
+    return `${head}<div class="tm-row ${done?"done":""} ${live?"live":""}"><div class="tm-h"><div><span class="lbl">${esc(lab)}${!m.tie&&cats(t).length>1?` · ${esc(catName(t,m.cat))}`:""}</span><b>${who}</b></div>
+      ${done?`<span class="bdone">✓ Played</span>`:live?`<span class="livebadge">Live</span>`:m.tie?`<label class="tm-start">Starts <input type="time" data-tiestart="${esc(m.tie)}" value="${esc(f)}"></label>`:""}</div>
+      ${done||live?"":`<div class="tm-parts">${ps.map(x=>`<div class="bk-er">${x.disc?`<span>${esc(DISC[x.disc])}</span>`:""}${planPick(t,x)}</div>`).join("")}</div>`}</div>` }).join("");
+  return `<div class="tm-top"><div><b>🕒 Timings & courts</b><p class="muted">Set or change any match's court and time here, any time. Players, referees and the big screen see changes straight away. The fixtures themselves don't change.</p></div>
+      <div class="tm-shift"><span class="lbl">Running late or early? Move all ${left} matches not yet started</span><div class="row">${[-10,-5,5,10,15,30].map(d=>`<button class="btn small ${d>0?"":"ghost"}" data-shift="${d}">${d>0?"+":"−"}${Math.abs(d)} min</button>`).join("")}</div></div></div>
+    ${rows.length?`<div class="tm-list">${list}</div>`:`<div class="empty">No fixtures yet. Make them in ⚙️ Organiser tools first.</div>`}`;
+}
 // the knockout draw, drawn like on paper: rounds left to right, lines joining each pair to the next round, champion at the end
 function bracket(t, cat){
   const ko=matchesOf(t,cat).filter(m=>m.stage==="ko" && (!m.disc || m.disc==="MD")); if(!ko.length) return "";
@@ -621,7 +641,7 @@ function courtCard(t, c){
   const side=(s,i)=>{ const id=sideTeam(m,s), tm=teamById(id), srv=sv&&sv.serving===s;
     const pl=k=>esc(tm?(k===1?tm.p1:tm.p2):""), names=m.disc?esc(DISC[m.disc]):tm?(srv?(sv.server===1?`🏸 ${pl(1)} & ${pl(2)}`:`${pl(1)} & 🏸 ${pl(2)}`):`${pl(1)} & ${pl(2)}`):"";
     return `<div class="row2"><div class="nm">${srv?"🏸 ":""}${esc(tName(id))}<small>${names}</small>${r.bestOf>1?`<span class="gw">${Array.from({length:need},(_,k)=>`<i class="${k<w[s]?"on":""}"></i>`).join("")}</span>`:""}</div><div class="pt">${g[i]}</div></div>` };
-  return `<div class="ct"><div class="cn"><span>Court ${c} · ${esc(catName(t,m.cat))}</span><span>${esc(stageTxt(m))} ${fb}</span></div>${side("a",0)}${side("b",1)}</div>`;
+  return `<div class="ct"><div class="cn"><span>Court ${c} · ${esc(catName(t,m.cat))}</span><span>${esc(stageTxt(m))} ${fb}</span></div>${side("a",0)}${side("b",1)}${m.ref?`<div class="ctref">🧑‍⚖️ Referee: ${esc(m.ref)}</div>`:""}</div>`;
 }
 
 /* ---------- views ---------- */
@@ -707,17 +727,18 @@ function viewFix(){
     ${catBar(t)}</section>`;
   const groups=t.groups?.[S.cat], ms=matchesOf(t,S.cat), edit=canRef(t);
   if(!groups && !ms.length) return head+`<section class="panel"><div class="empty">Fixtures appear here once the organiser makes the groups.</div></section>`;
-  const hasKo=ms.some(m=>m.stage==="ko"), fx=hasKo && (S.fxTab==="ko" || !groups) ? "ko" : "groups";
-  const tabs=`<div class="fxtabs"><button data-fxtab="groups" aria-pressed="${fx==="groups"}">Groups</button><button data-fxtab="ko" aria-pressed="${fx==="ko"}" ${hasKo?"":"disabled"}>Knockouts</button></div>`;
+  const hasKo=ms.some(m=>m.stage==="ko"), fx=S.isAdmin && S.fxTab==="time" ? "time" : hasKo && (S.fxTab==="ko" || !groups) ? "ko" : "groups";
+  const tabs=`<div class="fxtabs"><button data-fxtab="groups" aria-pressed="${fx==="groups"}">Groups</button><button data-fxtab="ko" aria-pressed="${fx==="ko"}" ${hasKo?"":"disabled"}>Knockouts</button>${S.isAdmin?`<button data-fxtab="time" aria-pressed="${fx==="time"}">🕒 Timings</button>`:""}</div>`;
+  if(fx==="time" && S.isAdmin) return head+`<section class="panel">${tabs}${timingsView(t)}</section>`;
   if(fx==="ko"){ const koList=ms.filter(m=>m.stage==="ko" && !m.bye).sort((a,b)=>a.round-b.round||a.slot-b.slot||(a.order||0)-(b.order||0));
     return head+`<section class="panel">${tabs}${bracket(t,S.cat)}
       <details class="vm" id="vm-${esc(S.cat)}-ko"><summary>${isTeam(t)?"View every knockout match":"View knockout matches"} (${isTeam(t)?new Set(koList.map(m=>m.tie)).size+" ties":koList.length})</summary><div class="mlist">${fixList(t,koList,{edit, plan:true})}</div></details></section>` }
   const adv=Number(t.advance)||2;
   return head+`<section class="panel">${tabs}
     <p class="muted" style="margin:0 0 4px">${adv===1?"The group winner goes":`The top ${adv} in each group go`} through${Number(t.koSize)>0||Number(t.wild)?", plus the best of the rest":""}. Green = going through.${new Set(Object.values(t.groups?.[S.cat]||{}).map(x=>x.length)).size>1?` Groups are different sizes: knockout seeds compare teams from different groups on points per ${isTeam(t)?"tie":"match"}.`:""}</p>
-    ${S.isAdmin?(S.grpOn?groupEditor(t,S.cat):`<div class="row"><button class="btn small" data-grpedit="1">✏️ Edit groups: move teams</button></div>`):""}
+    ${S.isAdmin&&S.grpOn?groupEditor(t,S.cat):""}
     <div class="groups">${S.grpOn?"":Object.keys(groups||{}).sort().map(G=>{ const gm=ms.filter(m=>m.stage==="group"&&m.group===G), n=isTeam(t)?new Set(gm.map(m=>m.tie)).size:gm.length, played=isTeam(t)?new Set(gm.filter(m=>m.tie&&tieResult(m.tie).complete).map(m=>m.tie)).size:gm.filter(m=>m.status==="done").length;
-      return `<div class="grp"><h3>Group ${G}<span class="muted" style="font-size:.8rem;font-family:var(--body)">${played} of ${n} played${S.isAdmin?` <button class="btn small ghost" data-grpedit="1" title="Edit groups">✏️ Edit</button>`:""}</span></h3>${standTable(t,S.cat,G)}
+      return `<div class="grp"><h3>Group ${G}<span class="muted" style="font-size:.8rem;font-family:var(--body)">${played} of ${n} played</span></h3>${standTable(t,S.cat,G)}
         <details class="vm" id="vm-${esc(S.cat)}-${G}"><summary>View all ${n} ${isTeam(t)?"ties":"matches"}</summary><div class="mlist">${fixList(t,gm,{edit, plan:true})}</div></details></div>` }).join("")}</div></section>`;
 }
 function viewLive(){
@@ -749,12 +770,14 @@ function viewRef(){
   return viewRefInner(t);
 }
 function viewRefInner(t){
-  if(!canRef(t)) return `<section class="panel"><h2>${S.refOnly?"🏸 Referee":"Referee"}</h2><p class="muted">Enter the referee code from the organiser. Once it's open on this phone you can start matches on your court and score them live.</p>
-    <div class="row" style="max-width:440px;flex-wrap:nowrap"><input id="ref-code" placeholder="Referee code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" style="text-transform:uppercase;letter-spacing:.2em;font-family:var(--mono)"><button class="btn primary" data-refopen="1">Open</button></div></section>`;
+  if(!canRef(t)) return `<section class="panel signgate refgate"><div class="sg-ico">🏸</div><h2>Referee sign-in</h2><p class="muted">${S.refPre?"Your code is filled in. Just add your name.":"Enter your name and the referee code from the organiser."} You stay signed in on this phone for the day.</p>
+    <div class="refform"><label class="f">Your name<input id="ref-name" maxlength="40" autocomplete="name" placeholder="e.g. Priya" value="${esc(ls.get("dsf:refname","")||"")}"></label>
+    <label class="f" ${S.refPre?"hidden":""}>Referee code<input id="ref-code" placeholder="Code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" value="${esc(S.refPre||"")}" style="text-transform:uppercase;letter-spacing:.2em;font-family:var(--mono)"></label>
+    <button class="btn primary" data-refopen="1">Start refereeing →</button></div></section>`;
   const n=Math.max(1,Number(t.courts)||4), c=Math.min(n,Math.max(1,S.refCourt)), m=liveOn(t,c), r=rules(t,m);
   const courtPick=`<div class="cats">${Array.from({length:n},(_,i)=>`<button data-refcourt="${i+1}" aria-pressed="${i+1===c}">Court ${i+1}${liveOn(t,i+1)?" 🔴":""}</button>`).join("")}</div>`;
   if(!m){ const nx=upNext(t,30).sort((x,y)=>(x.pcourt===c?0:1)-(y.pcourt===c?0:1)).slice(0,6);
-    return `<section class="panel"><h2>Referee · Court ${c}</h2>${courtPick}
+    return `<section class="panel"><div class="refhi">👋 <b>${esc(ls.get("dsf:refname","")||S.unlock?.name||"Referee")}</b><button class="btn small ghost" data-refname="1">Change name</button></div><h2>Referee · Court ${c}</h2>${courtPick}
       ${nx.length?`<p class="muted">Pick the next match for Court ${c}. The first one is next in line.</p><div class="mlist">${nx.map((x,i)=>`<div style="display:grid;gap:6px">${matchRow(t,x,{cat:true})}<button class="btn ${i?"small":"primary"}" data-start="${esc(x.id)}" data-court="${c}">Start on Court ${c}</button></div>`).join("")}</div>`:`<div class="empty">No matches waiting. 🎉</div>`}
       <div class="row">${S.unlock?`<button class="btn small ghost" data-refexit="1">Close referee mode</button>`:""}${S.refOnly?`<button class="btn small ghost" data-refleave="1">See the full tournament page</button>`:""}</div></section>`;
   }
@@ -847,9 +870,12 @@ function viewOrg(only){
   if(ot==="refs") body=`
     <section class="panel"><h2>Referees & big screen</h2>
       <div class="row code-row"><span class="lbl">Referee code</span>${S.secret?`<b class="code">${esc(S.secret)}</b><button class="btn small" data-copy="${esc(S.secret)}">Copy</button><button class="btn small ghost" data-tcode="1">New code</button>`:`<button class="btn small primary" data-tcode="1">Create code</button>`}</div>
-      ${(()=>{ const link="https://dropshotfolks.co.uk/tourney/#ref", msg=`🏸 Referee for ${t.name||"the tournament"}\nOpen: ${link}\n${S.secret?`Code: ${S.secret}\n`:""}Pick your court, tap Start, do the toss, then tap a team for each point.`;
-        return `<div class="row"><span class="lbl">Referee link</span><b class="code" style="font-size:.95rem;letter-spacing:0">${esc(link.replace("https://",""))}</b><button class="btn small" data-copy="${esc(link)}">Copy link</button>${S.secret?`<a class="btn small primary" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">Send link & code on WhatsApp</a>`:""}</div>` })()}
-      <p class="muted" style="font-size:.85rem">Referees open the link on their phone and enter the code. They only see the scoring screen, nothing else. A new code locks out phones using the old one.</p>
+      ${(()=>{ const link=S.secret?`https://dropshotfolks.co.uk/tourney/?t=${encodeURIComponent(t.id)}&ref=${encodeURIComponent(S.secret)}#ref`:"https://dropshotfolks.co.uk/tourney/#ref", msg=`🏸 Referee for ${t.name||"the tournament"}\nTap to sign in (your code is built in, just add your name):\n${link}\n\nPick your court, tap Start, do the toss, then tap a team for each point.`;
+        if(!S.secret) return `<p class="muted">Create a code first: you'll get a one-tap sign-in link and QR code for referees.</p>`;
+        return `<div class="refshare"><div class="pass-qr">${qrSvg(link)}</div><div><span class="lbl">One-tap referee sign-in</span><p>Referees scan this QR code or open the link, type their name, and they're in. They stay signed in on that phone.</p>
+          <div class="row"><button class="btn small" data-copy="${esc(link)}">Copy link</button><a class="btn small primary" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">💬 Send to referees on WhatsApp</a></div></div></div>` })()}
+      ${(()=>{ const refs=(S.refs||[]).filter(x=>x.tid===t.id && x.code===S.secret); return `<div><span class="lbl">Signed-in referees · ${refs.length}</span>${refs.length?`<div class="chips">${refs.map(x=>{ const on=matchesOf(t).find(m=>m.status==="live"&&m.ref&&m.ref===x.name); return `<span class="chip ${on?"st-confirmed":""}">🧑‍⚖️ ${esc(x.name||"No name")}${on?` · Court ${esc(on.court)}`:""}</span>` }).join("")}</div>`:`<p class="muted">Nobody yet.</p>`}</div>` })()}
+      <p class="muted" style="font-size:.85rem">Referees only see the scoring screen, nothing else. A new code signs out every phone using the old one.</p>
       <div class="row"><a class="btn small" href="#screen" data-screen="1">📺 Open big screen</a><span class="muted" style="font-size:.85rem">Put it on the projector and press F for full screen.</span></div></section>`;
   if(ot==="teams") body=`<section class="panel"><div class="row" style="justify-content:space-between"><h2>Teams</h2><div class="row"><button class="btn small" data-scanqr="1">📷 Scan QR</button><label class="btn small" for="imp-file">📥 Import spreadsheet</label><input id="imp-file" type="file" accept=".xlsx,.csv" hidden><button class="btn small primary" data-oaddopen="1">➕ Add a team</button></div></div>${catBar(t)}
       ${S.addTeam?`<div class="ogrp"><h3>New team · ${esc(catName(t,S.cat))}</h3><div class="grid2"><label class="f">Team name<input id="oa-name" maxlength="40"></label>${Array.from({length:nPl(t)},(_,i)=>`<label class="f">Player ${i+1}<input id="oa-p${i+1}" maxlength="60"></label>`).join("")}</div>
@@ -861,7 +887,7 @@ function viewOrg(only){
       <p class="muted" style="font-size:.82rem">📥 Import takes Google Form responses (.xlsx or .csv): teams already here get their contact details filled in, new teams are added.</p></section>`;
   if(ot==="fixtures") body=`<section class="panel"><h2>1 · Groups</h2>${catBar(t)}
       <p class="muted">${isTeam(t)?`${Number(t.numGroups)>0?`${Number(t.numGroups)} groups`:`Groups of about ${Number(t.groupSize)||3}`}; every tie is men's, women's and two mixed doubles. Top ${Number(t.advance)||2} per group go through.`:`Groups of about ${Number(t.groupSize)||4}; everyone plays everyone in their group. ${Number(t.advance)===1?"The winner":`The top ${Number(t.advance)||2}`} of each group go${Number(t.advance)===1?"es":""} through.`} Only confirmed teams are included. Change group sizes in 📝 Details.</p>
-      <div class="row"><label class="f" style="margin:0">Number of groups <select data-numgroups="1">${[0,2,3,4,5,6,8].map(n=>`<option value="${n}" ${(Number(t.numGroups)||0)===n?"selected":""}>${n?n:"Auto"}</option>`).join("")}</select></label><label class="f" style="margin:0">Each pair of teams plays <select data-legs="1"><option value="1" ${legs(t)===1?"selected":""}>once</option><option value="2" ${legs(t)===2?"selected":""}>twice, back to back</option></select></label><button class="btn primary" data-gen="${esc(S.cat||"")}">${t.groups?.[S.cat]?"Re-make groups":"Make groups"}</button>${matchesOf(t,S.cat).length?`<button class="btn small ghost danger" data-clearfix="${esc(S.cat||"")}">Clear all fixtures</button>`:""}</div>
+      <div class="row"><label class="f" style="margin:0">Number of groups <select data-numgroups="1">${[0,2,3,4,5,6,8].map(n=>`<option value="${n}" ${(Number(t.numGroups)||0)===n?"selected":""}>${n?n:"Auto"}</option>`).join("")}</select></label><label class="f" style="margin:0">Each pair of teams plays <select data-legs="1"><option value="1" ${legs(t)===1?"selected":""}>once</option><option value="2" ${legs(t)===2?"selected":""}>twice, back to back</option></select></label><button class="btn primary" data-gen="${esc(S.cat||"")}">${t.groups?.[S.cat]?"Re-make groups":"Make groups"}</button>${t.groups?.[S.cat]?`<button class="btn small" data-grpedit="1">✏️ Move teams between groups</button>`:""}${matchesOf(t,S.cat).length?`<button class="btn small ghost danger" data-clearfix="${esc(S.cat||"")}">Clear all fixtures</button>`:""}</div>
       <p class="muted" style="font-size:.85rem">${(()=>{ const g=matchesOf(t,S.cat).filter(m=>m.stage==="group"); return g.length?`${g.filter(m=>m.status==="done").length} of ${g.length} group matches played.`:"No groups yet." })()}</p></section>
     <section class="panel"><h2>2 · Knockouts</h2><p class="muted">Make it any time: the places read "Winner Group A" and so on, and fill in by themselves as groups finish.</p>
       <button class="btn primary" data-genko="${esc(S.cat||"")}">${matchesOf(t,S.cat).some(m=>m.stage==="ko")?"Re-make knockout bracket":"Make knockout bracket"}</button></section>
@@ -978,10 +1004,11 @@ async function ensureSignedIn(){
   if(auth.currentUser) return auth.currentUser;
   const c=await auth.signInAnonymously(); S.uid=c.user.uid; return c.user;
 }
-async function tryRefUnlock(code){
+async function tryRefUnlock(code, name){
   const t=T(); if(!t) return;
-  try{ await ensureSignedIn(); await db.collection("tunlocks").doc(auth.currentUser.uid).set({tid:t.id, code, at:nowIso()});
-    S.unlock={tid:t.id, code}; render(); toast("Referee mode is on for this phone") }
+  try{ await ensureSignedIn(); const ref=db.collection("tunlocks").doc(auth.currentUser.uid);
+    await ref.set({tid:t.id, code, at:nowIso(), ...(name?{name}:{})}).catch(e=>{ if(name && e?.code==="permission-denied") return ref.set({tid:t.id, code, at:nowIso()}); throw e });
+    S.unlock={tid:t.id, code, name}; S.refPre=null; history.replaceState(null,"",location.pathname+`?t=${t.id}`+location.hash); render(); toast(`Welcome${name?`, ${name}`:""}! Referee mode is on for this phone 🏸`) }
   catch(e){ toast(e?.code==="permission-denied"?"That code doesn't match":e?.code==="auth/operation-not-allowed"?"Referee mode isn't switched on yet":"Couldn't check the code") }
 }
 // Firestore can't hold arrays of arrays, so each game is stored as {a, b}
@@ -1040,9 +1067,12 @@ document.addEventListener("click", async e=>{
   if(ds.cat){ S.cat=ds.cat; render(); return }
   if(ds.fxtab){ S.fxTab=ds.fxtab; render(); return }
   if(ds.gcancel){ S.grpOn=false; S.gDraft=null; S.gExtra=null; render(); return }
-  if(ds.grpedit && S.isAdmin){ const t=T(), c=S.cat; S.grpOn=true; S.gExtra=[]; S.gDraft={}; Object.entries(t?.groups?.[c]||{}).forEach(([G,ids])=>ids.forEach(id=>S.gDraft[id]=G)); render(); document.querySelector(".ge-bar")?.scrollIntoView({behavior:"smooth",block:"center"}); return }
+  if(ds.grpedit && S.isAdmin){ const t=T(), c=S.cat; S.grpOn=true; S.fxTab="groups"; S.fxTools=false; S.gExtra=[]; S.gDraft={}; Object.entries(t?.groups?.[c]||{}).forEach(([G,ids])=>ids.forEach(id=>S.gDraft[id]=G)); render(); document.querySelector(".ge-bar")?.scrollIntoView({behavior:"smooth",block:"center"}); return }
   if(ds.gadd && S.isAdmin){ const t=T(), have=new Set([...Object.keys(t?.groups?.[S.cat]||{}), ...Object.values(S.gDraft||{}), ...(S.gExtra||[])]); const L=[..."ABCDEFGHIJKLMNOP"].find(x=>!have.has(x)); if(L){ S.gExtra=[...(S.gExtra||[]), L]; render() } return }
   if(ds.gsave!==undefined && S.isAdmin){ const t=T(); if(t) await saveGroupEdit(t, S.cat); return }
+  if(ds.shift && S.isAdmin){ const d=Number(ds.shift), t=T(), ms=matchesOf(t).filter(m=>m.status==="scheduled"&&m.ptime);
+    for(let i=0;i<ms.length;i+=400){ const b=db.batch(); ms.slice(i,i+400).forEach(m=>b.update(db.collection("tmatches").doc(m.id),{ptime:hm(m.ptime,d)})); await b.commit() }
+    toast(`${ms.length} matches moved ${d>0?"later":"earlier"} by ${Math.abs(d)} min`); return }
   if(ds.koedit){ S.koEdit = S.koEdit===ds.koedit ? null : ds.koedit; render(); return }
   if(ds.openko){ const d=document.querySelector("details.vm[id$='-ko']"); if(d){ d.open=true; const el=document.querySelector(`[data-medit="${ds.openko}_MD"]`)?.closest(".tie")||d; el.scrollIntoView({behavior:"smooth",block:"center"}); el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"),1600) } return }
   if(ds.mailteam){ const x=teamById(ds.mailteam); if(x) await mailTeam(t,x); return }
@@ -1066,13 +1096,18 @@ document.addEventListener("click", async e=>{
   if(ds.withdraw){ const x=teamById(ds.withdraw); if(!x||!confirm(`Withdraw ${x.name}?`)) return;
     await db.collection("tcontacts").doc(x.id).delete().catch(()=>{}); await db.collection("tteams").doc(x.id).delete().then(()=>toast("Team withdrawn"),()=>toast("Couldn't withdraw")); return }
   // referee
-  if(ds.refopen){ const code=($("#ref-code")?.value||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,""); if(code.length<4){ toast("Enter the referee code"); return } tryRefUnlock(code); return }
+  if(ds.refopen){ const code=($("#ref-code")?.value||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,""), name=($("#ref-name")?.value||"").trim().slice(0,40);
+    if(!name){ toast("Add your name"); $("#ref-name")?.focus(); return } if(code.length<4){ toast("Enter the referee code"); return } ls.set("dsf:refname",name); tryRefUnlock(code, name); return }
+  if(ds.refname){ const n=prompt("Your name", ls.get("dsf:refname","")||""); if(n==null) return; const name=n.trim().slice(0,40); if(!name) return; ls.set("dsf:refname",name);
+    if(S.unlock) await db.collection("tunlocks").doc(auth.currentUser.uid).update({name}).catch(()=>{}); render(); return }
   if(ds.refexit){ try{ await db.collection("tunlocks").doc(auth.currentUser.uid).delete() }catch{} S.unlock=null; render(); return }
   if(ds.refleave){ S.refOnly=false; history.replaceState(null,"",location.pathname); S.tab="live"; render(); return }
   if(ds.refcourt){ S.refCourt=Number(ds.refcourt); ls.set("dsf:refcourt",S.refCourt); render(); return }
   if(ds.start){ const m=S.matches.find(x=>x.id===ds.start); if(!m) return; const c=Number(ds.court); keepAwake();
     if(liveOn(t,c)){ toast(`Court ${c} already has a match`); return }
-    await upd(m.id,{status:"live", court:c, games:m.games?.length?m.games:[[0,0]], winner:null}); return }
+    const rn=S.isAdmin?"":(ls.get("dsf:refname","")||""), base={status:"live", court:c, games:m.games?.length?m.games:[[0,0]], winner:null};
+    if(rn){ const ok=await db.collection("tmatches").doc(m.id).update({...base, games:toDb(base.games), ref:rn, updatedAt:nowIso()}).then(()=>true,()=>false); if(ok) return }
+    await upd(m.id,base); return }
   if(ds.toss){ const m=liveOn(t,Math.min(Math.max(1,Number(t.courts)||4),S.refCourt)); if(!m) return; const gi=Math.max(0,(m.games||[]).length-1), d=S.toss[m.id+"#"+gi]||(S.toss[m.id+"#"+gi]={});
     const v=ds.toss==="sp"||ds.toss==="rp"?Number(ds.v):ds.v; d[ds.toss]=v; if(ds.toss==="s"){ d.sp=null; d.rp=null } render(); return }
   if(ds.svcgo||ds.svcskip){ const m=S.matches.find(x=>x.id===(ds.svcgo||ds.svcskip)); if(!m) return; const gi=Math.max(0,(m.games||[]).length-1), d=S.toss[m.id+"#"+gi]||{};
@@ -1163,6 +1198,9 @@ function shrinkImage(file, max=1400){
 document.addEventListener("input", e=>{ if(e.target.id!=="ci-find") return; S.ciFilter=e.target.value; const q=S.ciFilter.toLowerCase();
   document.querySelectorAll(".ci-row").forEach(r=>{ r.hidden=!!q && !r.textContent.toLowerCase().includes(q) }) });
 document.addEventListener("change", async e=>{
+  if(e.target.dataset?.tiestart && S.isAdmin){ const tie=e.target.dataset.tiestart, v=e.target.value, ms=S.matches.filter(x=>x.tie===tie && x.status==="scheduled"); if(!v||!ms.length) return;
+    const base=ms.map(x=>toMin(x.ptime)).filter(x=>x!=null), d=base.length?toMin(v)-Math.min(...base):0, b=db.batch();
+    ms.forEach(x=>b.update(db.collection("tmatches").doc(x.id),{ptime:x.ptime?hm(x.ptime,d):v})); await b.commit().then(()=>toast(`Tie moved to ${v}`),()=>toast("Couldn't save")); return }
   if(e.target.dataset?.gmove && S.isAdmin){ S.gDraft={...(S.gDraft||{}), [e.target.dataset.gmove]:e.target.value}; render(); return }
   if(e.target.dataset?.legs && S.isAdmin){ const t=T(); if(t) await db.collection("tourneys").doc(t.id).set({legs:Number(e.target.value)===2?2:1},{merge:true}).then(()=>toast("Saved. Press Re-make groups to use it."),()=>toast("Couldn't save")); return }
   if(e.target.dataset?.numgroups && S.isAdmin){ const t=T(); if(t) await db.collection("tourneys").doc(t.id).set({numGroups:Number(e.target.value)||0},{merge:true}).then(()=>toast("Saved. Press Re-make groups to use it."),()=>toast("Couldn't save")); return }
@@ -1542,6 +1580,7 @@ setTimeout(checkVersion, 4000); setInterval(checkVersion, 120000);
   listen("tteams", d=>{ S.teams=d; once("tteams") });
   listen("tmatches", d=>{ S.matches=d.map(m=>({...m, games:fromDb(m.games)})); once("tmatches") });
   if(S.isAdmin){
+    db.collection("tunlocks").onSnapshot(sn=>{ S.refs=sn.docs.map(d=>({id:d.id,...d.data()})); render() },()=>{});
     db.collection("config").doc("mail").onSnapshot(d=>{ S.mail=d.exists&&d.data().url?d.data():null; render() },()=>{});
     listen("tcontacts", d=>{ S.contacts=Object.fromEntries(d.map(x=>[x.id,x])); render() });
     db.collection("tcodes").onSnapshot(sn=>{ S.codes=Object.fromEntries(sn.docs.map(d=>[d.id,d.data()])); const first=!S.codesLoaded; S.codesLoaded=true; render();

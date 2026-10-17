@@ -201,7 +201,8 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
       allow update: if refOk(resource.data.tid)
-        && onlyChanges(['games', 'status', 'winner', 'court', 'updatedAt', 'svc', 'seq'])
+        && onlyChanges(['games', 'status', 'winner', 'court', 'updatedAt', 'svc', 'seq', 'ref'])
+        && shortText(request.resource.data.get('ref', ''), 40)
         && request.resource.data.get('svc', []) is list && request.resource.data.get('svc', []).size() <= 5
         && request.resource.data.get('seq', []) is list && request.resource.data.get('seq', []).size() <= 5
         && request.resource.data.status in ['scheduled', 'live', 'done']
@@ -231,7 +232,8 @@ service cloud.firestore {
     match /tunlocks/{uid} {
       allow read, delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
       allow create, update: if signedIn() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['tid', 'code', 'at'])
+        && request.resource.data.keys().hasOnly(['tid', 'code', 'at', 'name'])
+        && shortText(request.resource.data.get('name', ''), 40)
         && request.resource.data.tid is string && request.resource.data.code is string
         && request.resource.data.code == get(/databases/$(database)/documents/tsecrets/$(request.resource.data.tid)).data.code;
     }

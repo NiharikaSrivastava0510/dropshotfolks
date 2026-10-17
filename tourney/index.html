@@ -779,6 +779,19 @@ nav.tabs button[aria-selected="true"]::before{animation:tabPop .35s ease}
 .grp.ge.changed{outline:2px solid var(--ball);outline-offset:2px}
 .ge-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
 .ge-row>span{display:flex;align-items:center;gap:8px;min-width:0}.ge-row select{width:auto;padding:5px 8px;border-radius:9px}
+.tm-top{display:grid;gap:10px;margin:6px 0 12px}.tm-top p{margin:2px 0 0}
+.tm-shift{padding:10px 12px;border-radius:14px;background:var(--tint)}.tm-shift .row{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.tm-list{display:grid;gap:8px}.tm-slot{margin:10px 0 0;font-size:.8rem;letter-spacing:.06em;color:var(--accent)}
+.tm-row{border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:var(--surface);display:grid;gap:8px}
+.tm-row.done{opacity:.6}.tm-row.live{border-color:var(--accent)}
+.tm-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.tm-h>div{display:grid}
+.tm-start{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:.85rem}.tm-start input{width:auto;padding:5px 8px;border-radius:9px}
+.tm-parts{display:grid;gap:4px;padding-top:6px;border-top:1px dashed var(--line)}
+.refgate .refform{display:grid;gap:10px;max-width:360px;margin:0 auto;width:100%}.refgate .refform input{font-size:1.05rem;padding:12px}
+.refhi{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:8px 12px;border-radius:12px;background:var(--tint)}
+.refshare{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center}.refshare .pass-qr svg{width:130px;height:130px}.refshare p{margin:4px 0 8px}
+@media (max-width:520px){.refshare{grid-template-columns:1fr}}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.ctref{font-size:.75rem;opacity:.85;padding-top:4px}
 </style>
 
 <div class="wrap">
@@ -800,5 +813,5 @@ nav.tabs button[aria-selected="true"]::before{animation:tabPop .35s ease}
 <div class="toast" id="toast" hidden></div>
 
 <script src="qrcode.js?v=1"></script>
-<script src="app.js?v=202610171800"></script>
+<script src="app.js?v=202610172000"></script>
 </body></html>

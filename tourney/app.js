@@ -649,6 +649,23 @@ const callBox = (t, x, big) => { const a=sideTeam(x.m,"a"), b=sideTeam(x.m,"b");
 
 // organiser: every match's court and time in one place, in order; change any of it at any time
 const toMin = h => { const [a,b]=String(h||"").split(":").map(Number); return Number.isFinite(a)&&Number.isFinite(b) ? a*60+b : null };
+// a court's matches in playing order: ties in the order they're planned, inside a tie MD, WD, XD, XD2 with match 1 then match 2
+function courtOrder(t, c){
+  const ms=matchesOf(t).filter(m=>!m.bye && Number(m.pcourt)===c), key=m=>m.tie?tieBase(m.tie):m.id, rank={}, D=Object.keys(DISC);
+  ms.slice().sort(byPlan).forEach((m,i)=>{ const k=key(m); if(rank[k]==null) rank[k]=i });
+  return ms.sort((x,y)=>rank[key(x)]-rank[key(y)] || D.indexOf(x.disc)-D.indexOf(y.disc) || (x.leg||1)-(y.leg||1));
+}
+function courtTimes(t){
+  const C=[...new Set(matchesOf(t).filter(m=>!m.bye && m.pcourt).map(m=>Number(m.pcourt)))].sort((a,b)=>a-b); if(!C.length) return "";
+  const gap=Number(t.gapMins)||Number(t.matchMins)||10;
+  return `<div class="tm-courts"><span class="lbl">⏱ Times court by court</span><p class="muted">Set when a court's first match starts and the minutes between matches. Every match on that court not yet played gets its time, in order: each discipline's match 1 and match 2 back to back.</p>
+    ${C.map(c=>{ const ms=courtOrder(t,c), left=ms.filter(m=>m.status==="scheduled"), first=left.map(m=>m.ptime).filter(Boolean).sort()[0]||t.startTime||"09:00";
+      const gs=[...new Set(ms.map(m=>m.stage==="ko"?"Knockouts":`Group ${m.group}`))].join(", ");
+      return `<div class="tm-court" data-court="${c}"><b>Court ${c}</b><span class="muted">${esc(gs)} · ${left.length} to play</span>
+        <label>First match <input type="time" data-cstart="${c}" value="${esc(first)}"></label><label>Every <input type="number" data-cgap="${c}" min="3" max="90" value="${gap}"> min</label>
+        <button class="btn small primary" data-ctimes="${c}"${left.length?"":" disabled"}>Set times</button></div>` }).join("")}
+    ${C.length>1?`<button class="btn small" data-ctimes="all">Set times on all courts</button>`:""}</div>`;
+}
 function timingsView(t){
   const ms=matchesOf(t).filter(m=>!m.bye), seen=new Set(), rows=[];
   const keyOf=m=>m.tie?(m.leg?tieBase(m.tie):m.tie):m.id;
@@ -665,7 +682,7 @@ function timingsView(t){
       ${done?`<span class="bdone">✓ Played</span>`:live?`<span class="livebadge">Live</span>`:m.tie?`<label class="tm-start">Starts <input type="time" data-tiestart="${esc(keyOf(m))}" value="${esc(f)}"></label>`:""}</div>
       ${done||live?"":`<div class="tm-parts">${ps.map(x=>`<div class="bk-er">${x.disc?`<span>${esc(DISC[x.disc])}${x.leg?` · match ${x.leg}`:""}</span>`:""}${planPick(t,x)}</div>`).join("")}</div>`}</div>` }).join("");
   return `<div class="tm-top"><div><b>🕒 Timings & courts</b><p class="muted">Set or change any match's court and time here, any time. Players, referees and the big screen see changes straight away. The fixtures themselves don't change.</p></div>
-      <details class="tm-plan"${matchesOf(t).some(m=>m.pcourt)?"":" open"}><summary>🏸 Courts, match length & one court per group</summary>${schedForm(t)}</details><div class="tm-shift"><span class="lbl">Running late or early? Move all ${left} matches not yet started</span><div class="row">${[-10,-5,5,10,15,30].map(d=>`<button class="btn small ${d>0?"":"ghost"}" data-shift="${d}">${d>0?"+":"−"}${Math.abs(d)} min</button>`).join("")}</div></div></div>
+      ${courtTimes(t)}<details class="tm-plan"${matchesOf(t).some(m=>m.pcourt)?"":" open"}><summary>🏸 Courts, match length & one court per group</summary>${schedForm(t)}</details><div class="tm-shift"><span class="lbl">Running late or early? Move all ${left} matches not yet started</span><div class="row">${[-10,-5,5,10,15,30].map(d=>`<button class="btn small ${d>0?"":"ghost"}" data-shift="${d}">${d>0?"+":"−"}${Math.abs(d)} min</button>`).join("")}</div></div></div>
     ${rows.length?`<div class="tm-list">${list}</div>`:`<div class="empty">No fixtures yet. Make them in ⚙️ Organiser tools first.</div>`}`;
 }
 // the knockout draw, drawn like on paper: rounds left to right, lines joining each pair to the next round, champion at the end
@@ -1153,6 +1170,12 @@ document.addEventListener("click", async e=>{
   if(ds.grpedit && S.isAdmin){ const t=T(), c=S.cat; S.grpOn=true; S.fxTab="groups"; S.fxTools=false; S.gExtra=[]; S.gDraft={}; Object.entries(t?.groups?.[c]||{}).forEach(([G,ids])=>ids.forEach(id=>S.gDraft[id]=G)); render(); document.querySelector(".ge-bar")?.scrollIntoView({behavior:"smooth",block:"center"}); return }
   if(ds.gadd && S.isAdmin){ const t=T(), have=new Set([...Object.keys(t?.groups?.[S.cat]||{}), ...Object.values(S.gDraft||{}), ...(S.gExtra||[])]); const L=[..."ABCDEFGHIJKLMNOP"].find(x=>!have.has(x)); if(L){ S.gExtra=[...(S.gExtra||[]), L]; render() } return }
   if(ds.gsave!==undefined && S.isAdmin){ const t=T(); if(t) await saveGroupEdit(t, S.cat); return }
+  if(ds.ctimes && S.isAdmin){ const C=ds.ctimes==="all"?[...document.querySelectorAll("[data-ctimes]")].map(b=>b.dataset.ctimes).filter(x=>x!=="all"):[ds.ctimes], ups=[]; let gap=10;
+    for(const c of C){ const start=$(`[data-cstart="${c}"]`)?.value, g=Math.min(90,Math.max(3,Number($(`[data-cgap="${c}"]`)?.value)||10)); if(!start){ toast(`Pick the first match time for Court ${c}`); return } gap=g;
+      courtOrder(t,Number(c)).forEach((m,i,all)=>{ const j=all.slice(0,i).filter(x=>x.status==="scheduled").length; ups.push([m.id, {pnum:i+1, ...(m.status==="scheduled"?{ptime:hm(start,j*g)}:{})}]) }) }
+    for(let i=0;i<ups.length;i+=400){ const b=db.batch(); ups.slice(i,i+400).forEach(([id,u])=>b.update(db.collection("tmatches").doc(id),u)); await b.commit() }
+    await db.collection("tourneys").doc(t.id).set({gapMins:gap, ...(clockOn(t)?{}:{timed:true})},{merge:true});
+    toast(`Times set on ${C.length>1?`${C.length} courts`:`Court ${C[0]}`} ✓`); return }
   if(ds.shift && S.isAdmin){ const d=Number(ds.shift), t=T(), ms=matchesOf(t).filter(m=>m.status==="scheduled"&&m.ptime);
     for(let i=0;i<ms.length;i+=400){ const b=db.batch(); ms.slice(i,i+400).forEach(m=>b.update(db.collection("tmatches").doc(m.id),{ptime:hm(m.ptime,d)})); await b.commit() }
     toast(`${ms.length} matches moved ${d>0?"later":"earlier"} by ${Math.abs(d)} min`); return }

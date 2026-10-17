@@ -542,21 +542,37 @@ function standTable(t, cat, G){
     ${rows.map((x,i)=>`<tr class="${i<adv?"qual":""}"><td>${i+1}</td><td>${esc(tName(x.id))}</td><td>${x.p}</td><td>${x.w}</td><td>${x.l}</td><td>${x.pf-x.pa>0?"+":""}${x.pf-x.pa}</td></tr>`).join("")}
   </tbody></table></div>`;
 }
+// the knockout draw, drawn like on paper: rounds left to right, lines joining each pair to the next round, champion at the end
 function bracket(t, cat){
   const ko=matchesOf(t,cat).filter(m=>m.stage==="ko" && (!m.disc || m.disc==="MD")); if(!ko.length) return "";
-  const rounds=[...new Set(ko.map(m=>m.round))].sort((a,b)=>a-b);
-  const card=m=>{ const a=sideTeam(m,"a"), b=sideTeam(m,"b"), tr=m.tie?tieResult(m.tie):null, w=tr?tr.winner:m.status==="done"?m.winner:null;
-    const live=tr?S.matches.some(x=>x.tie===m.tie&&x.status==="live"):m.status==="live";
+  const isBronze=m=>m.roundName==="Bronze medal match";
+  const rounds=[...new Set(ko.filter(m=>!isBronze(m)).map(m=>m.round))].sort((a,b)=>a-b);
+  const keyOf=m=>m.tie||m.id;
+  const card=m=>{
+    const a=sideTeam(m,"a"), b=sideTeam(m,"b"), tr=m.tie?tieResult(m.tie):null, w=m.bye?null:tr?tr.winner:m.status==="done"?m.winner:null;
+    const live=!m.bye && (tr?S.matches.some(x=>x.tie===m.tie&&x.status==="live"):m.status==="live");
     const sc=side=>tr ? (tr.done?String(side==="a"?tr.a:tr.b):"") : m.status==="done"?(m.games||[]).map(g=>side==="a"?g[0]:g[1]).join(" "):"";
-    const line=(id,side)=>`<div class="bl ${w===side?"win":w?"lose":""}">${id?avatar(tName(id)):`<i class="av tbd">?</i>`}<span class="${id?"":"tbd"}">${id?esc(tName(id)):esc(sideLabel(m,side))}</span><b>${w===side&&m.roundName==="Final"?"🏆 ":""}${esc(sc(side))}</b></div>`;
-    const bronze=m.roundName==="Bronze medal match", top=bronze?`🥉 ${isTeam(t)?"Bronze medal":"3rd place"}`:"";
-    const when=live?`<span class="livebadge">Live</span>`:w?`<span class="bdone">✓ Final score</span>`:`<span class="bwhen">${esc(whenTxt(t,m))}</span>`;
-    const label=top||`${shortRound(m.roundName)}${/^(SF|QF|R\d+)$/.test(shortRound(m.roundName))?` ${m.slot}`:""}`;
-    const pick = S.isAdmin && !live && !w && !m.bye ? (m.tie ? `<div class="bpick"><button class="btn small ghost" data-openko="${esc(m.tie)}">✏️ Change court / time</button></div>` : `<div class="bpick">${planPick(t,m)}</div>`) : "";
-    return `<div class="bm ${live?"live":""} ${bronze?"bronze":""} ${m.roundName==="Final"?"final":""}"><div class="bt"><b>${label}</b>${when}</div>${line(a,"a")}${line(b,"b")}${pick}</div>` };
-  return `<div class="bracket">${rounds.map(rn=>{ const ms=ko.filter(m=>m.round===rn).sort((a,b)=>a.slot-b.slot), real=ms.filter(m=>!m.bye);
-    const show=real.length?real:ms, name=(ms.find(m=>m.roundName!=="Bronze medal match")||ms[0])?.roundName||"";
-    return `<div class="bround"><h4>${esc(name==="Final"?"🏆 Final":name)}</h4><div class="bcol">${show.map(card).join("")}</div></div>` }).join("")}</div>`;
+    const row=(id,side)=>`<div class="bk-t ${w===side?"win":w?"lose":""}">${id?avatar(tName(id)):`<i class="av tbd">?</i>`}<span class="${id?"":"tbd"}">${id?esc(tName(id)):esc(sideLabel(m,side))}</span><b>${esc(sc(side))}</b></div>`;
+    if(m.bye){ const side=(m.a||m.src?.a)?"a":"b", id=sideTeam(m,side);
+      return `<div class="bk-m bye">${row(id,side)}<div class="bk-t byel"><span>bye · straight through</span></div></div>` }
+    const label=`${shortRound(m.roundName)}${/^(SF|QF|R\d+)$/.test(shortRound(m.roundName))?` ${m.slot}`:""}`, k=keyOf(m), open=S.koEdit===k;
+    const meta=live?`<span class="livebadge">Live</span>`:w?`<span class="bdone">✓ Played</span>`:`<span class="bwhen">${esc(whenTxt(t,m))}</span>`;
+    const edit=S.isAdmin && !live && !w ? `<button class="bk-ed" data-koedit="${esc(k)}" title="Change court & time">${open?"✕":"✏️"}</button>` : "";
+    return `<div class="bk-m ${live?"live":""} ${m.roundName==="Final"?"final":""} ${open?"editing":""}"><div class="bk-meta"><b>${esc(label)}</b>${meta}${edit}</div>${row(a,"a")}${row(b,"b")}</div>`;
+  };
+  const cols=rounds.map((rn,ri)=>{ const ms=ko.filter(m=>m.round===rn && !isBronze(m)).sort((a,b)=>a.slot-b.slot), name=ms[0]?.roundName||"";
+    const slots=ms.map(m=>`<div class="bk-slot">${card(m)}</div>`);
+    const body = ms.length>1 ? Array.from({length:Math.ceil(slots.length/2)},(_,i)=>`<div class="bk-pair">${slots[2*i]}${slots[2*i+1]||""}</div>`).join("") : `<div class="bk-pair one">${slots[0]||""}</div>`;
+    return `<div class="bk-col ${ri===0?"first":""}"><h4 class="bk-h">${esc(name==="Final"?"🏆 Final":name)}</h4><div class="bk-body">${body}</div></div>` });
+  const fin=ko.find(m=>m.roundName==="Final"), champ=fin?winnerTeam(fin):null;
+  cols.push(`<div class="bk-col champ"><h4 class="bk-h">Champions</h4><div class="bk-body"><div class="bk-pair one"><div class="bk-slot"><div class="bk-champ">${champ?`<span class="bk-cup">🏆</span>${avatar(tName(champ))}<b>${esc(tName(champ))}</b>`:`<span class="bk-cup">🏆</span><span class="tbd">Winner of the final</span>`}</div></div></div></div></div>`);
+  const br=ko.find(isBronze), em=S.isAdmin && S.koEdit && ko.find(m=>keyOf(m)===S.koEdit);
+  const pop=em ? (()=>{ const lab=isBronze(em)?"Bronze medal match":`${em.roundName}${/^(SF|QF|R\d+)$/.test(shortRound(em.roundName))?` ${em.slot}`:""}`;
+    const xs=em.tie?S.matches.filter(x=>x.tie===em.tie).sort((x,y)=>Object.keys(DISC).indexOf(x.disc)-Object.keys(DISC).indexOf(y.disc)):[em];
+    return `<div class="bk-pop" role="dialog" aria-label="Court and time"><div class="bk-popc"><div class="row" style="justify-content:space-between"><h3>✏️ ${esc(lab)}: court & time</h3><button class="btn small ghost" data-koedit="${esc(S.koEdit)}">Done</button></div>
+      <p class="muted">${esc(sideLabel(em,"a")===tName(sideTeam(em,"a"))?"":"")}${sideTeam(em,"a")?esc(tName(sideTeam(em,"a"))):esc(sideLabel(em,"a"))} v ${sideTeam(em,"b")?esc(tName(sideTeam(em,"b"))):esc(sideLabel(em,"b"))}</p>
+      <div class="bk-edit">${xs.map(x=>`<div class="bk-er">${x.disc?`<span>${esc(DISC[x.disc])}</span>`:""}${planPick(t,x)}</div>`).join("")}</div><p class="muted" style="font-size:.8rem">Changes save straight away and players see them at once.</p></div></div>` })() : "";
+  return `${pop}<div class="bk">${cols.join("")}</div>${br?`<div class="bk-bronze"><h4 class="bk-h">🥉 Bronze medal match</h4>${card(br)}</div>`:""}`;
 }
 function courtCard(t, c){
   const m=liveOn(t,c), r=rules(t,m);
@@ -983,6 +999,7 @@ document.addEventListener("click", async e=>{
   if(ds.tid){ S.tid=ds.tid; S.newT=false; S.cat=null; ls.set("dsf:tid",S.tid); render(); return }
   if(ds.cat){ S.cat=ds.cat; render(); return }
   if(ds.fxtab){ S.fxTab=ds.fxtab; render(); return }
+  if(ds.koedit){ S.koEdit = S.koEdit===ds.koedit ? null : ds.koedit; render(); return }
   if(ds.openko){ const d=document.querySelector("details.vm[id$='-ko']"); if(d){ d.open=true; const el=document.querySelector(`[data-medit="${ds.openko}_MD"]`)?.closest(".tie")||d; el.scrollIntoView({behavior:"smooth",block:"center"}); el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"),1600) } return }
   if(ds.mailteam){ const x=teamById(ds.mailteam); if(x) await mailTeam(t,x); return }
   if(ds.mailall){ await mailAll(t); return }

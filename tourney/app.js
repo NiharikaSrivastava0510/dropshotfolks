@@ -76,7 +76,7 @@ function glance(t){
   const team=isTeam(t), per=team?Object.keys(DISC).length:1, gs=Number(t.groupSize)||(team?3:4);
   const nT=teamsOf(t).filter(x=>x.status==="confirmed").length || teamsOf(t).length;
   const groups=Object.values(t.groups||{}).flatMap(o=>Object.values(o||{}));
-  const minG=groups.length?Math.min(...groups.map(g=>g.length)):gs, ties=Math.max(1,minG-1);
+  const minG=groups.length?Math.min(...groups.map(g=>g.length)):gs, ties=Math.max(1,minG-1)*legs(t);
   const ms=matchesOf(t).filter(m=>!m.bye);
   return {team, per, nT, gs, nG:groups.length, ties, matches:ties*per, total:ms.length};
 }
@@ -113,7 +113,7 @@ function formatVisual(t){
       <div><span>👨👨</span><b>Men's doubles</b></div><div><span>👩👩</span><b>Women's doubles</b></div><div><span>👨👩</span><b>Mixed doubles 1</b></div><div><span>👨👩</span><b>Mixed doubles 2</b></div></div>
       <p>Win <b>3 of 4</b> to win the tie. At <b>2–2</b>, the team with more total points wins; still level → the winner of Mixed doubles 2.</p></div>`:""}
     <div class="fv-box"><h4>🗺️ The route to the final</h4><div class="fv-steps">
-      <div><i>1</i><b>Groups</b><span>Groups of ${g.gs}. Everyone plays everyone in their group.</span></div>
+      <div><i>1</i><b>Groups</b><span>${g.nG?`${g.nG} groups`:`Groups of ${g.gs}`}. Everyone plays everyone in their group${legs(t)===2?" <b>twice, back to back</b>":""}.</span></div>
       <div><i>2</i><b>${adv===1?"Winners through":`Top ${adv} through`}</b><span>${adv===1?"Each group winner":`The top ${adv} of each group`}${wild?", plus the best of the rest,":""} reach the knockouts.</span></div>
       <div><i>3</i><b>Knockouts</b><span>Quarter-finals → semi-finals → 🏆 final${bronzeOn(t)?" (+ 🥉 match for 3rd)":""}.</span></div></div></div>
     ${g.team?`<div class="fv-box"><h4>📊 Group points</h4><div class="fv-pts"><div><b>4</b><span>win by 6+</span></div><div><b>3</b><span>win by 4–5</span></div><div><b>1</b><span>win by 3 or less</span></div><div><b>0</b><span>loss</span></div></div><p class="muted">Margin = total points across the tie. Level on points → points difference, then head-to-head.</p></div>`
@@ -129,6 +129,7 @@ const bankOf = t => t?.bank && (t.bank.acct || t.bank.sort) ? t.bank : null;
 // a Team Cup tie: men's, women's and two mixed doubles (XD = mixed 1: man 1 + woman 1, XD2 = mixed 2: man 2 + woman 2)
 const DISC = {MD:"Men's doubles", WD:"Women's doubles", XD:"Mixed doubles 1", XD2:"Mixed doubles 2"};
 const isTeam = t => t?.mode==="team";
+const legs = t => Number(t?.legs)===2 ? 2 : 1;   // how many times each pair in a group meets (2 = back to back)
 const nPl = t => isTeam(t)?4:2;
 const playersOf = x => [x?.p1,x?.p2,x?.p3,x?.p4].filter(Boolean);
 const fmtHtml = t => { const [main, extra] = formatTxt(t).split("\n\n");
@@ -138,7 +139,7 @@ function formatTxt(t){
   if(isTeam(t)){ const adv=Number(t.advance)||2, wild=Number(t.wild)||0;
     return [`Teams of 4: 2 men and 2 women.`,
       `Every tie between two teams is 4 matches: men's doubles, women's doubles and two mixed doubles. Win 3 of the 4 to win the tie; at 2–2 the team with more total points wins, and if still level the winner of Mixed doubles 2.`,
-      `Group stage: round robin in groups of about ${Number(t.groupSize)||3}.`,
+      `Group stage: round robin in ${Number(t.numGroups)>0?`${Number(t.numGroups)} groups`:`groups of about ${Number(t.groupSize)||3}`}.${legs(t)===2?" Every pair of teams in a group meets twice, back to back: each discipline plays its second match on the same court straight after the first.":""}`,
       `Group points: win by 6 or more points = 4, win by 4–5 = 3, win by 3 or less = 1, loss = 0. The margin is the total points across the tie's 4 matches. Level teams are split by points difference, then head-to-head.`,
       crossPairs(t,t.groups?.TC)?`Knockouts: the top ${adv} of each group go through. ${adv===2?"Quarter-finals cross the groups: Winner A v Runner-up C, Winner B v Runner-up D, Winner C v Runner-up A, Winner D v Runner-up B.":"Semi-finals: Winner A v Winner C, Winner B v Winner D."}`:`Knockouts: top ${adv} of each group${wild?` plus the best ${wild} third-placed team${wild>1?"s":""}`:""} go through, ranked by points. The top seeds get a bye if the bracket isn't full.${t.bronze!==false?" The final and the bronze medal match are played at the same time.":""}`,
       `Group matches: ${r.bestOf===1?"1 game ":""}${ruleTxt(r)}${r.deuce&&r.cap<(CAP_FOR[r.to]||0)?`, at ${r.cap-1}–${r.cap-1} the next point wins`:""}${r.bestOf===2?". Both games are always played; at 1–1 the pair with more total points wins":""}.`,
@@ -170,7 +171,7 @@ const S = {
   refOnly: location.hash==="#ref",
   tourneys:[], teams:[], matches:[], contacts:{}, secret:null, unlock:null,
   uid:null, isAdmin:false, loaded:false, tid: new URLSearchParams(location.search).get("t") || ls.get("dsf:tid",null),
-  cat: null, toss: {}, newT:false, codes:{}, codesLoaded:false, desk:null, deskCode:null, mail:null, mailing:false, scan:null, otab: ls.get("dsf:otab","details"), editTeam:null, addTeam:false, myTeam: ls.get("dsf:myteam",null), refCourt: ls.get("dsf:refcourt",1), edit:null, scrIdx:0
+  cat: null, toss: {}, newT:false, codes:{}, codesLoaded:false, rulesOld:false, desk:null, deskCode:null, mail:null, mailing:false, scan:null, otab: ls.get("dsf:otab","details"), editTeam:null, addTeam:false, myTeam: ls.get("dsf:myteam",null), refCourt: ls.get("dsf:refcourt",1), edit:null, scrIdx:0
 };
 let db=null, auth=null;
 const T = () => S.tourneys.find(t=>t.id===S.tid) || (S.tid && S.tourneys.find(t=>t.id.startsWith(S.tid))) || nextTourney() || null;
@@ -318,8 +319,8 @@ function teamStandings(t, cat, group){
   ties.forEach(tie=>{ const m=S.matches.find(x=>x.tie===tie), r=tieResult(tie), A=row[m.a], B=row[m.b]; if(!A||!B||!r.complete||!r.winner) return;
     A.p++; B.p++; A.pf+=r.pa; A.pa+=r.pb; B.pf+=r.pb; B.pa+=r.pa;
     const W=r.winner==="a"?A:B, L=r.winner==="a"?B:A, margin=r.winner==="a"?r.pa-r.pb:r.pb-r.pa;
-    W.w++; L.l++; W.pts+=tiePts(margin); res[[m.a,m.b].sort().join("|")]=W.id });
-  const h2h=(x,y)=>{ const w=res[[x,y].sort().join("|")]; return w===x?-1:w===y?1:0 };
+    W.w++; L.l++; W.pts+=tiePts(margin); const k=[m.a,m.b].sort().join("|")+"|"+W.id; res[k]=(res[k]||0)+1 });
+  const h2h=(x,y)=>{ const p=[x,y].sort().join("|"), wx=res[p+"|"+x]||0, wy=res[p+"|"+y]||0; return wx>wy?-1:wy>wx?1:0 };
   return Object.values(row).sort((x,y)=>y.pts-x.pts || (y.pf-y.pa)-(x.pf-x.pa) || h2h(x.id,y.id) || y.pf-x.pf || String(tName(x.id)).localeCompare(tName(y.id)));
 }
 const allGroupsDone = (t, cat) => { const g=t.groups?.[cat]; return !!g && Object.keys(g).every(G=>groupDone(t,cat,G)) };
@@ -342,7 +343,7 @@ function wildTeams(t, cat){
 // one match, or for the Team Cup one tie = 3 matches sharing a tie id
 function addFixture(batch, t, id, data, plan={}){
   if(!isTeam(t) || data.bye){ batch.set(db.collection("tmatches").doc(id), {...data, ...(plan[id]||{})}); return [id] }
-  return Object.keys(DISC).map((d,k)=>{ const mid=`${id}_${d}`; batch.set(db.collection("tmatches").doc(mid), {...data, tie:id, disc:d, order:(data.order??0)*4+k, ...(plan[mid]||{})}); return mid });
+  return Object.keys(DISC).map((d,k)=>{ const mid=`${id}_${d}`, {first, ...rest}=data; batch.set(db.collection("tmatches").doc(mid), {...rest, tie:id, disc:d, order:(data.order??0)*4+k, ...(first?{after:`${first}_${d}`}:{}), ...(plan[mid]||{})}); return mid });
 }
 function roundRobin(ids){
   const list=[...ids]; if(list.length%2) list.push(null);
@@ -367,7 +368,8 @@ async function generateGroups(t, cat){
   const maxR=Math.max(...perGroup.map(x=>x.rounds.length)), batch=db.batch(); let order=base;
   for(let r=0;r<maxR;r++) perGroup.forEach(({G,rounds})=>(rounds[r]||[]).forEach((pair,k)=>{
     const id=`${t.id}_${cat}_${G}${r+1}${String.fromCharCode(97+k)}`;
-    addFixture(batch, t, id, {tid:t.id, cat, stage:"group", group:G, round:r+1, a:pair[0], b:pair[1], status:"scheduled", games:[], winner:null, court:0, order:order++, updatedAt:nowIso()});
+    addFixture(batch, t, id, {tid:t.id, cat, stage:"group", group:G, round:r+1, a:pair[0], b:pair[1], ...(legs(t)===2?{leg:1}:{}), status:"scheduled", games:[], winner:null, court:0, order:order++, updatedAt:nowIso()});
+    if(legs(t)===2) addFixture(batch, t, id+"L2", {tid:t.id, cat, stage:"group", group:G, round:r+1, a:pair[1], b:pair[0], leg:2, first:id, status:"scheduled", games:[], winner:null, court:0, order:order++, updatedAt:nowIso()});
   }));
   batch.set(db.collection("tourneys").doc(t.id), {groups:{...(t.groups||{}), [cat]:groups}}, {merge:true});
   await batch.commit(); toast(`${catName(t,cat)}: ${ng} group${ng>1?"s":""} and ${order-base} ${isTeam(t)?`ties (${(order-base)*4} matches)`:"matches"} created`);
@@ -473,12 +475,17 @@ async function scheduleAll(t, koOnly){
   if(koOnly){ const gm=ms.filter(m=>m.stage==="group"); if(gm.some(m=>m.pslot==null)) koOnly=false;
     else { gm.forEach(m=>{ slotOf[m.id]=m.pslot; perCourt[m.pcourt]=Math.max(perCourt[m.pcourt]||0, Number(m.pnum)||0) });
       slot=gm.length?Math.max(...gm.map(m=>m.pslot))+1:0; pending=pending.filter(m=>m.stage!=="group") } }
+  const byId=Object.fromEntries(ms.map(m=>[m.id,m])), follow={}, forced={};
+  ms.forEach(m=>{ if(m.after && byId[m.after]) follow[m.after]=m });
   while(pending.length && slot<500){
     const used=new Set(), now=new Set();
-    for(let c=1;c<=C;c++){
-      const ok=(m,rest)=>{ const r=ready(m); if(r==null||r>slot) return false; const tm=teamsIn(m); return tm.every(x=>!now.has(x)) && (!rest || tm.every(x=>!last.has(x))) };
+    // back to back: the second meeting of a discipline takes the same court straight after the first
+    Object.entries(forced[slot]||{}).forEach(([c,m])=>{ const i=pending.indexOf(m); if(i<0) return; pending.splice(i,1); slotOf[m.id]=slot; m._c=Number(c); m._n=(perCourt[c]=(perCourt[c]||0)+1); used.add(Number(c)); teamsIn(m).forEach(x=>now.add(x)) });
+    for(let c=1;c<=C;c++){ if(used.has(c)) continue;
+      const ok=(m,rest)=>{ if(m.after && byId[m.after]) return false; const r=ready(m); if(r==null||r>slot) return false; const tm=teamsIn(m); return tm.every(x=>!now.has(x)) && (!rest || tm.every(x=>!last.has(x))) };
       let i=pending.findIndex(m=>ok(m,true)); if(i<0) i=pending.findIndex(m=>ok(m,false)); if(i<0) break;
       const m=pending.splice(i,1)[0]; slotOf[m.id]=slot; m._c=c; m._n=(perCourt[c]=(perCourt[c]||0)+1); teamsIn(m).forEach(x=>now.add(x));
+      if(follow[m.id]) (forced[slot+1]=forced[slot+1]||{})[c]=follow[m.id];
     }
     last=now; slot++;
   }
@@ -515,7 +522,7 @@ function fixList(t, ms, opts={}){
   const seen=new Set();
   return ms.map(m=>{ if(!m.tie) return matchRow(t,m,opts); if(seen.has(m.tie)) return ""; seen.add(m.tie);
     const r=tieResult(m.tie), rs=S.matches.filter(x=>x.tie===m.tie).sort((x,y)=>Object.keys(DISC).indexOf(x.disc)-Object.keys(DISC).indexOf(y.disc));
-    const mine=opts.me&&(sideTeam(m,"a")===opts.me||sideTeam(m,"b")===opts.me), stage=m.stage==="ko"?(m.roundName||"Knockout"):`Group ${m.group}`;
+    const mine=opts.me&&(sideTeam(m,"a")===opts.me||sideTeam(m,"b")===opts.me), stage=m.stage==="ko"?(m.roundName||"Knockout"):`Group ${m.group}${m.leg?` · ${m.leg===1?"1st":"2nd"} meeting`:""}`;
     const line=x=>{ const g=(x.games||[]).slice(-1)[0], live=x.status==="live", done=x.status==="done";
       const right = done ? `<b class="${x.winner==="a"?"wa":"wb"}">${esc(gamesTxt(x))}</b>` : live ? `<span class="livebadge">Court ${esc(x.court)}</span> <b>${g?`${g[0]}–${g[1]}`:"0–0"}</b>`
         : opts.plan && S.isAdmin ? planPick(t,x) : `<span class="muted">${esc(planTxt(x))}</span>`;
@@ -794,7 +801,7 @@ function viewOrg(only){
       <p class="muted" style="font-size:.82rem">📥 Import takes Google Form responses (.xlsx or .csv): teams already here get their contact details filled in, new teams are added.</p></section>`;
   if(ot==="fixtures") body=`<section class="panel"><h2>1 · Groups</h2>${catBar(t)}
       <p class="muted">${isTeam(t)?`${Number(t.numGroups)>0?`${Number(t.numGroups)} groups`:`Groups of about ${Number(t.groupSize)||3}`}; every tie is men's, women's and two mixed doubles. Top ${Number(t.advance)||2} per group go through.`:`Groups of about ${Number(t.groupSize)||4}; everyone plays everyone in their group. ${Number(t.advance)===1?"The winner":`The top ${Number(t.advance)||2}`} of each group go${Number(t.advance)===1?"es":""} through.`} Only confirmed teams are included. Change group sizes in 📝 Details.</p>
-      <div class="row"><label class="f" style="margin:0">Number of groups <select data-numgroups="1">${[0,2,3,4,5,6,8].map(n=>`<option value="${n}" ${(Number(t.numGroups)||0)===n?"selected":""}>${n?n:"Auto"}</option>`).join("")}</select></label><button class="btn primary" data-gen="${esc(S.cat||"")}">${t.groups?.[S.cat]?"Re-make groups":"Make groups"}</button>${matchesOf(t,S.cat).length?`<button class="btn small ghost danger" data-clearfix="${esc(S.cat||"")}">Clear all fixtures</button>`:""}</div>
+      <div class="row"><label class="f" style="margin:0">Number of groups <select data-numgroups="1">${[0,2,3,4,5,6,8].map(n=>`<option value="${n}" ${(Number(t.numGroups)||0)===n?"selected":""}>${n?n:"Auto"}</option>`).join("")}</select></label><label class="f" style="margin:0">Each pair of teams plays <select data-legs="1"><option value="1" ${legs(t)===1?"selected":""}>once</option><option value="2" ${legs(t)===2?"selected":""}>twice, back to back</option></select></label><button class="btn primary" data-gen="${esc(S.cat||"")}">${t.groups?.[S.cat]?"Re-make groups":"Make groups"}</button>${matchesOf(t,S.cat).length?`<button class="btn small ghost danger" data-clearfix="${esc(S.cat||"")}">Clear all fixtures</button>`:""}</div>
       <p class="muted" style="font-size:.85rem">${(()=>{ const g=matchesOf(t,S.cat).filter(m=>m.stage==="group"); return g.length?`${g.filter(m=>m.status==="done").length} of ${g.length} group matches played.`:"No groups yet." })()}</p></section>
     <section class="panel"><h2>2 · Knockouts</h2><p class="muted">Make it any time: the places read "Winner Group A" and so on, and fill in by themselves as groups finish.</p>
       <button class="btn primary" data-genko="${esc(S.cat||"")}">${matchesOf(t,S.cat).some(m=>m.stage==="ko")?"Re-make knockout bracket":"Make knockout bracket"}</button></section>
@@ -807,7 +814,10 @@ function orgBar(t){
   if(!S.isAdmin) return "";
   const preset = PRESETS.map(p=>{ const x=p.find(); if(p.create ? x : (!x || x.preset===p.key)) return ""; return `<button class="btn small primary" data-preset="${p.key}">${p.btn}</button>` }).join("");
   return `<div class="orgbar"><span class="ob-l">🔑 Organiser</span>${t?`<span class="ob-t">Editing <b>${esc(t.name||"Tournament")}</b></span>`:""}<span class="ob-g"></span>${preset}
-    <a class="btn small" href="../#edit">🏠 Edit homepage</a><button class="btn small" data-tnew="1">➕ New tournament</button>${t?`<button class="btn small ghost danger" data-tdelt="${esc(t.id)}">🗑 Delete</button>`:""}</div>`;
+    <a class="btn small" href="../#edit">🏠 Edit homepage</a><button class="btn small" data-tnew="1">➕ New tournament</button>${t?`<button class="btn small ghost danger" data-tdelt="${esc(t.id)}">🗑 Delete</button>`:""}</div>
+    ${S.rulesOld?`<div class="rulesbar"><b>⚠️ Your Firebase rules are out of date.</b> Team codes, QR passes, check-in and website edits won't work until you publish them.
+      <ol><li>Open <a href="https://raw.githubusercontent.com/NiharikaSrivastava0510/dropshotfolks/main/book/firestore.rules" target="_blank" rel="noopener">the latest rules</a>, press ⌘A then ⌘C.</li>
+      <li>Open <a href="https://console.firebase.google.com/project/dropshotfolks/firestore/rules" target="_blank" rel="noopener">Firebase → Firestore → Rules</a>, click in the editor, ⌘A, ⌘V, then <b>Publish</b>.</li><li>Reload this page.</li></ol></div>`:""}`;
 }
 // organiser: one team, with an inline editor
 function teamCard(t, x){
@@ -1088,6 +1098,7 @@ function shrinkImage(file, max=1400){
 document.addEventListener("input", e=>{ if(e.target.id!=="ci-find") return; S.ciFilter=e.target.value; const q=S.ciFilter.toLowerCase();
   document.querySelectorAll(".ci-row").forEach(r=>{ r.hidden=!!q && !r.textContent.toLowerCase().includes(q) }) });
 document.addEventListener("change", async e=>{
+  if(e.target.dataset?.legs && S.isAdmin){ const t=T(); if(t) await db.collection("tourneys").doc(t.id).set({legs:Number(e.target.value)===2?2:1},{merge:true}).then(()=>toast("Saved. Press Re-make groups to use it."),()=>toast("Couldn't save")); return }
   if(e.target.dataset?.numgroups && S.isAdmin){ const t=T(); if(t) await db.collection("tourneys").doc(t.id).set({numGroups:Number(e.target.value)||0},{merge:true}).then(()=>toast("Saved. Press Re-make groups to use it."),()=>toast("Couldn't save")); return }
   const pc=e.target.dataset?.plcourt, pt=e.target.dataset?.pltime, pn=e.target.dataset?.plnum;
   if((pc||pt||pn) && S.isAdmin){ const id=pc||pt||pn, data=pc?{pcourt:Number(e.target.value)||null}:pt?{ptime:e.target.value||null}:{pnum:Number(e.target.value)||null, pslot:Math.max(0,(Number(e.target.value)||1)-1)};
@@ -1468,7 +1479,7 @@ setTimeout(checkVersion, 4000); setInterval(checkVersion, 120000);
     db.collection("config").doc("mail").onSnapshot(d=>{ S.mail=d.exists&&d.data().url?d.data():null; render() },()=>{});
     listen("tcontacts", d=>{ S.contacts=Object.fromEntries(d.map(x=>[x.id,x])); render() });
     db.collection("tcodes").onSnapshot(sn=>{ S.codes=Object.fromEntries(sn.docs.map(d=>[d.id,d.data()])); const first=!S.codesLoaded; S.codesLoaded=true; render();
-      if(first) setTimeout(async()=>{ for(const t of S.tourneys) await ensureCodes(t) },2500) },()=>{});
+      if(first) setTimeout(async()=>{ for(const t of S.tourneys) await ensureCodes(t) },2500); S.rulesOld=false },e=>{ if(e?.code==="permission-denied"){ S.rulesOld=true; render() } });
     const go=()=>{ if(S.loaded) autoSetup(); else setTimeout(go,300) }; setTimeout(go,1200);
     const watchSecret=()=>{ const t=T(); if(t) db.collection("tsecrets").doc(t.id).get().then(d=>{ S.secret=d.exists?d.data().code||null:null; S.deskCode=d.exists?d.data().desk||null:null; render() }).catch(()=>{}) };
     setTimeout(watchSecret,800);

@@ -367,16 +367,55 @@ async function generateGroups(t, cat){
   const groups={}; for(let g=0;g<ng;g++) groups[letters[g]]=[];
   shuffle(ids).forEach((id,i)=>{ const row=Math.floor(i/ng), col=i%ng, g=row%2?ng-1-col:col; groups[letters[g]].push(id) });
   await clearMatches(t, cat);
+  const batch=db.batch(), made=groupFixtures(t, cat, groups, batch);
+  batch.set(db.collection("tourneys").doc(t.id), {groups:{...(t.groups||{}), [cat]:groups}}, {merge:true});
+  await batch.commit(); toast(`${catName(t,cat)}: ${ng} group${ng>1?"s":""} and ${made} ${isTeam(t)?`ties (${made*4} matches)`:"matches"} created`);
+}
+// round-robin fixtures for the given groups ({A:[ids]…}); returns how many ties/matches were added
+function groupFixtures(t, cat, groups, batch){
   const base=matchesOf(t).length ? Math.max(...matchesOf(t).map(m=>m.order||0))+1 : 0;
   const perGroup=Object.entries(groups).map(([G,ids])=>({G, rounds:roundRobin(ids)}));
-  const maxR=Math.max(...perGroup.map(x=>x.rounds.length)), batch=db.batch(); let order=base;
+  if(!perGroup.length) return 0;
+  const maxR=Math.max(...perGroup.map(x=>x.rounds.length)); let order=base;
   for(let r=0;r<maxR;r++) perGroup.forEach(({G,rounds})=>(rounds[r]||[]).forEach((pair,k)=>{
     const id=`${t.id}_${cat}_${G}${r+1}${String.fromCharCode(97+k)}`;
     addFixture(batch, t, id, {tid:t.id, cat, stage:"group", group:G, round:r+1, a:pair[0], b:pair[1], ...(legs(t)===2?{leg:1}:{}), status:"scheduled", games:[], winner:null, court:0, order:order++, updatedAt:nowIso()});
     if(legs(t)===2) addFixture(batch, t, id+"L2", {tid:t.id, cat, stage:"group", group:G, round:r+1, a:pair[1], b:pair[0], leg:2, first:id, status:"scheduled", games:[], winner:null, court:0, order:order++, updatedAt:nowIso()});
   }));
-  batch.set(db.collection("tourneys").doc(t.id), {groups:{...(t.groups||{}), [cat]:groups}}, {merge:true});
-  await batch.commit(); toast(`${catName(t,cat)}: ${ng} group${ng>1?"s":""} and ${order-base} ${isTeam(t)?`ties (${(order-base)*4} matches)`:"matches"} created`);
+  return order-base;
+}
+function groupEditor(t, cat){
+  const old=t.groups?.[cat]||{}, d=S.gDraft||{}, Gs=[...new Set([...Object.keys(old), ...Object.values(d).filter(Boolean), ...(S.gExtra||[])])].sort();
+  const all=teamsOf(t,cat).filter(x=>x.status==="confirmed"||Object.keys(d).includes(x.id)), sel=x=>`<select data-gmove="${esc(x.id)}" aria-label="Group for ${esc(x.name)}">${Gs.map(G=>`<option value="${G}" ${d[x.id]===G?"selected":""}>Group ${G}</option>`).join("")}<option value="" ${d[x.id]?"":"selected"}>Not in a group</option></select>`;
+  const box=(G,label)=>{ const xs=all.filter(x=>(d[x.id]||"")===G); return `<div class="grp ge ${G&&old[G]&&!(old[G].length===xs.length&&xs.every(x=>old[G].includes(x.id)))?"changed":""}"><h3>${label}<span class="muted" style="font-size:.8rem;font-family:var(--body)">${xs.length} team${xs.length===1?"":"s"}</span></h3>
+    ${xs.length?xs.map(x=>`<div class="ge-row"><span>${avatar(x.name)} <b>${esc(x.name)}</b></span>${sel(x)}</div>`).join(""):`<p class="muted">No teams.</p>`}</div>` };
+  const free=all.filter(x=>!d[x.id]);
+  return `<div class="ge-bar"><b>✏️ Editing groups</b><span class="muted">Pick a new group for any team. Only the groups you change get new fixtures; the others keep theirs (and their results).</span>
+      <div class="row"><button class="btn small" data-gadd="1">➕ Add a group</button><button class="btn small ghost" data-gcancel="1">Cancel</button><button class="btn primary small" data-gsave="${esc(cat||"")}">💾 Save groups</button></div></div>
+    <div class="groups">${Gs.map(G=>box(G,`Group ${G}`)).join("")}${free.length?box("","Not in a group"):""}</div>`;
+}
+// organiser: move teams between groups; only the groups that changed get new fixtures
+async function saveGroupEdit(t, cat){
+  const old=t.groups?.[cat]||{}, draft=S.gDraft||{}, letters=[...new Set([...Object.keys(old), ...Object.values(draft).filter(Boolean)])].sort();
+  const next={}; letters.forEach(G=>next[G]=[]);
+  Object.entries(draft).forEach(([id,G])=>{ if(G) next[G].push(id) });
+  Object.keys(next).forEach(G=>{ if(!next[G].length) delete next[G] });
+  const same=(a,b)=>a.length===b.length && a.every(x=>b.includes(x));
+  const changed=[...new Set([...Object.keys(old), ...Object.keys(next)])].filter(G=>!same(old[G]||[], next[G]||[]));
+  if(!changed.length){ S.grpOn=false; render(); toast("No changes"); return }
+  if(Object.values(next).some(a=>a.length<2) && !confirm("A group has fewer than 2 teams, so it has no matches. Save anyway?")) return;
+  const hit=matchesOf(t,cat).filter(m=>m.stage==="group" && changed.includes(m.group) && m.status!=="scheduled");
+  if(hit.length && !confirm(`Groups ${changed.join(", ")} change. ${hit.length} match${hit.length>1?"es":""} already started or played in them will be deleted. Carry on?`)) return;
+  const gone=matchesOf(t,cat).filter(m=>m.stage==="group" && changed.includes(m.group)), hadPlan=matchesOf(t).some(m=>m.pcourt);
+  for(let i=0;i<gone.length;i+=400){ const b=db.batch(); gone.slice(i,i+400).forEach(m=>b.delete(db.collection("tmatches").doc(m.id))); await b.commit() }
+  S.matches=S.matches.filter(m=>!gone.includes(m));
+  const batch=db.batch(), made=groupFixtures(t, cat, Object.fromEntries(changed.filter(G=>next[G]).map(G=>[G,next[G]])), batch);
+  batch.update(db.collection("tourneys").doc(t.id), {[`groups.${cat}`]:next});
+  await batch.commit().catch(()=>{ toast("Couldn't save the groups"); return });
+  S.grpOn=false; S.gDraft=null; S.gExtra=null; render();
+  toast(`Groups ${changed.join(", ")} updated: ${made} ${isTeam(t)?"ties":"matches"} made${Object.keys(next).length!==Object.keys(old).length?". The number of groups changed: re-make the knockout bracket":""}`);
+  if(hadPlan){ for(let i=0;i<30 && matchesOf(t,cat).filter(m=>m.stage==="group" && changed.includes(m.group)).length<made;i++) await new Promise(r=>setTimeout(r,100));
+    await scheduleAll(S.tourneys.find(x=>x.id===t.id)||t) }
 }
 async function clearMatches(t, cat, stage){
   const ms=matchesOf(t,cat).filter(m=>!stage || m.stage===stage);
@@ -676,8 +715,9 @@ function viewFix(){
   const adv=Number(t.advance)||2;
   return head+`<section class="panel">${tabs}
     <p class="muted" style="margin:0 0 4px">${adv===1?"The group winner goes":`The top ${adv} in each group go`} through${Number(t.koSize)>0||Number(t.wild)?", plus the best of the rest":""}. Green = going through.${new Set(Object.values(t.groups?.[S.cat]||{}).map(x=>x.length)).size>1?` Groups are different sizes: knockout seeds compare teams from different groups on points per ${isTeam(t)?"tie":"match"}.`:""}</p>
-    <div class="groups">${Object.keys(groups||{}).sort().map(G=>{ const gm=ms.filter(m=>m.stage==="group"&&m.group===G), n=isTeam(t)?new Set(gm.map(m=>m.tie)).size:gm.length, played=isTeam(t)?new Set(gm.filter(m=>m.tie&&tieResult(m.tie).complete).map(m=>m.tie)).size:gm.filter(m=>m.status==="done").length;
-      return `<div class="grp"><h3>Group ${G}<span class="muted" style="font-size:.8rem;font-family:var(--body)">${played} of ${n} played</span></h3>${standTable(t,S.cat,G)}
+    ${S.isAdmin?(S.grpOn?groupEditor(t,S.cat):`<div class="row"><button class="btn small" data-grpedit="1">✏️ Edit groups: move teams</button></div>`):""}
+    <div class="groups">${S.grpOn?"":Object.keys(groups||{}).sort().map(G=>{ const gm=ms.filter(m=>m.stage==="group"&&m.group===G), n=isTeam(t)?new Set(gm.map(m=>m.tie)).size:gm.length, played=isTeam(t)?new Set(gm.filter(m=>m.tie&&tieResult(m.tie).complete).map(m=>m.tie)).size:gm.filter(m=>m.status==="done").length;
+      return `<div class="grp"><h3>Group ${G}<span class="muted" style="font-size:.8rem;font-family:var(--body)">${played} of ${n} played${S.isAdmin?` <button class="btn small ghost" data-grpedit="1" title="Edit groups">✏️ Edit</button>`:""}</span></h3>${standTable(t,S.cat,G)}
         <details class="vm" id="vm-${esc(S.cat)}-${G}"><summary>View all ${n} ${isTeam(t)?"ties":"matches"}</summary><div class="mlist">${fixList(t,gm,{edit, plan:true})}</div></details></div>` }).join("")}</div></section>`;
 }
 function viewLive(){
@@ -999,6 +1039,10 @@ document.addEventListener("click", async e=>{
   if(ds.tid){ S.tid=ds.tid; S.newT=false; S.cat=null; ls.set("dsf:tid",S.tid); render(); return }
   if(ds.cat){ S.cat=ds.cat; render(); return }
   if(ds.fxtab){ S.fxTab=ds.fxtab; render(); return }
+  if(ds.gcancel){ S.grpOn=false; S.gDraft=null; S.gExtra=null; render(); return }
+  if(ds.grpedit && S.isAdmin){ const t=T(), c=S.cat; S.grpOn=true; S.gExtra=[]; S.gDraft={}; Object.entries(t?.groups?.[c]||{}).forEach(([G,ids])=>ids.forEach(id=>S.gDraft[id]=G)); render(); document.querySelector(".ge-bar")?.scrollIntoView({behavior:"smooth",block:"center"}); return }
+  if(ds.gadd && S.isAdmin){ const t=T(), have=new Set([...Object.keys(t?.groups?.[S.cat]||{}), ...Object.values(S.gDraft||{}), ...(S.gExtra||[])]); const L=[..."ABCDEFGHIJKLMNOP"].find(x=>!have.has(x)); if(L){ S.gExtra=[...(S.gExtra||[]), L]; render() } return }
+  if(ds.gsave!==undefined && S.isAdmin){ const t=T(); if(t) await saveGroupEdit(t, S.cat); return }
   if(ds.koedit){ S.koEdit = S.koEdit===ds.koedit ? null : ds.koedit; render(); return }
   if(ds.openko){ const d=document.querySelector("details.vm[id$='-ko']"); if(d){ d.open=true; const el=document.querySelector(`[data-medit="${ds.openko}_MD"]`)?.closest(".tie")||d; el.scrollIntoView({behavior:"smooth",block:"center"}); el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"),1600) } return }
   if(ds.mailteam){ const x=teamById(ds.mailteam); if(x) await mailTeam(t,x); return }
@@ -1119,6 +1163,7 @@ function shrinkImage(file, max=1400){
 document.addEventListener("input", e=>{ if(e.target.id!=="ci-find") return; S.ciFilter=e.target.value; const q=S.ciFilter.toLowerCase();
   document.querySelectorAll(".ci-row").forEach(r=>{ r.hidden=!!q && !r.textContent.toLowerCase().includes(q) }) });
 document.addEventListener("change", async e=>{
+  if(e.target.dataset?.gmove && S.isAdmin){ S.gDraft={...(S.gDraft||{}), [e.target.dataset.gmove]:e.target.value}; render(); return }
   if(e.target.dataset?.legs && S.isAdmin){ const t=T(); if(t) await db.collection("tourneys").doc(t.id).set({legs:Number(e.target.value)===2?2:1},{merge:true}).then(()=>toast("Saved. Press Re-make groups to use it."),()=>toast("Couldn't save")); return }
   if(e.target.dataset?.numgroups && S.isAdmin){ const t=T(); if(t) await db.collection("tourneys").doc(t.id).set({numGroups:Number(e.target.value)||0},{merge:true}).then(()=>toast("Saved. Press Re-make groups to use it."),()=>toast("Couldn't save")); return }
   const pc=e.target.dataset?.plcourt, pt=e.target.dataset?.pltime, pn=e.target.dataset?.plnum;

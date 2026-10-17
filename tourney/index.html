@@ -774,6 +774,11 @@ nav.tabs button[aria-selected="true"]::before{animation:tabPop .35s ease}
 .bk-pop{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:16px;background:rgba(36,16,15,.35)}
 .bk-popc{width:min(460px,100%);background:var(--surface);border-radius:20px;padding:18px;display:grid;gap:10px;box-shadow:0 30px 60px -20px rgba(0,0,0,.5)}
 .bk-popc h3{margin:0}.bk-popc .bk-edit{border:1px solid var(--line);border-radius:14px}.bk-popc .bk-er{justify-content:space-between;padding:4px 0}
+.ge-bar{display:grid;gap:6px;padding:12px 14px;margin:6px 0 12px;border-radius:14px;background:color-mix(in srgb,var(--accent) 7%,var(--surface));border:1.5px dashed var(--accent)}
+.ge-bar .row{display:flex;flex-wrap:wrap;gap:8px}
+.grp.ge.changed{outline:2px solid var(--ball);outline-offset:2px}
+.ge-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.ge-row>span{display:flex;align-items:center;gap:8px;min-width:0}.ge-row select{width:auto;padding:5px 8px;border-radius:9px}
 </style>
 
 <div class="wrap">
@@ -795,5 +800,5 @@ nav.tabs button[aria-selected="true"]::before{animation:tabPop .35s ease}
 <div class="toast" id="toast" hidden></div>
 
 <script src="qrcode.js?v=1"></script>
-<script src="app.js?v=202610171600"></script>
+<script src="app.js?v=202610171800"></script>
 </body></html>

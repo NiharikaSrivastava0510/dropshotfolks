@@ -1017,7 +1017,7 @@ function viewOrg(only){
       ${(()=>{ const ts=teamsOf(t,S.cat); if(!ts.length) return `<div class="empty">No teams in this category yet.</div>`;
         return `<div class="row"><span class="muted">${ts.length} teams · ${ts.filter(x=>x.status==="confirmed").length} confirmed</span>${ts.some(x=>x.status!=="confirmed")?`<button class="btn small" data-confirmall="${esc(S.cat)}">Confirm all</button>`:""}</div>
         <div class="otl">${ts.map(x=>teamCard(t,x)).join("")}</div>` })()}
-      ${mailPanel(t)}${recordsPanel()}
+      ${finalPanel(t)}${mailPanel(t)}${recordsPanel()}
       <p class="muted" style="font-size:.82rem">📥 Import takes Google Form responses (.xlsx or .csv): teams already here get their contact details filled in, new teams are added.</p></section>`;
   if(ot==="fixtures") body=`<section class="panel"><h2>1 · Groups</h2>${catBar(t)}
       <p class="muted">${isTeam(t)?`${Number(t.numGroups)>0?`${Number(t.numGroups)} groups`:`Groups of about ${Number(t.groupSize)||3}`}; every tie is men's, women's and two mixed doubles. Top ${Number(t.advance)||2} per group go through.`:`Groups of about ${Number(t.groupSize)||4}; everyone plays everyone in their group. ${Number(t.advance)===1?"The winner":`The top ${Number(t.advance)||2}`} of each group go${Number(t.advance)===1?"es":""} through.`} Only confirmed teams are included. Change group sizes in 📝 Details.</p>
@@ -1271,6 +1271,11 @@ document.addEventListener("click", async e=>{
   if(ds.openko){ const d=document.querySelector("details.vm[id$='-ko']"); if(d){ d.open=true; const el=document.querySelector(`[data-medit="${ds.openko}_MD"]`)?.closest(".tie")||d; el.scrollIntoView({behavior:"smooth",block:"center"}); el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"),1600) } return }
   if(ds.mailteam){ const x=teamById(ds.mailteam); if(x) await mailTeam(t,x); return }
   if(ds.mailall){ await mailAll(t); return }
+  if((ds.finalteam || ds.finalall) && S.isAdmin){ const note=($("#final-note")?.value||"").trim()||FINAL_NOTE; S.finalNote=note; db.collection("tourneys").doc(t.id).set({finalNote:note},{merge:true}).catch(()=>{});
+    const list=ds.finalall?teamsOf(t).filter(x=>x.status==="confirmed"&&S.contacts[x.id]?.email&&S.codes[x.id]?.code):[teamById(ds.finalteam)].filter(Boolean);
+    if(ds.finalall && !confirm(`Email the final details to all ${list.length} teams now?`)) return;
+    S.mailing=true; render(); let n=0; for(const x of list){ toast(`Emailing ${x.name} (${n+1}/${list.length})…`); if(await finalTeam(t,x,note)) n++; else break }
+    S.mailing=false; render(); toast(n===list.length?`Final details emailed to ${n} team${n>1?"s":""} ✓`:`Emailed ${n} of ${list.length}. Check the message and try again.`); return }
   if(ds.mailsave){ const url=($("#mail-url")?.value||"").trim(); if(url && !/^https:\/\/script\.google\.com\/(a\/macros\/[\w.-]+|macros)\/s\/[\w-]+\/exec$/.test(url)){ toast("Paste the Web app URL: it starts https://script.google.com/macros/s/ and ends /exec"); return }
     const saved=await db.collection("config").doc("mail").set({url, updatedAt:nowIso()},{merge:true}).then(()=>{ S.mail=url?{...S.mail, url}:null; render(); return true },()=>{ toast("Couldn't save"); return false });
     if(!saved) return; if(!url){ toast("Automatic emails turned off"); return } toast("Saved ✓ Sending a test email…"); const r=await mailPost({test:true});
@@ -1400,6 +1405,8 @@ function shrinkImage(file, max=1400){
 }
 document.addEventListener("input", e=>{ if(e.target.id!=="ci-find") return; S.ciFilter=e.target.value; const q=S.ciFilter.toLowerCase();
   document.querySelectorAll(".ci-row").forEach(r=>{ r.hidden=!!q && !r.textContent.toLowerCase().includes(q) }) });
+// remember whether the final-details panel is open, so redraws keep it that way
+document.addEventListener("toggle", e=>{ if(e.target.classList?.contains("finalset")) S.finalOpen=e.target.open }, true);
 document.addEventListener("change", async e=>{
   if(e.target.dataset?.kostart && S.isAdmin){ const t=T(), k=Number(e.target.value); if(!t||!k||!t.groups?.[S.cat]) return; await setKo(t, koSizeUpd(t,k)); return }
   if(e.target.dataset?.timerset && S.isAdmin){ const t=T(), k=e.target.dataset.timerset, v=Math.min(1800,Math.max(5,Number(e.target.value)||TIMERS[k][2]));
@@ -1627,6 +1634,58 @@ async function mailAll(t){
   if(S.mailing) return; const todo=teamsOf(t).filter(x=>x.status==="confirmed"&&S.codes[x.id]&&!S.codes[x.id].mailedAt&&S.contacts[x.id]?.email); if(!todo.length){ toast("Nobody left to email"); return }
   S.mailing=true; render(); let n=0; for(const x of todo){ toast(`Emailing ${x.name} (${n+1}/${todo.length})…`); if(await mailTeam(t,x,true)) n++; else break }
   S.mailing=false; render(); toast(n===todo.length?`Emailed ${n} team${n>1?"s":""} ✓`:`Emailed ${n} of ${todo.length}. Check the message above and try again.`);
+}
+/* ---------- final details: each team's own times, courts and opponents, by email (with the QR pass) and WhatsApp ---------- */
+function teamPlan(t, x){
+  const ms=matchesOf(t).filter(m=>!m.bye && m.stage==="group" && (sideTeam(m,"a")===x.id || sideTeam(m,"b")===x.id)), by={};
+  ms.forEach(m=>{ const k=m.tie?tieBase(m.tie):m.id; (by[k]=by[k]||[]).push(m) });
+  return Object.values(by).map(g=>{ const f=g[0], opp=sideTeam(f,"a")===x.id?sideTeam(f,"b"):sideTeam(f,"a"), times=g.map(m=>m.ptime).filter(Boolean).sort(), courts=[...new Set(g.map(m=>m.pcourt).filter(Boolean))];
+    return {opp:tName(opp), group:f.group, start:times[0]||"", end:times[times.length-1]||"", courts, n:g.length, twice:g.some(m=>m.leg)} }).sort((a,b)=>(a.start||"99").localeCompare(b.start||"99"));
+}
+const FINAL_NOTE = "Please arrive at least 20 minutes before your first match and check in at the Tournament Desk with your QR code. Times can move a little on the day: keep an eye on the live page.";
+const planWhen = p => p.start ? `${p.start}${p.end&&p.end!==p.start?`–${p.end}`:""}` : "Time to come";
+function finalMsg(t, x, note){
+  const code=S.codes[x.id]?.code||"", plan=teamPlan(t,x), G=plan[0]?.group;
+  const lines=plan.map(p=>`• ${planWhen(p)}${p.courts.length?` · Court ${p.courts.join(" & ")}`:""} · v ${p.opp}${isTeam(t)?` (${p.n} matches${p.twice?", each discipline twice back to back":""})`:""}`);
+  return `📣 Final details: ${t.name||"Tournament"} · ${fmtDate(t.date)}\n\nHi ${x.p1||"there"}, here's everything for ${x.name}.\n\n${t.venue?`📍 ${t.venue}\n`:""}${G?`👥 Group ${G}\n`:""}\n🏸 Your matches:\n${lines.join("\n")||"Times to come."}\n\n${note||FINAL_NOTE}\n\n${code?`🎟 Team code: ${code}\nLive fixtures, results and your QR pass:\n${passUrl(t,code)}\n\n`:""}See you on court!\nDropshot Folks`;
+}
+function finalHtml(t, x, note){
+  const code=S.codes[x.id]?.code||"", plan=teamPlan(t,x), G=plan[0]?.group, P="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;", td="padding:8px 10px;border-top:1px solid #EAD9BD";
+  const rows=plan.map(p=>`<tr><td style="${td};font-weight:700;white-space:nowrap">${esc(planWhen(p))}</td><td style="${td};white-space:nowrap">${p.courts.length?`Court ${esc(p.courts.join(" & "))}`:""}</td><td style="${td}">v <b>${esc(p.opp)}</b>${isTeam(t)?`<br><span style="color:#715250;font-size:13px">${p.n} matches${p.twice?", each discipline twice back to back":""}</span>`:""}</td></tr>`).join("");
+  return `<div style="background:#F3E9D9;padding:24px 12px;${P}"><div style="max-width:560px;margin:0 auto;background:#FCF7EE;border-radius:18px;overflow:hidden;border:1px solid #DFCDAE">
+  <div style="background:#7A2331;color:#fff;padding:22px 24px;text-align:center"><div style="font-size:22px;font-weight:800;letter-spacing:.04em">DROPSHOT FOLKS</div><div style="color:#EBD9BA;font-size:15px;margin-top:4px">${esc(t.name||"Tournament")} · ${esc(fmtDate(t.date))}</div></div>
+  <div style="padding:24px;color:#24100F;font-size:16px;line-height:1.5">
+    <div style="font-size:22px;font-weight:800;margin-bottom:8px">📣 Final details</div>
+    <p style="margin:0 0 12px">Hi ${esc(x.p1||"there")}, here's everything for <b>${esc(x.name)}</b>.</p>
+    ${t.venue?`<p style="margin:0 0 6px">📍 <b>${esc(t.venue)}</b></p>`:""}${G?`<p style="margin:0 0 12px">👥 Group ${esc(G)}</p>`:""}
+    <div style="font-weight:800;margin:16px 0 6px">🏸 Your matches</div>
+    <table style="width:100%;border-collapse:collapse;font-size:15px;background:#fff">${rows||`<tr><td style="padding:10px">Times to come.</td></tr>`}</table>
+    <p style="margin:16px 0 12px">${esc(note||FINAL_NOTE).replace(/\n/g,"<br>")}</p>
+    ${code?`<div style="text-align:center;margin:18px 0"><a href="${esc(passUrl(t,code))}" style="display:inline-block;background:#7A2331;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px">Live fixtures & results →</a></div>
+    <div style="text-align:center;margin:18px 0 6px"><img src="cid:qr" alt="Team pass QR code" width="240" style="max-width:100%;border-radius:12px;border:1px solid #DFCDAE"></div>
+    <p style="margin:6px 0 0;text-align:center;color:#715250;font-size:14px">Team code <b>${esc(code)}</b> · show this QR at the Tournament Desk</p>`:""}
+    <p style="margin:18px 0 0">See you on court! 🏸<br><b>Dropshot Folks</b></p></div></div></div>`;
+}
+async function finalTeam(t, x, note){
+  const c=S.contacts[x.id]||{}, code=S.codes[x.id]?.code; if(!c.email||!code) return false;
+  const r=await mailPost({to:c.email, cc:[c.email2,c.email3,c.email4].filter(Boolean), subject:`📣 Final details · ${t.name||"Tournament"} · ${x.name}`,
+    text:finalMsg(t,x,note), html:finalHtml(t,x,note), png:await b64(await passPng(t,x,code)), file:`${x.name.replace(/[^\w]+/g,"-")}-team-pass.png`});
+  if(!r.ok){ toast(`Email to ${x.name} didn't send: ${r.error||"unknown error"}`); return false }
+  const at=nowIso(); S.codes[x.id]={...S.codes[x.id], finalAt:at}; await db.collection("tcodes").doc(x.id).set({finalAt:at},{merge:true}).catch(()=>{}); return true;
+}
+function finalPanel(t){
+  const ts=teamsOf(t).filter(x=>x.status==="confirmed"), note=S.finalNote??t.finalNote??FINAL_NOTE, emailable=ts.filter(x=>S.contacts[x.id]?.email&&S.codes[x.id]?.code), sent=ts.filter(x=>S.codes[x.id]?.finalAt).length;
+  const timed=matchesOf(t).some(m=>m.ptime), first=x=>teamPlan(t,x)[0];
+  const group=`📣 ${t.name||"Tournament"} · ${fmtDate(t.date)}\n\n${t.venue?`📍 ${t.venue}\n\n`:""}🏸 First matches:\n${ts.map(x=>{ const p=first(x); return `• ${x.name}: ${p?.start||"tbc"}${p?.courts?.length?` · Court ${p.courts.join(" & ")}`:""}` }).sort().join("\n")}\n\n${note}\n\nEvery team's times, courts and live results: ${location.origin}/tourney/?t=${encodeURIComponent(t.id)}&tab=fix`;
+  return `<details class="mailset finalset ${sent?"on":""}"${S.finalOpen?" open":""}><summary>📣 Final details to every team${sent?` · <b>${sent} emailed ✓</b>`:` <span class="muted">· each team's times, courts and opponents, by email and WhatsApp</span>`}</summary>
+    ${timed?"":`<p class="rulesbar" style="margin:8px 0">Set courts & times first (Fixtures → 🕒 Timings), so each message has the team's times.</p>`}
+    <label class="f">Your message to everyone (goes under each team's times)<textarea id="final-note" rows="3">${esc(note)}</textarea></label>
+    <div class="row">${S.mail?.url?`<button class="btn small primary" data-finalall="1"${S.mailing||!emailable.length?" disabled":""}>📧 Email all ${emailable.length} teams</button>`:`<span class="muted">Set up 📧 Automatic emails below to email everyone in one go.</span>`}
+      <a class="btn small" href="https://wa.me/?text=${encodeURIComponent(group)}" target="_blank" rel="noopener">💬 Message for the WhatsApp group</a><button class="btn small ghost" data-copy="${esc(group)}">Copy group message</button></div>
+    <div class="finlist">${ts.map(x=>{ const c=S.contacts[x.id]||{}, ph=ukPhone(c.phone), msg=finalMsg(t,x,note), p=first(x);
+      return `<div class="finrow"><b>${esc(x.name)}</b><span class="muted">${p?.start?`first match ${esc(p.start)}${p.courts.length?` · Court ${esc(p.courts.join(" & "))}`:""}`:"no times yet"}</span>${S.codes[x.id]?.finalAt?'<span class="chip st-confirmed">📧 Sent</span>':""}
+        <span class="row">${S.mail?.url&&c.email?`<button class="btn small" data-finalteam="${esc(x.id)}"${S.mailing?" disabled":""}>📧 ${S.codes[x.id]?.finalAt?"Again":"Email"}</button>`:""}<a class="btn small" href="https://wa.me/${ph?esc(ph):""}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">💬 WhatsApp</a><button class="btn small ghost" data-copy="${esc(msg)}">Copy</button></span></div>` }).join("")}</div>
+    <p class="muted" style="font-size:.85rem">Each WhatsApp button opens a chat with that team's captain with the message ready: just press send. The email also carries their QR pass.</p></details>`;
 }
 /* ---------- records: every tournament, team, contact, match and table in one spreadsheet (Excel download, or a Google Sheet kept up to date through mailer.gs) ---------- */
 const when = s => s ? new Date(s).toLocaleString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}) : "";

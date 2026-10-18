@@ -329,6 +329,8 @@ function teamStandings(t, cat, group){
     if(!r.complete||!r.winner) return;
     const W=r.winner==="a"?A:B, L=r.winner==="a"?B:A;
     A.p++; B.p++; W.w++; L.l++; const k=[m.a,m.b].sort().join("|")+"|"+W.id; res[k]=(res[k]||0)+1 });
+  // organiser's extra points (t.adj[teamId] = {pts, pf}): added on top of what the matches give
+  Object.values(row).forEach(r=>{ const a=t.adj?.[r.id]; if(a){ r.pts+=Number(a.pts)||0; r.pf+=Number(a.pf)||0; r.adj=!!(Number(a.pts)||Number(a.pf)) } });
   const h2h=(x,y)=>{ const p=[x,y].sort().join("|"), wx=res[p+"|"+x]||0, wy=res[p+"|"+y]||0; return wx>wy?-1:wy>wx?1:0 };
   return Object.values(row).sort((x,y)=>y.pts-x.pts || (y.pf-y.pa)-(x.pf-x.pa) || h2h(x.id,y.id) || y.pf-x.pf || String(tName(x.id)).localeCompare(tName(y.id)));
 }
@@ -623,11 +625,18 @@ function fixList(t, ms, opts={}){
       <div class="tie-h"><span class="${won("a")>won("b")?"win":""}">${sideName(first,"a")}</span><b>${legs2&&!(r1.done||r2?.done)?"vs":sc}</b><span class="${won("b")>won("a")?"win":""}">${sideName(first,"b")}</span></div>
       ${DO.map(row).join("")}</div>` }).join("");
 }
+// organiser: extra group points / points scored for a team, e.g. a correction
+function adjBox(t, cat, G){
+  const ids=t.groups?.[cat]?.[G]||[], open=S.adjOpen===cat+"|"+G;
+  return `<details class="adjbox"${open?" open":""} data-adjg="${esc(cat+"|"+G)}"><summary>± Extra points</summary><p class="muted">Add (or take away, with a minus) group points or points scored for any team. They're added on top of the match results.</p>
+    ${ids.map(id=>{ const a=t.adj?.[id]||{}; return `<div class="adjrow"><b>${esc(tName(id))}</b><label>Group points <input type="number" step="1" data-adjpts="${esc(id)}" value="${Number(a.pts)||0}"></label><label>Points scored (+/−) <input type="number" step="1" data-adjpf="${esc(id)}" value="${Number(a.pf)||0}"></label></div>` }).join("")}
+    <button class="btn small primary" data-adjsave="${esc(cat+"|"+G)}">Save extra points</button></details>`;
+}
 function standTable(t, cat, G){
   const adv=Number(t.advance)||2, rows=standings(t,cat,G);
   if(isTeam(t)) return `<div class="tbl"><table class="stand"><thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>L</th><th>Pts</th><th>+/−</th></tr></thead><tbody>
-    ${rows.map((x,i)=>`<tr class="${i<adv?"qual":""}"><td>${i+1}</td><td>${esc(tName(x.id))}</td><td>${x.p}</td><td>${x.w}</td><td>${x.l}</td><td><b>${x.pts}</b></td><td>${x.pf-x.pa>0?"+":""}${x.pf-x.pa}</td></tr>`).join("")}
-  </tbody></table></div>`;
+    ${rows.map((x,i)=>`<tr class="${i<adv?"qual":""}"><td>${i+1}</td><td>${esc(tName(x.id))}</td><td>${x.p}</td><td>${x.w}</td><td>${x.l}</td><td><b>${x.pts}</b>${x.adj?`<sup class="adjmark" title="Includes extra points added by the organiser">+</sup>`:""}</td><td>${x.pf-x.pa>0?"+":""}${x.pf-x.pa}</td></tr>`).join("")}
+  </tbody></table></div>${S.isAdmin?adjBox(t,cat,G):""}`;
   return `<div class="tbl"><table class="stand"><thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>L</th><th>+/−</th></tr></thead><tbody>
     ${rows.map((x,i)=>`<tr class="${i<adv?"qual":""}"><td>${i+1}</td><td>${esc(tName(x.id))}</td><td>${x.p}</td><td>${x.w}</td><td>${x.l}</td><td>${x.pf-x.pa>0?"+":""}${x.pf-x.pa}</td></tr>`).join("")}
   </tbody></table></div>`;
@@ -1266,6 +1275,9 @@ document.addEventListener("click", async e=>{
     else { const i=keys.indexOf(ds.ck), j=i+Number(ds.cdir); if(i<0||j<0||j>=keys.length) return; [keys[i],keys[j]]=[keys[j],keys[i]] }
     S.coOpen={...(S.coOpen||{}), [c]:true}; await timeCourt(t,c,start,gap,keys);
     toast(ds.cshuffle?`Court ${c} reshuffled ✓ New times from ${start}`:"Moved ✓ Times updated"); return }
+  if(ds.adjsave && S.isAdmin){ const box=t0.closest(".adjbox"), adj={};
+    box.querySelectorAll("[data-adjpts]").forEach(i=>{ const id=i.dataset.adjpts, pf=box.querySelector(`[data-adjpf="${id}"]`); adj[id]={pts:Math.round(Number(i.value)||0), pf:Math.round(Number(pf?.value)||0)} });
+    S.adjOpen=ds.adjsave; await db.collection("tourneys").doc(t.id).set({adj},{merge:true}).then(()=>toast("Extra points saved ✓ Table updated"),()=>toast("Couldn't save")); return }
   if(ds.ctimes && S.isAdmin){ const C=ds.ctimes==="all"?[...document.querySelectorAll("[data-ctimes]")].map(b=>b.dataset.ctimes).filter(x=>x!=="all"):[ds.ctimes]; let gap=10;
     // read every row first: saving one court redraws the page
     const rows=C.map(c=>[Number(c), $(`[data-cstart="${c}"]`)?.value, Math.min(90,Math.max(3,Number($(`[data-cgap="${c}"]`)?.value)||10))]);
@@ -1417,7 +1429,7 @@ function shrinkImage(file, max=1400){
 document.addEventListener("input", e=>{ if(e.target.id!=="ci-find") return; S.ciFilter=e.target.value; const q=S.ciFilter.toLowerCase();
   document.querySelectorAll(".ci-row").forEach(r=>{ r.hidden=!!q && !r.textContent.toLowerCase().includes(q) }) });
 // remember whether the final-details panel is open, so redraws keep it that way
-document.addEventListener("toggle", e=>{ if(e.target.classList?.contains("finalset")) S.finalOpen=e.target.open }, true);
+document.addEventListener("toggle", e=>{ if(e.target.classList?.contains("finalset")) S.finalOpen=e.target.open; if(e.target.classList?.contains("adjbox")) S.adjOpen=e.target.open?e.target.dataset.adjg:null }, true);
 document.addEventListener("change", async e=>{
   if(e.target.dataset?.kostart && S.isAdmin){ const t=T(), k=Number(e.target.value); if(!t||!k||!t.groups?.[S.cat]) return; await setKo(t, koSizeUpd(t,k)); return }
   if(e.target.dataset?.timerset && S.isAdmin){ const t=T(), k=e.target.dataset.timerset, v=Math.min(1800,Math.max(5,Number(e.target.value)||TIMERS[k][2]));

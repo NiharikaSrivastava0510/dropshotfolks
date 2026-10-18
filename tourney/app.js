@@ -770,8 +770,10 @@ function bracket(t, cat){
   const br=ko.find(isBronze), em=S.isAdmin && S.koEdit && ko.find(m=>keyOf(m)===S.koEdit);
   const pop=em ? (()=>{ const lab=isBronze(em)?"Bronze medal match":`${em.roundName}${/^(SF|QF|R\d+)$/.test(shortRound(em.roundName))?` ${em.slot}`:""}`;
     const xs=em.tie?S.matches.filter(x=>x.tie===em.tie).sort((x,y)=>Object.keys(DISC).indexOf(x.disc)-Object.keys(DISC).indexOf(y.disc)):[em];
-    return `<div class="bk-pop" role="dialog" aria-label="Court and time"><div class="bk-popc"><div class="row" style="justify-content:space-between"><h3>✏️ ${esc(lab)}: court & time</h3><button class="btn small ghost" data-koedit="${esc(S.koEdit)}">Done</button></div>
+    return `<div class="bk-pop" role="dialog" aria-label="Court and time"><div class="bk-popc"><div class="row" style="justify-content:space-between"><h3>✏️ ${esc(lab)}: teams, court & time</h3><button class="btn small ghost" data-koedit="${esc(S.koEdit)}">Done</button></div>
       <p class="muted">${esc(sideLabel(em,"a")===tName(sideTeam(em,"a"))?"":"")}${sideTeam(em,"a")?esc(tName(sideTeam(em,"a"))):esc(sideLabel(em,"a"))} v ${sideTeam(em,"b")?esc(tName(sideTeam(em,"b"))):esc(sideLabel(em,"b"))}</p>
+      <div class="bk-teams">${["a","b"].map(sd=>{ const auto=(()=>{ const c={...em, [sd]:null}; const id=sideTeam(c,sd); return id?tName(id):sideLabel(c,sd) })();
+        return `<label class="f">${sd==="a"?"Team 1":"Team 2"}<select data-koteam="${sd}" data-kotie="${esc(em.tie||em.id)}"><option value="">Automatic: ${esc(auto)}</option>${teamsOf(t,em.cat).filter(x=>x.status==="confirmed").map(x=>`<option value="${esc(x.id)}" ${em[sd]===x.id?"selected":""}>${esc(x.name)}</option>`).join("")}</select></label>` }).join("")}</div>
       <div class="bk-edit">${xs.map(x=>`<div class="bk-er">${x.disc?`<span>${esc(DISC[x.disc])}</span>`:""}${planPick(t,x)}</div>`).join("")}</div><p class="muted" style="font-size:.8rem">Changes save straight away and players see them at once.</p></div></div>` })() : "";
   return `${pop}<div class="bk">${cols.join("")}</div>${br?`<div class="bk-bronze"><h4 class="bk-h">🥉 Bronze medal match</h4>${card(br)}</div>`:""}`;
 }
@@ -1431,6 +1433,8 @@ document.addEventListener("input", e=>{ if(e.target.id!=="ci-find") return; S.ci
 // remember whether the final-details panel is open, so redraws keep it that way
 document.addEventListener("toggle", e=>{ if(e.target.classList?.contains("finalset")) S.finalOpen=e.target.open; if(e.target.classList?.contains("adjbox")) S.adjOpen=e.target.open?e.target.dataset.adjg:null }, true);
 document.addEventListener("change", async e=>{
+  if(e.target.dataset?.koteam && S.isAdmin){ const sd=e.target.dataset.koteam, key=e.target.dataset.kotie, v=e.target.value||null, xs=S.matches.filter(m=>m.tie===key||m.id===key);
+    const b=db.batch(); xs.forEach(m=>b.update(db.collection("tmatches").doc(m.id),{[sd]:v, updatedAt:nowIso()})); await b.commit().then(()=>toast(v?`${tName(v)} put in ✓`:"Back to automatic ✓"),()=>toast("Couldn't save")); return }
   if(e.target.dataset?.kostart && S.isAdmin){ const t=T(), k=Number(e.target.value); if(!t||!k||!t.groups?.[S.cat]) return; await setKo(t, koSizeUpd(t,k)); return }
   if(e.target.dataset?.timerset && S.isAdmin){ const t=T(), k=e.target.dataset.timerset, v=Math.min(1800,Math.max(5,Number(e.target.value)||TIMERS[k][2]));
     if(t) await db.collection("tourneys").doc(t.id).set({timers:{...(t.timers||{}), [k]:v}},{merge:true}).then(()=>toast(`${TIMERS[k][1]}: ${fmtSecs(v)}`),()=>toast("Couldn't save")); return }

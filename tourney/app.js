@@ -99,8 +99,13 @@ function formatForm(t){
       <label class="row" style="gap:6px;align-self:end"><input type="checkbox" id="fe-bronze" style="width:auto" ${bronzeOn(t)?"checked":""}> 🥉 3rd-place match</label></div></div>
     <div class="fv-box"><h4>🏸 Scoring</h4>${row("🔁 Round robin","",{pointsTo:t.pointsTo,cap:t.cap,bestOf:t.bestOf})}${row("⚔️ Quarter & semi-finals","k",t.stageRules?.ko||{})}${row("🏆 Final & 3rd place","f",t.stageRules?.final||{})}</div>
     <div class="fv-box"><h4>📝 Good to know</h4><textarea id="fe-format" rows="4" placeholder="e.g. 2 minutes warm-up, 20 seconds between games…">${esc(t.format||"")}</textarea></div>
+    <div class="fv-box"><h4>➕ Your own sections</h4><p class="muted">Add anything players should know: rules, what to bring, timings, parking, prizes… Each section shows as its own box in the game format.</p>
+      ${(S.secDraft||[]).map((x,i)=>`<div class="secrow"><div class="row"><input class="sec-t" data-sec="${i}" maxlength="60" placeholder="Title, e.g. 🎒 What to bring" value="${esc(x.title||"")}"><button class="btn small ghost danger" data-secdel="${i}" aria-label="Delete section">🗑</button>${i?`<button class="btn small ghost" data-secup="${i}" aria-label="Move up">↑</button>`:""}</div><textarea class="sec-x" data-sec="${i}" rows="3" maxlength="2000" placeholder="Write the details here. New lines are kept.">${esc(x.text||"")}</textarea></div>`).join("")}
+      <button class="btn small" data-secadd="1">➕ Add a section</button></div>
     <div class="row"><button class="btn primary" data-savefmt="1">💾 Save format & scoring</button><button class="btn small ghost" data-editfmt="0">Cancel</button></div></div>`;
 }
+// the organiser's own format sections, as typed in the edit form
+const readSecs = () => [...document.querySelectorAll(".sec-t")].map(i=>({title:i.value.trim().slice(0,60), text:(document.querySelector(`.sec-x[data-sec="${i.dataset.sec}"]`)?.value||"").trim().slice(0,2000)}));
 // the game format as a picture: numbers, how a tie works, the route to the final, points and scoring
 function formatVisual(t){
   const g=glance(t), r=rules(t), ko=rules(t,{stage:"ko"}), fin=rules(t,{stage:"ko",roundName:"Final"}), adv=Number(t.advance)||2, wild=Number(t.koSize)>0||Number(t.wild)>0;
@@ -120,6 +125,7 @@ function formatVisual(t){
       :`<div class="fv-box"><h4>📊 Group places</h4><p>Most wins first. Level → head-to-head, then points difference, then points scored.</p></div>`}
     <div class="fv-box"><h4>🏸 Scoring</h4><div class="fv-score"><div><span>🔁 Round robin (groups)</span><b>${rl(r)}</b></div><div><span>⚔️ Knockouts${ruleTxt(fin)!==ruleTxt(ko)?" (quarter & semi-finals)":""}</span><b>${rl(ko)}</b></div>${ruleTxt(fin)!==ruleTxt(ko)?`<div><span>🏆 Final${bronzeOn(t)?" & 3rd place":""}</span><b>${rl(fin)}</b></div>`:""}</div>${two?`<p class="muted">2 games: both games are always played. At 1–1, the pair with more total points wins the match.</p>`:""}</div>
     ${t.format?`<div class="fv-box"><h4>📝 Good to know</h4>${richTxt(t.format)}</div>`:""}
+    ${(t.sections||[]).filter(x=>x&&(x.title||x.text)).map(x=>`<div class="fv-box"><h4>${esc(x.title||"More information")}</h4>${richTxt(x.text||"")}</div>`).join("")}
   </div>`;
 }
 const prizeCards = t => { const p=[t.prize1,t.prize2,t.prize3], ed=S.isAdmin;
@@ -815,7 +821,7 @@ function viewReg(){
       ${mapQ?`<div class="row" style="align-items:flex-start"><a class="btn small" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQ)}" target="_blank" rel="noopener">📍 Directions</a><span style="font-size:.9rem">${esc(mapQ)}${t.directions?`<br><span class="muted">${esc(t.directions).replace(/\n/g,"<br>")}</span>`:""}</span></div>`:""}
     </div></section>
     <section class="panel">${S.isAdmin?`<button class="btn small editbtn" data-editfmt="${S.editFmt?0:1}">${S.editFmt?"Close":"✏️ Edit format & scoring"}</button>`:""}<h2>📋 Game format</h2>${S.isAdmin&&S.editFmt?formatForm(t):formatVisual(t)}</section>
-    <section class="panel"><h2>Register a team</h2>
+    <section class="panel">${S.isAdmin?`<button class="btn small editbtn ${t.regOpen?"ghost":"primary"}" data-regopen="${t.regOpen?0:1}">${t.regOpen?"🔒 Close registration":"🔓 Open registration"}</button>`:""}<h2>Register a team</h2>
     ${t.regOpen ? `<form id="regForm" class="regform" novalidate>
         <fieldset><legend>🏸 Team</legend><div class="grid2">
           <label class="f">Category *<select id="rg-cat">${cats(t).map(c=>`<option value="${esc(c.id)}" ${full(c.id)?"disabled":""}>${esc(c.name)}${full(c.id)?" (full)":""}</option>`).join("")}</select></label>
@@ -1247,9 +1253,12 @@ document.addEventListener("click", async e=>{
   if(ds.scanx){ S.scan=null; history.replaceState(null,"",location.pathname+(T()?`?t=${T().id}`:"")); render(); return }
   if(ds.fxcode){ const p=await useCode($("#fx-code")?.value); if(p){ render(); toast(`Welcome, ${teamById(p.team)?.name||p.name}! 🏸`) } return }
   if(ds.fxout){ ls.set(`dsf:fx:${T()?.id}`,null); render(); return }
-  if(ds.editfmt!=null){ S.editFmt=ds.editfmt==="1"; render(); return }
+  if(ds.editfmt!=null){ S.editFmt=ds.editfmt==="1"; if(S.editFmt) S.secDraft=(T()?.sections||[]).map(x=>({...x})); render(); return }
+  if(ds.secadd!=null || ds.secdel!=null || ds.secup!=null){ S.secDraft=readSecs(); if(ds.secadd!=null) S.secDraft.push({title:"", text:""});
+    if(ds.secdel!=null) S.secDraft.splice(Number(ds.secdel),1); if(ds.secup!=null){ const i=Number(ds.secup); [S.secDraft[i-1],S.secDraft[i]]=[S.secDraft[i],S.secDraft[i-1]] } render(); return }
+  if(ds.regopen!=null && S.isAdmin){ const on=ds.regopen==="1"; await db.collection("tourneys").doc(t.id).set({regOpen:on},{merge:true}).then(()=>toast(on?"Registration is open ✓":"Registration closed"),()=>toast("Couldn't save")); return }
   if(ds.savefmt && S.isAdmin){ const g=id=>$(`#fe-${id}`), n=(id,min,max,d)=>Math.min(max,Math.max(min,Number(g(id)?.value)||d));
-    const data={groupSize:n("gsize",3,8,3), advance:n("adv",1,4,2), koSize:Math.min(64,Math.max(0,Number(g("kosize").value)||0)), deuce:g("deuce").value!=="0", bronze:g("bronze").checked,
+    const data={sections:readSecs().filter(x=>x.title||x.text), groupSize:n("gsize",3,8,3), advance:n("adv",1,4,2), koSize:Math.min(64,Math.max(0,Number(g("kosize").value)||0)), deuce:g("deuce").value!=="0", bronze:g("bronze").checked,
       pointsTo:Number(g("to").value)||21, cap:Math.min(40,Math.max(0,Number(g("cap").value)||0)), bestOf:Number(g("bo").value)||1, format:g("format").value.trim().slice(0,2000),
       stageRules:Object.fromEntries([["ko","k"],["final","f"]].map(([key,k])=>[key,{pointsTo:Number(g(k+"to").value)||0, cap:Math.min(40,Math.max(0,Number(g(k+"cap").value)||0)), bestOf:Number(g(k+"bo").value)||0}]))};
     await db.collection("tourneys").doc(T().id).set(data,{merge:true}).then(()=>{ S.editFmt=false; render(); toast("Format & scoring saved ✓") },()=>toast("Couldn't save")); return }

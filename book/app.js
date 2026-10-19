@@ -177,7 +177,7 @@ const S = {
   gq: {}, guests: [],               // guest questions and guests waiting to be booked
   liveSess: null, result: null, liveKey: "",
   picks: new Set(),                 // sessions ticked but not booked yet
-  qpos: {}, qfb: {}, fx: ls.get("dsf:fx", true),                // level quiz: card on screen and last answer feedback, per quiz
+  qpos: {}, qfb: {},                // level quiz: card on screen and last answer feedback, per quiz
   rotEdit: {}, pedit: null,         // organiser: game being edited per court, player being edited
   kiosk: ls.get("dsf:kiosk", null), // session this device has open in host view
   unlock: null, secrets: {}         // this device's unlock; organiser: session codes
@@ -509,8 +509,7 @@ function quizFields(prefix, ans){
   const n=QUIZ.length; let i=S.qpos[prefix];
   if(i==null){ i=QUIZ.findIndex((_,k)=>ans[k]==null); if(i<0) i=n }
   const sc=qScore(ans), maxPow=QUIZ.filter(x=>x.correct==null).length*4;
-  const board=`<div class="qboard"><span class="qside">🙋 <small>You</small> <b>${sc.you}</b></span><span class="qpow" title="Warm-up power">⚡ <i><em style="width:${Math.round(sc.power/maxPow*100)}%"></em></i></span><span class="qside"><b>${sc.coach}</b> <small>Coach</small> 🧢</span>
-    <button type="button" class="qsnd" data-qfx="1" aria-label="${S.fx?"Mute the umpire":"Turn on the umpire voice"}">${S.fx?"🔊":"🔇"}</button></div>`;
+  const board=`<div class="qboard"><span class="qside">🙋 <small>You</small> <b>${sc.you}</b></span><span class="qpow" title="Warm-up power">⚡ <i><em style="width:${Math.round(sc.power/maxPow*100)}%"></em></i></span><span class="qside"><b>${sc.coach}</b> <small>Coach</small> 🧢</span></div>`;
   const bar=`<div class="qbar" aria-hidden="true">${QUIZ.map((_,k)=>`<i class="${ans[k]!=null?"done":""} ${k===i?"on":""}"></i>`).join("")}</div>`;
   const f=S.qfb[prefix];
   const fb = f && f.i===i-1 ? (f.self ? `<div class="qfb pow">🔥 Warm-up done: +${f.v} power</div>`
@@ -539,42 +538,6 @@ function quizFields(prefix, ans){
     </fieldset>
     ${a!=null||x.multi?`<div class="row qnav"><button type="button" class="btn small primary" data-qnext="${prefix}">${i===n-1?"🏆 See my level":"Next rally →"}</button></div>`:""}
   </div>`;
-}
-/* umpire voice and racket sounds (Web Speech and Web Audio, nothing to download) */
-let audioCtx=null;
-function sfx(kind){
-  if(!S.fx) return;
-  try{
-    audioCtx ||= new (window.AudioContext||window.webkitAudioContext)();
-    const t=audioCtx.currentTime, tone=(f,at,d,type="sine",vol=.18)=>{ const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.type=type; o.frequency.value=f; g.gain.setValueAtTime(vol,t+at); g.gain.exponentialRampToValueAtTime(.001,t+at+d); o.connect(g).connect(audioCtx.destination); o.start(t+at); o.stop(t+at+d) };
-    if(kind==="hit"){ const len=.07, buf=audioCtx.createBuffer(1,audioCtx.sampleRate*len,audioCtx.sampleRate), d=buf.getChannelData(0);
-      for(let k=0;k<d.length;k++) d[k]=(Math.random()*2-1)*Math.pow(1-k/d.length,3);
-      const src=audioCtx.createBufferSource(), bp=audioCtx.createBiquadFilter(), g=audioCtx.createGain(); bp.type="bandpass"; bp.frequency.value=2200; g.gain.value=.9;
-      src.buffer=buf; src.connect(bp).connect(g).connect(audioCtx.destination); src.start(t) }
-    if(kind==="win"){ tone(660,.08,.18); tone(880,.22,.3) }
-    if(kind==="lose"){ tone(330,.08,.2,"triangle"); tone(220,.24,.3,"triangle") }
-    if(kind==="power"){ tone(520,.06,.12,"triangle",.12); tone(700,.16,.16,"triangle",.12) }
-    if(kind==="match"){ [523,659,784,1046].forEach((f,k)=>tone(f,.1+k*.14,.35)) }
-  }catch{}
-}
-// a warm female voice: the best match the phone or browser has
-const FEMALE = /female|woman|libby|sonia|maisie|hazel|susan|serena|kate|stephanie|martha|fiona|moira|tessa|karen|samantha|victoria|zira|aria|jenny|emma|amy|ava|allison|google uk english female/i;
-function umpireVoice(){
-  const vs=("speechSynthesis" in window) ? speechSynthesis.getVoices() : [];
-  const en=vs.filter(v=>/^en/i.test(v.lang)), gb=en.filter(v=>/GB/i.test(v.lang));
-  return gb.find(v=>FEMALE.test(v.name)) || en.find(v=>FEMALE.test(v.name)) || gb[0] || en[0] || null;
-}
-if("speechSynthesis" in window) try{ speechSynthesis.getVoices(); speechSynthesis.addEventListener?.("voiceschanged", ()=>speechSynthesis.getVoices()) }catch{}
-function say(text){
-  if(!S.fx || !("speechSynthesis" in window)) return;
-  try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text), v=umpireVoice();
-    u.lang=v?.lang||"en-GB"; if(v) u.voice=v; u.rate=1; u.pitch=1.2; speechSynthesis.speak(u) }catch{}
-}
-function quizCall(prefix, ans){
-  let i=S.qpos[prefix]; if(i==null){ i=QUIZ.findIndex((_,k)=>ans[k]==null); if(i<0) i=QUIZ.length }
-  const f=S.qfb[prefix], lead = f && f.i===i-1 ? (f.self ? "" : f.ok ? "Point to you! " : "Out! Point to Coach. ") : "";
-  if(i>=QUIZ.length){ const l=lvByCode(levelFrom(ans)||""); sfx("match"); say(`${lead}Game, set and match! ${l?`${prefix==="gq"?"They're":"You're"} ${l.name}.`:""}`); return }
-  say(lead + (i===0 ? "Love all, play! " : "") + QUIZ[i].q);
 }
 function levelVerdict(lv, who="you"){
   if(!lv) return `<p class="muted">Answer all the questions to see ${who==="you"?"your":"their"} court.</p>`;
@@ -1254,7 +1217,7 @@ async function bookSelected(){
   }
   S.guests=[]; S.gq={}; S.picks.clear();
   S.result={ok, title: ok?"You're booked in. Pay to confirm your places.":"Booking done, with some notes:", lines};
-  if(ok){ burst(); sfx("match") }
+  if(ok) burst()
   render(); window.scrollTo({top:0,behavior:"smooth"});
 }
 async function setBooking(id,patch,text,msg="Updated"){
@@ -1385,12 +1348,10 @@ document.addEventListener("click", async e=>{
   if(ds.qnext||ds.qback||ds.qredo){ const k=ds.qnext||ds.qback||ds.qredo, ans=k==="rq"?S.reg.ans:k==="gq"?S.gq:S.quiz;
     let i=S.qpos[k]; if(i==null){ i=QUIZ.findIndex((_,j)=>ans[j]==null); if(i<0) i=QUIZ.length }
     S.qfb[k]=null;
-    if(ds.qnext && QUIZ[i]?.multi){ ans[i] ??= 0; S.qfb[k]={i, self:true, v:qval(QUIZ[i],ans[i])}; sfx("power") }
+    if(ds.qnext && QUIZ[i]?.multi){ ans[i] ??= 0; S.qfb[k]={i, self:true, v:qval(QUIZ[i],ans[i])} }
     if(ds.qredo){ if(k==="rq") S.reg.ans={}; else if(k==="gq") S.gq={}; else S.quiz={}; S.qpos[k]=0 }
     else S.qpos[k] = ds.qnext ? Math.min(QUIZ.length,i+1) : Math.max(0,i-1);
-    render(); sfx("hit"); quizCall(k, ds.qredo ? {} : ans); return }
-  if(ds.qfx){ S.fx=!S.fx; ls.set("dsf:fx",S.fx); if(!S.fx) try{ speechSynthesis.cancel() }catch{}; render();
-    if(S.fx){ const k=t.closest("#quiz")?"q":t.closest("#regForm")?"rq":"gq"; quizCall(k, k==="rq"?S.reg.ans:k==="gq"?S.gq:S.quiz) } return }
+    render(); return }
   if(ds.alertok){ $("#alert").hidden=true; return }
   if(ds.kopen){ const code=($("#k-code")?.value||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,"");
     if(code.length<4){ toast("Enter the session code"); return }
@@ -1440,12 +1401,11 @@ document.addEventListener("change", async e=>{
   const t=e.target;
   const m=/^(rq|gq|q)(\d+)$/.exec(t.name||"");
   if(m && QUIZ[Number(m[2])]?.multi){ const target = m[1]==="rq"?S.reg.ans : m[1]==="gq"?S.gq : S.quiz, qi=Number(m[2]);
-    target[qi]=(Number(target[qi])||0) ^ (1<<Number(t.value)); S.qpos[m[1]]=qi; render(); sfx("hit"); return }
+    target[qi]=(Number(target[qi])||0) ^ (1<<Number(t.value)); S.qpos[m[1]]=qi; render(); return }
   if(m){ const target = m[1]==="rq"?S.reg.ans : m[1]==="gq"?S.gq : S.quiz, qi=Number(m[2]), x=QUIZ[qi]; target[qi]=Number(t.value);
     // swipe on to the next card; quick-quiz answers show why on the next card
     const ok = target[qi]===x.correct;
-    S.qfb[m[1]] = x.correct!=null ? {i:qi, ok} : {i:qi, self:true, v:target[qi]}; S.qpos[m[1]]=qi+1; render();
-    sfx("hit"); setTimeout(()=>sfx(x.correct==null?"power":ok?"win":"lose"),120); quizCall(m[1], target); return }
+    S.qfb[m[1]] = x.correct!=null ? {i:qi, ok} : {i:qi, self:true, v:target[qi]}; S.qpos[m[1]]=qi+1; render(); return }
   if(t.id==="r-photo" || t.id==="photoChange"){
     const file=t.files?.[0]; if(!file) return;
     try{ const img=await toThumb(file);

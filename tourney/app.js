@@ -165,6 +165,14 @@ function formatTxt(t){
     `Group places are decided by wins, then head-to-head, then points difference, then points scored.`];
   return lines.join("\n")+(t.format?`\n\n${t.format}`:"");
 }
+const catChk = (id, nm, on) => `<label class="row" style="gap:6px"><input type="checkbox" style="width:auto" id="to-cat-${esc(id)}" data-catname="${esc(nm)}" ${on?"checked":""}> ${esc(nm)}</label>`;
+// early-bird discount: t.discount = {amount, until}; shows by itself up to and including the 'until' date
+const discOn = t => Number(t?.discount?.amount)>0 && !!t.discount.until && todayStr()<=t.discount.until;
+const money = n => `£${Number.isInteger(n)?n:n.toFixed(2)}`;
+function priceHtml(t){ const e=esc(t.entry||""); if(!discOn(t)) return e; const a=Number(t.discount.amount);
+  const m=String(t.entry).match(/£\s?(\d+(?:\.\d{1,2})?)/); if(!m) return e;
+  return e.replace(esc(m[0]), `<s class="was">${esc(m[0])}</s> <b class="now">${money(Math.max(0,Number(m[1])-a))}</b>`) }
+const discBanner = t => discOn(t) ? `<p class="discban">🎉 <b>Early-bird: ${money(Number(t.discount.amount))} off</b> if you register by ${esc(new Date(t.discount.until+"T12:00:00").toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"long"}))}</p>` : "";
 const CAT_PRESETS = [["MD","Men's doubles"],["WD","Women's doubles"],["XD","Mixed doubles"]];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -845,7 +853,7 @@ function viewReg(){
       <div class="big">${esc(t.name||"Tournament")}</div>
       ${t.info?`<p>${esc(t.info).replace(/\n/g,"<br>")}</p>`:""}
       <div class="row">${cats(t).map(c=>`<span class="chip st-paid">${esc(c.name)} · ${teamsOf(t,c.id).length}${Number(t.maxTeams)?`/${Number(t.maxTeams)}`:""} teams</span>`).join("")}</div>
-      ${t.entry?`<p class="entry"><b>Entry:</b> ${esc(t.entry)}</p>`:""}${prizeCards(t)}
+      ${t.entry?`<p class="entry"><b>Entry:</b> ${priceHtml(t)}</p>`:""}${discBanner(t)}${prizeCards(t)}
       ${glanceLine(t)}
       ${mapQ?`<div class="row" style="align-items:flex-start"><a class="btn small" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQ)}" target="_blank" rel="noopener">📍 Directions</a><span style="font-size:.9rem">${esc(mapQ)}${t.directions?`<br><span class="muted">${esc(t.directions).replace(/\n/g,"<br>")}</span>`:""}</span></div>`:""}
     </div></section>
@@ -866,7 +874,7 @@ function viewReg(){
           <label class="f">Phone *<input id="rg-emphone" type="tel" maxlength="30" required placeholder="07…"></label>
           <label class="f" style="grid-column:1/-1">Anything we should know? (optional)<textarea id="rg-notes" rows="2" maxlength="300" placeholder="Injuries, medical info, arrival time…"></textarea></label></div></fieldset>
         ${(()=>{ const bk=bankOf(t), row=(l,v)=>v?`<div class="bankrow"><span>${l}</span><b>${esc(v)}</b><button type="button" class="btn small ghost" data-copy="${esc(v)}">Copy</button></div>`:"";
-          return `<fieldset class="feebox"><legend>💷 Entry fee${t.entry?` · ${esc(t.entry)}`:""}</legend>${bk?`
+          return `<fieldset class="feebox"><legend>💷 Entry fee${t.entry?` · ${priceHtml(t)}`:""}</legend>${discBanner(t)}${bk?`
           <p>Pay by bank transfer <b>before you register</b>. Use your <b>team name</b> as the reference.</p>
           <div class="bank">${row("Account name",bk.name)}${row("Sort code",bk.sort)}${row("Account number",bk.acct)}${bk.note?`<p class="muted" style="margin:4px 0 0">${esc(bk.note)}</p>`:""}</div>
           <label class="f">Name on the bank payment *<input id="rg-payname" maxlength="60" placeholder="Whose account it came from"></label>`:`<p>The organiser will message you about payment after you register.</p>`}</fieldset>` })()}
@@ -1016,6 +1024,7 @@ function viewOrg(only){
   const form=x=>`<div class="ogrp"><h3>📝 The basics</h3><div class="grid2">
       ${f("name","Tournament name",x?.name)}${f("date","Date",x?.date,"date")}${f("venue","Venue",x?.venue)}${f("address","Address (for the map)",x?.address,"text",'placeholder="e.g. Lodge Ave, Dagenham RM8 2JR"')}
       ${f("entry","Entry fee",x?.entry,"text",'placeholder="e.g. £25 per player"')}
+      ${f("disc","Early-bird discount (£ off, 0 = none)",x?.discount?.amount??0,"number",'min="0" max="500" step="0.5"')}${f("discuntil","Discount until (shows automatically till this date)",x?.discount?.until||"","date")}
       <div style="grid-column:1/-1"><span class="lbl">Prizes</span><div class="grid2" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">${f("p1","🥇 Gold · winners",x?.prize1??(x?.prize2||x?.prize3?"":x?.prizes),"text",'placeholder="e.g. Trophy + £200"')}${f("p2","🥈 Silver · runners-up",x?.prize2,"text",'placeholder="e.g. Medals + £150"')}${f("p3","🥉 Bronze · third place",x?.prize3,"text",'placeholder="e.g. Medals + £100"')}</div></div>
       ${ta("info","About (shown at the top of the Register tab)",x?.info,4)}
       ${ta("dirs","Directions & travel tips",x?.directions,2,"Nearest station, buses, parking, which entrance…")}
@@ -1035,7 +1044,9 @@ function viewOrg(only){
       <label class="f">Deuce<select id="to-deuce"><option value="1" ${x?.deuce!==false?"selected":""}>On: win by 2</option><option value="0" ${x?.deuce===false?"selected":""}>Off: first to the points wins</option></select></label>
       <label class="f">Games per match<select id="to-bo">${[[1,"1 game"],[2,"2 games (total points if 1–1)"],[3,"Best of 3"]].map(([n,l])=>`<option value="${n}" ${Number(x?.bestOf||1)===n?"selected":""}>${l}</option>`).join("")}</select></label>
       ${f("courts","Courts",x?.courts??4,"number",'min="1" max="12"')}
-      <div style="grid-column:1/-1"><span class="lbl">Categories (doubles pairs only)</span><div class="row">${CAT_PRESETS.map(([id,nm])=>`<label class="row" style="gap:6px"><input type="checkbox" style="width:auto" id="to-cat-${id}" ${!x||x.catIds?.includes(id)?"checked":""}> ${nm}</label>`).join("")}</div></div></div>
+      <div style="grid-column:1/-1"><span class="lbl">Categories (doubles pairs only)</span><div class="row catrow">${[...CAT_PRESETS, ...cats(x).filter(c=>!CAT_PRESETS.some(([id])=>id===c.id)&&c.id!=="TC").map(c=>[c.id,c.name])].map(([id,nm])=>catChk(id,nm,!x||x.catIds?.includes(id))).join("")}</div>
+        <div class="row" style="margin-top:6px"><input id="to-newcat" maxlength="40" placeholder="Add your own, e.g. Over-40s doubles" style="flex:1;min-width:200px"><button type="button" class="btn small" data-catadd="1">➕ Add category</button></div>
+        <p class="muted" style="font-size:.8rem;margin:4px 0 0">Untick a category to remove it.</p></div></div>
       <details class="more"><summary>More options: knockout scoring, deuce limits, 3rd place, extra format notes</summary><div class="grid2" style="margin-top:10px">
         ${f("cap","Deuce max points (0 = standard)",x?.cap??0,"number",'min="0" max="40"')}
         ${f("kosize","Knockout size, filled with best runners-up (0 = off)",x?.koSize??0,"number",'min="0" max="64"')}
@@ -1400,7 +1411,10 @@ document.addEventListener("click", async e=>{
   // organiser
   if(!S.isAdmin) return;
   if(ds.noposter){ S.posterDraft=""; render(); return }
-  if(ds.tsave){ const g=id=>$(`#to-${id}`), team=g("mode").value==="team", catIds=team?["TC"]:CAT_PRESETS.filter(([id])=>g(`cat-${id}`)?.checked).map(([id])=>id);
+  if(ds.catadd!=null){ const inp=$("#to-newcat"), nm=(inp?.value||"").trim().slice(0,40); if(!nm){ toast("Type the category name first"); return }
+    const row=$(".catrow"); if([...row.querySelectorAll("[data-catname]")].some(c=>c.dataset.catname.toLowerCase()===nm.toLowerCase())){ toast("That category is already there"); return }
+    row.insertAdjacentHTML("beforeend", catChk("C"+Date.now().toString(36).slice(-5).toUpperCase(), nm, true)); inp.value=""; toast(`${nm} added. Press Save changes to keep it.`); return }
+  if(ds.tsave){ const g=id=>$(`#to-${id}`), team=g("mode").value==="team", picked=[...document.querySelectorAll(".catrow input[data-catname]:checked")].map(i=>({id:i.id.replace(/^to-cat-/,""), name:i.dataset.catname})), catIds=team?["TC"]:picked.map(c=>c.id);
     if(!g("name").value.trim()){ toast("Give the tournament a name"); return } if(!catIds.length){ toast("Pick at least one category"); return }
     const data={name:g("name").value.trim(), date:g("date").value, venue:g("venue").value.trim(), entry:g("entry").value.trim(), info:g("info").value.trim(), prize1:g("p1").value.trim().slice(0,200), prize2:g("p2").value.trim().slice(0,200), prize3:g("p3").value.trim().slice(0,200),
       maxTeams:Number(g("max").value)||0, courts:Math.min(12,Math.max(1,Number(g("courts").value)||4)), groupSize:Math.min(8,Math.max(3,Number(g("gsize").value)||4)), advance:Math.min(4,Math.max(1,Number(g("adv").value)||2)),
@@ -1410,7 +1424,8 @@ document.addEventListener("click", async e=>{
       koSize:Math.min(64,Math.max(0,Number(g("kosize").value)||0)),
       stageRules:Object.fromEntries([["ko","k"],["final","f"]].map(([key,k])=>[key,{pointsTo:Number(g(k+"to").value)||0, cap:Math.min(40,Math.max(0,Number(g(k+"cap").value)||0)), bestOf:Number(g(k+"bo").value)||0}])),
       mode:team?"team":"pairs", cap:Math.min(40,Math.max(0,Number(g("cap").value)||0)), wild:Math.min(8,Math.max(0,Number(g("wild").value)||0)), bronze:g("bronze").checked,
-      catIds, cats:team?[{id:"TC",name:"Team Cup"}]:CAT_PRESETS.filter(([id])=>catIds.includes(id)).map(([id,name])=>({id,name}))};
+      catIds, cats:team?[{id:"TC",name:"Team Cup"}]:picked,
+      discount:{amount:Math.max(0,Math.round((Number(g("disc").value)||0)*100)/100), until:g("discuntil").value||""}};
     const id = ds.tsave==="new" ? `t${(data.date||nowIso().slice(0,10)).replace(/-/g,"")}-${Date.now().toString(36).slice(-4)}` : ds.tsave;
     await db.collection("tourneys").doc(id).set(data,{merge:true}).then(()=>{ S.tid=id; S.newT=false; S.editDetails=false; ls.set("dsf:tid",id); S.posterDraft=undefined; render(); scrollTo({top:0,behavior:"smooth"}); toast("Tournament saved ✓") },()=>toast("Couldn't save")); return }
   if(ds.deskcode){ const desk=newCode(); await db.collection("tsecrets").doc(t.id).set({desk},{merge:true}).then(()=>{ S.deskCode=desk; render(); toast(`Check-in code ${desk}`) },()=>toast("Couldn't save the code")); return }

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dropshot Folks Tournaments</title>
+<!-- Short link: dropshotfolks.co.uk/DSFtournaments shows the tournament app right here (November Net Play, Register tab),
+     so the short address stays in the bar. It loads the live /tourney/ page each time, so it never goes out of date. -->
+<script>(function(){
+  var go="/tourney/?t=t20261121&tab=reg&short=DSFtournaments";
+  try{ var q=new URLSearchParams(location.search); if(q.has("v")){ q.delete("v"); history.replaceState(null,"",location.pathname+(q.toString()?"?"+q:"")+location.hash) } }catch(e){}
+  try{ if(!location.search){ localStorage.setItem("dsf:tid",JSON.stringify("t20261121")); localStorage.setItem("dsf:ttab",JSON.stringify("reg")) } }catch(e){}
+  fetch("/tourney/index.html?t="+Date.now(),{cache:"no-store"}).then(function(r){ if(!r.ok) throw 0; return r.text() }).then(function(h){
+    h=h.replace(/<head>/i,'<head><base href="/tourney/">'); document.open(); document.write(h); document.close();
+  }).catch(function(){ location.replace(go) });
+})()</script>
+<noscript><meta http-equiv="refresh" content="0; url=/tourney/?t=t20261121&amp;tab=reg"></noscript>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#F3E9D9;color:#7A2331;font:600 18px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}a{color:#7A2331}</style>
+</head>
+<body><p>Opening Dropshot Folks tournaments… <a href="/tourney/?t=t20261121&amp;tab=reg">Tap here if nothing happens</a></p></body>
+</html>

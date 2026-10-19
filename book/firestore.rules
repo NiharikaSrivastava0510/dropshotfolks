@@ -140,6 +140,12 @@ service cloud.firestore {
       return signedIn() && exists(u) && get(u).data.tid == tid
         && get(u).data.code == get(/databases/$(database)/documents/tsecrets/$(tid)).data.code;
     }
+    // A check-in volunteer's phone that entered the tournament's check-in code (stored in tdesk/{uid}).
+    function deskOk(tid) {
+      let u = /databases/$(database)/documents/tdesk/$(request.auth.uid);
+      return signedIn() && exists(u) && get(u).data.tid == tid
+        && get(u).data.code == get(/databases/$(database)/documents/tsecrets/$(tid)).data.get('desk', '');
+    }
     function validTeam(d) {
       return d.keys().hasOnly(['tid', 'cat', 'name', 'p1', 'p2', 'p3', 'p4', 'createdBy', 'createdAt', 'status'])
         && shortText(d.get('p3', ''), 60) && shortText(d.get('p4', ''), 60)
@@ -160,6 +166,9 @@ service cloud.firestore {
         && tourney(request.resource.data.tid).regOpen == true
         && request.resource.data.cat in tourney(request.resource.data.tid).catIds);
       allow update: if isAdmin();
+      // check-in volunteers can only tick a team in or out
+      allow update: if deskOk(resource.data.tid) && onlyChanges(['checkedIn', 'checkedInAt'])
+        && request.resource.data.checkedIn is bool;
       allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
     }
     match /tcontacts/{teamId} {
@@ -182,12 +191,19 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
     }
+    // Main website text, links and photos the organiser has changed: public to read, organiser only to change.
+    match /site/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
     // Matches: the organiser makes them; referees with the code can only score.
     match /tmatches/{id} {
       allow read: if true;
       allow write: if isAdmin();
       allow update: if refOk(resource.data.tid)
-        && onlyChanges(['games', 'status', 'winner', 'court', 'updatedAt', 'svc', 'seq'])
+        && onlyChanges(['games', 'status', 'winner', 'court', 'updatedAt', 'svc', 'seq', 'ref', 'timer'])
+        && (request.resource.data.get('timer', null) == null || request.resource.data.timer is map)
+        && shortText(request.resource.data.get('ref', ''), 40)
         && request.resource.data.get('svc', []) is list && request.resource.data.get('svc', []).size() <= 5
         && request.resource.data.get('seq', []) is list && request.resource.data.get('seq', []).size() <= 5
         && request.resource.data.status in ['scheduled', 'live', 'done']
@@ -198,10 +214,27 @@ service cloud.firestore {
     match /tsecrets/{tid} {
       allow read, write: if isAdmin();
     }
-    match /tunlocks/{uid} {
+    // Team codes sent on confirmation: the organiser keeps the list; a player can look up only the code they were given.
+    match /tcodes/{id} {
+      allow read, write: if isAdmin();
+    }
+    match /tpasses/{code} {
+      allow get: if true;
+      allow list: if false;
+      allow write: if isAdmin();
+    }
+    match /tdesk/{uid} {
       allow read, delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
       allow create, update: if signedIn() && request.auth.uid == uid
         && request.resource.data.keys().hasOnly(['tid', 'code', 'at'])
+        && request.resource.data.tid is string && request.resource.data.code is string && request.resource.data.code.size() >= 4
+        && request.resource.data.code == get(/databases/$(database)/documents/tsecrets/$(request.resource.data.tid)).data.get('desk', '');
+    }
+    match /tunlocks/{uid} {
+      allow read, delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['tid', 'code', 'at', 'name'])
+        && shortText(request.resource.data.get('name', ''), 40)
         && request.resource.data.tid is string && request.resource.data.code is string
         && request.resource.data.code == get(/databases/$(database)/documents/tsecrets/$(request.resource.data.tid)).data.code;
     }

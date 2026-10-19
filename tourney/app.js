@@ -87,9 +87,9 @@ function formatForm(t){
   const sel=(id,val,opts)=>`<select id="fe-${id}">${opts.map(([v,l])=>`<option value="${v}" ${String(val)===String(v)?"selected":""}>${l}</option>`).join("")}</select>`;
   const num=(id,val,min,max)=>`<input id="fe-${id}" type="number" min="${min}" max="${max}" value="${esc(val??"")}">`;
   const row=(label,k,src)=>`<div class="fe-row"><b>${label}</b>
-    <label class="f">Points ${sel(k+"to",src.pointsTo??(k?"0":21),[...(k?[["0",k==="f"?"Same as knockouts":"Same as round robin"]]:[]),["11","11"],["15","15"],["21","21"]])}</label>
+    <label class="f">Points ${sel(k+"to",src.pointsTo??(k?"0":21),[...(k?[["0",k==="k"?"Same as round robin":"Same as knockouts"]]:[]),["11","11"],["15","15"],["21","21"]])}</label>
     <label class="f">Deuce max (0 = standard) ${num(k+"cap",src.cap??0,0,40)}</label>
-    <label class="f">Games ${sel(k+"bo",src.bestOf??(k?"0":1),[...(k?[["0",k==="f"?"Same as knockouts":"Same as round robin"]]:[]),["1","1 game"],...(k?[]:[["2","2 games (total points at 1–1)"]]),["3","Best of 3"]])}</label></div>`;
+    <label class="f">Games ${sel(k+"bo",src.bestOf??(k?"0":1),[...(k?[["0",k==="k"?"Same as round robin":"Same as knockouts"]]:[]),["1","1 game"],...(k?[]:[["2","2 games (total points at 1–1)"]]),["3","Best of 3"]])}</label></div>`;
   return `<div class="fmtform">
     <div class="fv-box"><h4>🔁 Round robin & who goes through</h4><div class="grid2">
       <label class="f">Teams per group ${num("gsize",t.groupSize??(isTeam(t)?3:4),3,8)}</label>
@@ -97,13 +97,19 @@ function formatForm(t){
       <label class="f">Knockout size, filled with best runners-up (0 = off) ${num("kosize",t.koSize??0,0,64)}</label>
       <label class="f">Deuce ${sel("deuce",t.deuce===false?0:1,[["1","On: win by 2"],["0","Off: first to the points"]])}</label>
       <label class="row" style="gap:6px;align-self:end"><input type="checkbox" id="fe-bronze" style="width:auto" ${bronzeOn(t)?"checked":""}> 🥉 3rd-place match</label></div></div>
-    <div class="fv-box"><h4>🏸 Scoring</h4>${row("🔁 Round robin","",{pointsTo:t.pointsTo,cap:t.cap,bestOf:t.bestOf})}${row("⚔️ Quarter & semi-finals","k",t.stageRules?.ko||{})}${row("🏆 Final & 3rd place","f",t.stageRules?.final||{})}</div>
+    <div class="fv-box"><h4>🏸 Scoring</h4>${row("🔁 Round robin","",{pointsTo:t.pointsTo,cap:t.cap,bestOf:t.bestOf})}${row("⚔️ All knockout rounds","k",t.stageRules?.ko||{})}
+      ${(S.rndDraft||[]).map(k=>row(`${k==="final"?"🏆":k==="bronze"?"🥉":"⚔️"} ${roundLabel(k)} <button class="btn small ghost danger" data-rnddel="${k}" aria-label="Remove ${roundLabel(k)} scoring">✕</button>`,"r_"+k,t.stageRules?.[k]||{})).join("")}
+      ${ROUNDS.some(([k])=>!(S.rndDraft||[]).includes(k))?`<div class="row rndadd"><label class="f" style="margin:0">Give a round its own scoring <select id="fe-rndadd">${ROUNDS.filter(([k])=>!(S.rndDraft||[]).includes(k)).map(([k])=>`<option value="${k}">${roundLabel(k)}</option>`).join("")}</select></label><button class="btn small" data-rndadd="1">➕ Add round</button></div>`:""}
+      <p class="muted" style="font-size:.82rem">Rounds without their own row use "All knockout rounds"${(S.rndDraft||[]).includes("final")&&!(S.rndDraft||[]).includes("bronze")?"; 3rd place follows the Final":""}.</p></div>
     <div class="fv-box"><h4>📝 Good to know</h4><textarea id="fe-format" rows="4" placeholder="e.g. 2 minutes warm-up, 20 seconds between games…">${esc(t.format||"")}</textarea></div>
     <div class="fv-box"><h4>➕ Your own sections</h4><p class="muted">Add anything players should know: rules, what to bring, timings, parking, prizes… Each section shows as its own box in the game format.</p>
       ${(S.secDraft||[]).map((x,i)=>`<div class="secrow"><div class="row"><input class="sec-t" data-sec="${i}" maxlength="60" placeholder="Title, e.g. 🎒 What to bring" value="${esc(x.title||"")}"><button class="btn small ghost danger" data-secdel="${i}" aria-label="Delete section">🗑</button>${i?`<button class="btn small ghost" data-secup="${i}" aria-label="Move up">↑</button>`:""}</div><textarea class="sec-x" data-sec="${i}" rows="3" maxlength="2000" placeholder="Write the details here. New lines are kept.">${esc(x.text||"")}</textarea></div>`).join("")}
       <button class="btn small" data-secadd="1">➕ Add a section</button></div>
     <div class="row"><button class="btn primary" data-savefmt="1">💾 Save format & scoring</button><button class="btn small ghost" data-editfmt="0">Cancel</button></div></div>`;
 }
+// keep what's typed in the format form across a redraw (adding or removing a round)
+const fmtSnapshot = () => Object.fromEntries([...document.querySelectorAll(".fmtform [id^='fe-']")].map(el=>[el.id, el.type==="checkbox"?el.checked:el.value]));
+const fmtRestore = v => Object.entries(v||{}).forEach(([id,x])=>{ const el=document.getElementById(id); if(!el || id==="fe-rndadd") return; if(el.type==="checkbox") el.checked=x; else el.value=x });
 // the organiser's own format sections, as typed in the edit form
 const readSecs = () => [...document.querySelectorAll(".sec-t")].map(i=>({title:i.value.trim().slice(0,60), text:(document.querySelector(`.sec-x[data-sec="${i.dataset.sec}"]`)?.value||"").trim().slice(0,2000)}));
 // the game format as a picture: numbers, how a tie works, the route to the final, points and scoring
@@ -123,7 +129,7 @@ function formatVisual(t){
       <div><i>3</i><b>Knockouts</b><span>${koPath(t)}${bronzeOn(t)?" (+ 🥉 match for 3rd)":""}.</span></div></div></div>
     ${g.team?`<div class="fv-box"><h4>📊 Group points</h4><div class="fv-pts"><div><b>5</b><span>win by 6+<br>(1 + 4 bonus)</span></div><div><b>4</b><span>win by 4–5<br>(1 + 3 bonus)</span></div><div><b>2</b><span>win by 3 or less<br>(1 + 1 bonus)</span></div><div><b>1</b><span>win in deuce<br>(no bonus)</span></div><div><b>0</b><span>loss</span></div></div><p class="muted">Points for every match: men's, women's and both mixed. Level on points → points difference, then head-to-head.</p></div>`
       :`<div class="fv-box"><h4>📊 Group places</h4><p>Most wins first. Level → head-to-head, then points difference, then points scored.</p></div>`}
-    <div class="fv-box"><h4>🏸 Scoring</h4><div class="fv-score"><div><span>🔁 Round robin (groups)</span><b>${rl(r)}</b></div><div><span>⚔️ Knockouts${ruleTxt(fin)!==ruleTxt(ko)?" (quarter & semi-finals)":""}</span><b>${rl(ko)}</b></div>${ruleTxt(fin)!==ruleTxt(ko)?`<div><span>🏆 Final${bronzeOn(t)?" & 3rd place":""}</span><b>${rl(fin)}</b></div>`:""}</div>${two?`<p class="muted">2 games: both games are always played. At 1–1, the pair with more total points wins the match.</p>`:""}</div>
+    <div class="fv-box"><h4>🏸 Scoring</h4><div class="fv-score"><div><span>🔁 Round robin (groups)</span><b>${rl(r)}</b></div>${koScoring(t).map(([lab,x])=>`<div><span>${/Final/.test(lab)?"🏆":/^3rd/.test(lab)?"🥉":"⚔️"} ${esc(lab)}</span><b>${rl(x)}</b></div>`).join("")}</div>${two?`<p class="muted">2 games: both games are always played. At 1–1, the pair with more total points wins the match.</p>`:""}</div>
     ${t.format?`<div class="fv-box"><h4>📝 Good to know</h4>${richTxt(t.format)}</div>`:""}
     ${(t.sections||[]).filter(x=>x&&(x.title||x.text)).map(x=>`<div class="fv-box"><h4>${esc(x.title||"More information")}</h4>${richTxt(x.text||"")}</div>`).join("")}
   </div>`;
@@ -149,15 +155,13 @@ function formatTxt(t){
       `Group points, for every match (men's, women's and both mixed): a win is 1 point plus a bonus for the winning margin: win by 6 or more = 5 (1 + 4), win by 4–5 = 4 (1 + 3), win by 3 or less = 2 (1 + 1). A win that went to deuce = 1 point, no bonus. Loss = 0. Level teams are split by points difference, then head-to-head.`,
       crossPairs(t,t.groups?.TC)?`Knockouts: the top ${adv} of each group go through. ${adv===2?"Quarter-finals cross the groups: Winner A v Runner-up C, Winner B v Runner-up D, Winner C v Runner-up A, Winner D v Runner-up B.":"Semi-finals: Winner A v Winner C, Winner B v Winner D."}`:`Knockouts: top ${adv} of each group${wild?` plus the best ${wild} third-placed team${wild>1?"s":""}`:""} go through. Seeding: group winners first, then runners-up; teams from different groups are compared on points per tie, so groups of different sizes are fair. The top seeds get a bye if the bracket isn't full.${t.bronze!==false?" The final and the bronze medal match are played at the same time.":""}`,
       `Group matches: ${r.bestOf===1?"1 game ":""}${ruleTxt(r)}${r.deuce&&r.cap<(CAP_FOR[r.to]||0)?`, at ${r.cap-1}–${r.cap-1} the next point wins`:""}${r.bestOf===2?". Both games are always played; at 1–1 the pair with more total points wins":""}.`,
-      ...(()=>{ const ko=rules(t,{stage:"ko"}), fin=rules(t,{stage:"ko",roundName:"Final"});
-        return [...(ruleTxt(ko)!==ruleTxt(r)?[`Knockout matches: ${ko.bestOf===1?"1 game ":""}${ruleTxt(ko)}.`]:[]), ...(ruleTxt(fin)!==ruleTxt(ko)?[`Final${bronzeOn(t)?" and bronze medal match":""}: ${fin.bestOf===1?"1 game ":""}${ruleTxt(fin)}.`]:[])] })()].join("\n")+(t.format?`\n\n${t.format}`:"") }
+      ...koScoring(t).filter(([,x])=>ruleTxt(x)!==ruleTxt(r)||x.bestOf!==r.bestOf).map(([lab,x])=>`${lab}: ${x.bestOf===1?"1 game ":""}${ruleTxt(x)}.`)].join("\n")+(t.format?`\n\n${t.format}`:"") }
   const adv=Number(t.advance)||2, ko=rules(t,{stage:"ko"}), fin=rules(t,{stage:"ko",roundName:"Final"}), same=(x,y)=>ruleTxt(x)===ruleTxt(y);
   const lines=[
     `Group stage: round robin in groups of about ${Number(t.groupSize)||4}. ${adv===1?"The group winner goes":`The top ${adv} from each group go`} through to the knockouts${Number(t.koSize)>0?`, and the best ${adv===1?"runners-up":"teams in the next place"} fill any spare places up to ${Number(t.koSize)}`:""}.`,
     `Knockouts: single elimination until the final${bronzeOn(t)?", plus a 3rd-place play-off":""}.`,
     `Group matches: ${r.bestOf===1?"1 game ":r.bestOf===2?"2 games (at 1–1, more total points wins) ":""}${ruleTxt({...r,bestOf:1})}.`,
-    ...(same(ko,r)?[]:[`Quarter- and semi-finals: ${ko.bestOf===1?"1 game ":""}${ruleTxt(ko)}.`]),
-    ...(same(fin,ko)?[]:[`Final${bronzeOn(t)?" and 3rd-place play-off":""}: ${fin.bestOf===1?"1 game ":""}${ruleTxt(fin)}.`]),
+    ...koScoring(t).filter(([,x])=>!same(x,r)||x.bestOf!==r.bestOf).map(([lab,x])=>`${lab}: ${x.bestOf===1?"1 game ":""}${ruleTxt(x)}.`),
     `Group places are decided by wins, then head-to-head, then points difference, then points scored.`];
   return lines.join("\n")+(t.format?`\n\n${t.format}`:"");
 }
@@ -197,10 +201,27 @@ const canRef = t => !!t && (S.isAdmin || (S.unlock?.tid===t.id));
 // points per game 11/15/21; with deuce you must win by 2, up to a cap (11→15, 15→21, 21→30); without deuce first to the target wins
 const CAP_FOR = {11:15, 15:21, 21:30};
 // knockout rounds can have their own scoring: t.stageRules = {ko:{pointsTo,cap,bestOf}, final:{…}} (final = final & 3rd-place play-off)
+// each knockout round can also have its own scoring: stageRules.r32 / r16 / qf / sf / final / bronze (3rd place falls back to the final's)
+const ROUNDS = [["r32","Round of 32"],["r16","Round of 16"],["qf","Quarter-finals"],["sf","Semi-finals"],["final","Final"],["bronze","Bronze medal match"]];
+const roundKey = m => (ROUNDS.find(([,n])=>n===m?.roundName)||[])[0] || null;
+const roundLabel = k => k==="bronze" ? "3rd place" : (ROUNDS.find(([x])=>x===k)||[,k])[1];
+// the knockout rounds this tournament plays, first to last, from the bracket if made, else from the settings
+function koRounds(t){
+  const ko=matchesOf(t).filter(m=>m.stage==="ko" && !m.bye && m.roundName!=="Bronze medal match");
+  let P=ko.length?2**Math.max(...ko.map(m=>m.round||1)):0;
+  if(!P){ const gs=Object.values(t?.groups||{})[0]; if(gs){ const adv=Math.max(1,Number(t.advance)||2), cur=Object.values(gs).reduce((s,g)=>s+Math.min(adv,g.length),0)+nWild(t,gs); P=1; while(P<cur) P*=2 } }
+  if(P<2){ const k=Number(t?.koSize)||8; P=2; while(P<k) P*=2 }   // no groups yet: go by the knockout size (8 = quarter-finals)
+  const out=[]; for(let k=P/2;k>=1;k/=2) out.push(roundName(k)); if(bronzeOn(t)) out.push("Bronze medal match"); return out;
+}
+// knockout scoring in words, rounds with the same scoring grouped: [["Quarter-finals & semi-finals", rules], ["Final & 3rd place", rules]]
+function koScoring(t){
+  const out=[]; koRounds(t).forEach(n=>{ const r=rules(t,{stage:"ko", roundName:n}), lab=n==="Bronze medal match"?"3rd place":n, last=out[out.length-1];
+    if(last && ruleTxt(last[1])===ruleTxt(r) && last[1].bestOf===r.bestOf) last[0]+=` & ${lab.toLowerCase()}`; else out.push([lab, r]) }); return out;
+}
 const isFinalRound = m => m?.roundName==="Final" || m?.roundName==="Bronze medal match";
 const rules = (t, m) => {   // the final & 3rd place follow the knockout scoring unless they have their own
   const pick=st=>Object.fromEntries(Object.entries(st||{}).filter(([,v])=>Number(v)>0));
-  if(m?.stage==="ko") t={...t, ...pick(t?.stageRules?.ko), ...(isFinalRound(m)?pick(t?.stageRules?.final):{})};
+  if(m?.stage==="ko") t={...t, ...pick(t?.stageRules?.ko), ...(isFinalRound(m)?pick(t?.stageRules?.final):{}), ...(roundKey(m)&&roundKey(m)!=="final"?pick(t?.stageRules?.[roundKey(m)]):{})};
   const to=[11,15,21].includes(Number(t?.pointsTo))?Number(t.pointsTo):21, deuce=t?.deuce!==false;
   const cap=Number(t?.cap)>to ? Number(t.cap) : (CAP_FOR[to]||to+9);
   return {to, deuce, cap:deuce?cap:to, bestOf:Number(t?.bestOf)||1} };
@@ -1253,14 +1274,16 @@ document.addEventListener("click", async e=>{
   if(ds.scanx){ S.scan=null; history.replaceState(null,"",location.pathname+(T()?`?t=${T().id}`:"")); render(); return }
   if(ds.fxcode){ const p=await useCode($("#fx-code")?.value); if(p){ render(); toast(`Welcome, ${teamById(p.team)?.name||p.name}! 🏸`) } return }
   if(ds.fxout){ ls.set(`dsf:fx:${T()?.id}`,null); render(); return }
-  if(ds.editfmt!=null){ S.editFmt=ds.editfmt==="1"; if(S.editFmt) S.secDraft=(T()?.sections||[]).map(x=>({...x})); render(); return }
+  if(ds.editfmt!=null){ S.editFmt=ds.editfmt==="1"; if(S.editFmt){ const sr=T()?.stageRules||{}; S.secDraft=(T()?.sections||[]).map(x=>({...x})); S.rndDraft=ROUNDS.map(([k])=>k).filter(k=>Object.values(sr[k]||{}).some(v=>Number(v)>0)) } render(); return }
+  if((ds.rndadd!=null || ds.rnddel) && S.editFmt){ const keep=fmtSnapshot(); if(ds.rndadd!=null){ const k=$("#fe-rndadd")?.value; if(k) S.rndDraft=ROUNDS.map(([x])=>x).filter(x=>x===k||(S.rndDraft||[]).includes(x)) } else S.rndDraft=(S.rndDraft||[]).filter(x=>x!==ds.rnddel);
+    S.secDraft=readSecs(); render(); fmtRestore(keep); return }
   if(ds.secadd!=null || ds.secdel!=null || ds.secup!=null){ S.secDraft=readSecs(); if(ds.secadd!=null) S.secDraft.push({title:"", text:""});
     if(ds.secdel!=null) S.secDraft.splice(Number(ds.secdel),1); if(ds.secup!=null){ const i=Number(ds.secup); [S.secDraft[i-1],S.secDraft[i]]=[S.secDraft[i],S.secDraft[i-1]] } render(); return }
   if(ds.regopen!=null && S.isAdmin){ const on=ds.regopen==="1"; await db.collection("tourneys").doc(t.id).set({regOpen:on},{merge:true}).then(()=>toast(on?"Registration is open ✓":"Registration closed"),()=>toast("Couldn't save")); return }
   if(ds.savefmt && S.isAdmin){ const g=id=>$(`#fe-${id}`), n=(id,min,max,d)=>Math.min(max,Math.max(min,Number(g(id)?.value)||d));
     const data={sections:readSecs().filter(x=>x.title||x.text), groupSize:n("gsize",3,8,3), advance:n("adv",1,4,2), koSize:Math.min(64,Math.max(0,Number(g("kosize").value)||0)), deuce:g("deuce").value!=="0", bronze:g("bronze").checked,
       pointsTo:Number(g("to").value)||21, cap:Math.min(40,Math.max(0,Number(g("cap").value)||0)), bestOf:Number(g("bo").value)||1, format:g("format").value.trim().slice(0,2000),
-      stageRules:Object.fromEntries([["ko","k"],["final","f"]].map(([key,k])=>[key,{pointsTo:Number(g(k+"to").value)||0, cap:Math.min(40,Math.max(0,Number(g(k+"cap").value)||0)), bestOf:Number(g(k+"bo").value)||0}]))};
+      stageRules:Object.fromEntries([["ko","k"], ...ROUNDS.map(([key])=>[key,"r_"+key])].map(([key,k])=>[key, g(k+"to") ? {pointsTo:Number(g(k+"to").value)||0, cap:Math.min(40,Math.max(0,Number(g(k+"cap").value)||0)), bestOf:Number(g(k+"bo").value)||0} : {pointsTo:0, cap:0, bestOf:0}]))};
     await db.collection("tourneys").doc(T().id).set(data,{merge:true}).then(()=>{ S.editFmt=false; render(); toast("Format & scoring saved ✓") },()=>toast("Couldn't save")); return }
   if(ds.editdetails!=null){ S.editDetails=ds.editdetails==="1"; S.newT=false; render(); scrollTo({top:0,behavior:"smooth"}); return }
   if(ds.fxtools!=null){ S.fxTools=!S.fxTools; render(); return }

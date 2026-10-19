@@ -23,22 +23,25 @@ const PER_COURT = 7, GAME_MINS = 12;
 const QUIZ = [
   {e:"🌈", img:"court-wide-1", call:"Warm-up · clear", k:"clear", q:"You're right at your back line. Hit a forehand clear. Where does it land, honestly?", ic:["🙈","🤏","👍","🚀","🎯"], a:["Mid-court or shorter","In the back half, but only if I wind up and I'm standing still","Near the back line most times, when I have time","Between the back lines nearly every time, even when I'm moving","Deep every time, and I can play it flat and fast to attack"]},
   {e:"🏸", img:"service-ready", call:"Rally 1 · after the serve", tag:"serve", q:"Doubles. You low-serve. The receiver pushes it flat past you to the mid-court sideline. Your partner is behind you. Who takes it, and what do they play?", a:["You, the server: turn and chase it","Your partner: lift it high and deep to reset","Your partner: drive or push it flat back, keeping the attack","Leave it: pushes like that usually go out"], correct:2, why:"After a low serve the server holds the net. The back player takes the mid-court and keeps it flat, because lifting hands them the attack."},
-  {e:"🧰", img:"court-three", call:"Warm-up · your shots", k:"shots", q:"Clear, drop, smash, net shot, drive, lift, push, flick serve. How many can you play on purpose in a real game, and land where you meant?", ic:["🤷","✌️","🖐️","💪","🏆"], a:["0–1: I mostly just get it back","2–3","4–5","6–7","All 8, even under pressure"]},
+  {e:"🧰", img:"court-three", call:"Warm-up · your shots", k:"shots", multi:true, q:"Tick every shot you can play on purpose in a real game and land where you meant. Be strict: only the ones that work most of the time.", ic:["🌈","🪶","💥","🥅","➡️","🎈","👉","⚡"], a:["Clear to the back line","Drop shot from the back","Smash from the back","Tight net shot","Flat drive","Deep lift from the net","Push to mid-court","Flick serve"]},
   {e:"🔙", img:"backhand-defence", call:"Warm-up · backhand", k:"backhand", q:"A high shuttle drops into your backhand back corner and you can't get round it. What happens?", ic:["🏃","😬","↗️","🎯","🪄"], a:["I miss it or frame it","It gets over the net, but short and high","Lifts to mid-court, so they attack it","A backhand clear to the back third, or a decent drop, most times","Backhand clear, drop or smash, with control"]},
   {e:"💥", img:"jump-reach", call:"Warm-up · smash", k:"smash", q:"Smashing from the back of the court against players at your level:", ic:["🤷","📉","👌","⚡","🔨"], a:["I don't really smash from the back","It goes flat, long or into the net a lot","It's steep, but they get it back easily","Steep and fast, and it often wins the point or forces a weak reply","I can smash, follow it in and finish the reply, rally after rally"]},
   {e:"🔁", img:"court-wide-2", call:"Rally 2 · after a lift", tag:"rotation", q:"You and your partner are front-and-back, attacking. Your partner at the back gets stuck and has to lift. You're at the net. What now?", a:["Stay at the net to cut off their reply","Step back to the service line and wait","Go side by side with your partner, ready to defend","Swap: you go back, your partner comes forward"], correct:2, why:"Once your side lifts, you're defending. Get side by side and cover the smash; staying at the net leaves a hole behind you."},
-  {e:"🥅", img:"net-high-five", call:"Warm-up · net", k:"net", q:"The shuttle drops just over the net on your side, below the tape. Your net shot:", ic:["🙈","↩️","👇","🎯","🎩"], a:["Pops up high or goes in the net","Gets over, but sits up and gets killed","Tight sometimes, loose when I'm rushed","Tight and tumbling most of the time","Tight with spin, and I can hold it and flick it to the back instead"]},
-  {e:"🛡️", img:"backhand-defence", call:"Warm-up · defence", k:"defence", q:"A hard smash comes straight at you. What usually happens?", ic:["🙈","😬","↩️","🎯","🔄"], a:["I miss it","I get a racket on it, but it often goes in the net or out","I lift it back high, but it's not always deep","Block to the net or lift deep, my choice","I block tight or counter-drive and turn defence into attack"]},
+  {e:"🥅", img:"net-high-five", call:"Warm-up · at the net", k:"net", multi:true, q:"At the net, tick everything you can do in a game, most of the time:", ic:["🎯","🔨","🎈","↗️","🌀"], a:["Play a tight net shot from below the tape","Kill a shuttle that pops up above the net","Lift from the net right to the back line","Play a cross-court net shot","Hold the shot, then flick it to the back"]},
+  {e:"🛡️", img:"backhand-defence", call:"Warm-up · defence", k:"defence", multi:true, q:"When they smash at you, tick everything you can do most of the time:", ic:["🎈","🧱","🔙","🔄","🎯"], a:["Lift a smash back deep to the back line","Block a smash short to the net","Return a smash on my backhand side","Counter-drive a smash back flat","Return a smash aimed at my body"]},
   {e:"🧱", img:"court-wide-1", call:"Rally 3 · after a block", tag:"defence", q:"You're defending side by side. You block their smash short to the net and it's a good block. What do you do next?", a:["Stay side by side and wait","Go back to the baseline","Follow your block in to the net; your partner covers the back","Both rush forward to the net"], correct:2, why:"A good block turns defence into attack. Follow it in to take the net, and your partner moves back: front-and-back."},
   {e:"⚡", img:"court-wide-2", call:"Warm-up · pace", k:"pace", q:"What pace can you keep up with for a whole game, not just a few rallies?", ic:["🐌","🐢","🚶","🏃","🚀"], a:["Gentle hitting back and forth; I don't play real games yet","Slow games; fast shuttles get past me","Social pace; medium-paced games are a stretch","Medium to fast rallies, all game","Fast tournament pace, game after game"]},
-  {e:"👯", img:"group-high-five", call:"Warm-up · doubles", k:"doubles", q:"How does your doubles rotation work in a fast game?", ic:["🙋","🧭","🔄","🛡️","♟️"], a:["I haven't played much doubles","I'm still working out where to stand","We get front-and-back and side-by-side right most of the time","We rotate without talking and cover every gap","We plan it: who serves, who attacks, which player to target"]},
+  {e:"👯", img:"group-high-five", call:"Warm-up · doubles", k:"doubles", multi:true, q:"In a fast doubles game, tick everything you do without being told:", ic:["↕️","↔️","🏃","🧭","🎯","🗣️"], a:["Go front-and-back when my side attacks","Go side by side when my side lifts","Follow my drop or block into the net","Take the back after a low serve or return","Cover the middle with my partner without clashing","Pick which opponent to target"]},
   {e:"🏆", img:"kneel-celebrate", call:"Match point · tournaments", k:"tgrade", q:"Tournaments: what's the highest grade you've played, and won at least one match?", ic:["🙈","🎪","🥉","🥈","🥇"], a:["I've never played one","Fun or social tournaments only","E or D grade","C grade","B grade or higher (A, open, county)"]}
 ];
 // answers that describe your shots and game (the tournament answer is counted separately)
 const SHOT_KEYS = ["clear","shots","backhand","smash","net","defence","pace","doubles"];
-const packQuiz = ans => ({v:6, a:QUIZ.map((_,i)=>ans?.[i] ?? "").join(",")});
+const packQuiz = ans => ({v:7, a:QUIZ.map((_,i)=>ans?.[i] ?? "").join(",")});
 const knowCount = ans => QUIZ.filter((x,i)=>x.correct!=null && ans?.[i]===x.correct).length;
-const qv = (ans,k) => ans[QUIZ.findIndex(x=>x.k===k)];
+// tick-box questions store a bitmask; their value 0–4 comes from how many boxes are ticked (all of them for a 4)
+const ticks = a => { let n=0; for(let b=Number(a)||0; b; b>>=1) n+=b&1; return n };
+const qval = (x,a) => { if(a==null || !x.multi) return a; const c=ticks(a), f=c/x.a.length; return c===0?0 : f<0.34?1 : f<0.6?2 : f<1?3 : 4 };
+const qv = (ans,k) => { const i=QUIZ.findIndex(x=>x.k===k); return qval(QUIZ[i], ans[i]) };
 const LV_ORDER = ["E-","E","D-","D+","C-","C+"];
 function levelFrom(ans){
   if(QUIZ.some((_,i)=>ans?.[i]==null)) return null;
@@ -501,7 +504,7 @@ function reminderBanner(){
 /* ----- registration (new players answer the level questions first) ----- */
 /* ---- level check as a mini match against the coach ---- */
 const qScore = ans => { let you=0, coach=0, power=0;
-  QUIZ.forEach((x,k)=>{ const a=ans[k]; if(a==null) return; if(x.correct==null) power+=a; else if(a===x.correct) you++; else coach++ }); return {you,coach,power} };
+  QUIZ.forEach((x,k)=>{ const a=ans[k]; if(a==null) return; if(x.correct==null) power+=qval(x,a); else if(a===x.correct) you++; else coach++ }); return {you,coach,power} };
 function quizFields(prefix, ans){
   const n=QUIZ.length; let i=S.qpos[prefix];
   if(i==null){ i=QUIZ.findIndex((_,k)=>ans[k]==null); if(i<0) i=n }
@@ -530,9 +533,11 @@ function quizFields(prefix, ans){
       <div class="qcourt" aria-hidden="true"><span class="qnet"></span><span class="qshuttle">🏸</span></div></div>
     <div class="row" style="justify-content:space-between"><span class="lbl">${know?"Rally":"Warm-up"} · ${i+1} of ${n}</span>${i>0?`<button type="button" class="btn small ghost" data-qback="${prefix}">← Back</button>`:""}</div>
     <fieldset class="q"><legend class="qq">${esc(x.q)}</legend>
-      <div class="qopts">${x.a.map((t,j)=>`<label class="qopt ${a===j?"picked":""}"><input type="radio" id="${prefix}${i}_${j}" name="${prefix}${i}" value="${j}" ${a===j?"checked":""}><span>${x.ic?`<span class="qic">${x.ic[j]}</span> `:""}${esc(t)}</span></label>`).join("")}</div>
+      ${x.multi?`<p class="muted" style="font-size:.85rem;margin:0 0 6px">Tick all that apply, then tap Next. ${ticks(a)} ticked.</p>`:""}
+      <div class="qopts">${x.a.map((t,j)=>{ const on = x.multi ? !!((Number(a)||0)&(1<<j)) : a===j;
+        return `<label class="qopt ${on?"picked":""}"><input type="${x.multi?"checkbox":"radio"}" id="${prefix}${i}_${j}" name="${prefix}${i}" value="${j}" ${on?"checked":""}><span>${x.ic?`<span class="qic">${x.ic[j]}</span> `:""}${esc(t)}</span></label>` }).join("")}</div>
     </fieldset>
-    ${a!=null?`<div class="row qnav"><button type="button" class="btn small primary" data-qnext="${prefix}">${i===n-1?"🏆 See my level":"Next rally →"}</button></div>`:""}
+    ${a!=null||x.multi?`<div class="row qnav"><button type="button" class="btn small primary" data-qnext="${prefix}">${i===n-1?"🏆 See my level":"Next rally →"}</button></div>`:""}
   </div>`;
 }
 /* umpire voice and racket sounds (Web Speech and Web Audio, nothing to download) */
@@ -1380,6 +1385,7 @@ document.addEventListener("click", async e=>{
   if(ds.qnext||ds.qback||ds.qredo){ const k=ds.qnext||ds.qback||ds.qredo, ans=k==="rq"?S.reg.ans:k==="gq"?S.gq:S.quiz;
     let i=S.qpos[k]; if(i==null){ i=QUIZ.findIndex((_,j)=>ans[j]==null); if(i<0) i=QUIZ.length }
     S.qfb[k]=null;
+    if(ds.qnext && QUIZ[i]?.multi){ ans[i] ??= 0; S.qfb[k]={i, self:true, v:qval(QUIZ[i],ans[i])}; sfx("power") }
     if(ds.qredo){ if(k==="rq") S.reg.ans={}; else if(k==="gq") S.gq={}; else S.quiz={}; S.qpos[k]=0 }
     else S.qpos[k] = ds.qnext ? Math.min(QUIZ.length,i+1) : Math.max(0,i-1);
     render(); sfx("hit"); quizCall(k, ds.qredo ? {} : ans); return }
@@ -1433,6 +1439,8 @@ document.addEventListener("click", async e=>{
 document.addEventListener("change", async e=>{
   const t=e.target;
   const m=/^(rq|gq|q)(\d+)$/.exec(t.name||"");
+  if(m && QUIZ[Number(m[2])]?.multi){ const target = m[1]==="rq"?S.reg.ans : m[1]==="gq"?S.gq : S.quiz, qi=Number(m[2]);
+    target[qi]=(Number(target[qi])||0) ^ (1<<Number(t.value)); S.qpos[m[1]]=qi; render(); sfx("hit"); return }
   if(m){ const target = m[1]==="rq"?S.reg.ans : m[1]==="gq"?S.gq : S.quiz, qi=Number(m[2]), x=QUIZ[qi]; target[qi]=Number(t.value);
     // swipe on to the next card; quick-quiz answers show why on the next card
     const ok = target[qi]===x.correct;

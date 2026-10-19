@@ -184,10 +184,14 @@ const S = {
   cat: null, toss: {}, newT:false, codes:{}, codesLoaded:false, rulesOld:false, desk:null, deskCode:null, mail:null, mailing:false, scan:null, otab: ls.get("dsf:otab","details"), editTeam:null, addTeam:false, myTeam: ls.get("dsf:myteam",null), refCourt: ls.get("dsf:refcourt",1), edit:null, scrIdx:0
 };
 let db=null, auth=null;
-const T = () => S.tourneys.find(t=>t.id===S.tid) || (S.tid && S.tourneys.find(t=>t.id.startsWith(S.tid))) || nextTourney() || null;
+// a tournament is over the day after its date: then it's hidden everywhere (the organiser can still open it with 🗂 Past)
+const todayStr = () => { if(window.DSF_TODAY) return window.DSF_TODAY; const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` };
+const isPast = t => !!t?.date && String(t.date) < todayStr();
+const visibleT = () => S.tourneys.filter(t=>!isPast(t) || (S.isAdmin && S.showPast));
+const T = () => { const v=visibleT(); return v.find(t=>t.id===S.tid) || (S.tid && v.find(t=>t.id.startsWith(S.tid))) || nextTourney() || null };
 // the soonest tournament that hasn't finished yet, else the most recent
-function nextTourney(){ const today=new Date(Date.now()-864e5).toISOString().slice(0,10), by=[...S.tourneys].sort((a,b)=>String(a.date||"9").localeCompare(String(b.date||"9")));
-  return by.find(t=>String(t.date||"9")>=today) || by[by.length-1] }
+function nextTourney(){ const by=visibleT().sort((a,b)=>String(a.date||"9").localeCompare(String(b.date||"9")));
+  return by.find(t=>!isPast(t)) || by[by.length-1] }
 const cats = t => (t?.cats||[]).filter(c=>c && c.id);
 const catName = (t,id) => cats(t).find(c=>c.id===id)?.name || id;
 const teamsOf = (t,cat) => S.teams.filter(x=>x.tid===t?.id && (!cat || x.cat===cat)).sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));
@@ -819,10 +823,11 @@ function courtCard(t, c){
 }
 
 /* ---------- views ---------- */
-function noTourney(){ return S.isAdmin ? orgBar(null)+viewOrg("new") : `<section class="panel"><h2>Tournaments</h2><div class="empty">No tournament set up yet. Check back soon.</div></section>` }
+function noTourney(){ return S.isAdmin ? orgBar(null)+pickBar(null)+viewOrg("new") : `<section class="panel"><h2>Tournaments</h2><div class="empty">No upcoming tournaments right now. Check back soon.</div></section>` }
 function pickBar(t){
-  if(S.tourneys.length<2) return "";
-  return `<div class="cats tpicker">${[...S.tourneys].sort((a,b)=>String(a.date||"9").localeCompare(String(b.date||"9"))).map(x=>`<button data-tid="${esc(x.id)}" aria-pressed="${x.id===t.id}">${esc(x.name||"Tournament")}<small>${esc(x.date?new Date(x.date+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"}):"")}</small></button>`).join("")}</div>`;
+  const past=S.isAdmin?S.tourneys.filter(isPast).length:0, pastBtn=past?`<button data-showpast="1" aria-pressed="${!!S.showPast}" title="Finished tournaments are hidden from everyone">🗂 Past (${past})</button>`:"";
+  if(visibleT().length<2) return pastBtn?`<div class="cats tpicker">${pastBtn}</div>`:"";
+  return `<div class="cats tpicker">${pastBtn}${visibleT().sort((a,b)=>String(a.date||"9").localeCompare(String(b.date||"9"))).map(x=>`<button data-tid="${esc(x.id)}" aria-pressed="${x.id===t?.id}">${esc(x.name||"Tournament")}<small>${esc(x.date?new Date(x.date+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"}):"")}</small></button>`).join("")}</div>`;
 }
 function catBar(t){
   const cs=cats(t); if(!S.cat || !cs.some(c=>c.id===S.cat)) S.cat=cs[0]?.id||null;
@@ -1292,6 +1297,7 @@ document.addEventListener("click", async e=>{
   if(ds.fxtools!=null){ S.fxTools=!S.fxTools; render(); return }
   if(ds.tab){ S.tab=ds.tab; S.edit=null; S.newT=false; ls.set("dsf:ttab",S.tab); if(location.hash) history.replaceState(null,"",location.pathname); render(); scrollTo({top:0}); return }
   if(ds.screen){ e.preventDefault(); location.hash="#screen"; return }
+  if(ds.showpast){ S.showPast=!S.showPast; if(!S.showPast && isPast(S.tourneys.find(x=>x.id===S.tid))) S.tid=null; render(); return }
   if(ds.tid){ S.tid=ds.tid; S.newT=false; S.cat=null; ls.set("dsf:tid",S.tid); render(); return }
   if(ds.cat){ S.cat=ds.cat; render(); return }
   if(ds.fxtab){ S.fxTab=ds.fxtab; render(); return }

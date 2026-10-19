@@ -192,6 +192,8 @@ const S = {
   cat: null, toss: {}, newT:false, codes:{}, codesLoaded:false, rulesOld:false, desk:null, deskCode:null, mail:null, mailing:false, scan:null, otab: ls.get("dsf:otab","details"), editTeam:null, addTeam:false, myTeam: ls.get("dsf:myteam",null), refCourt: ls.get("dsf:refcourt",1), edit:null, scrIdx:0
 };
 let db=null, auth=null;
+// arrived through a short link (dropshotfolks.co.uk/DSFtournaments): keep that short address in the bar
+{ const sh=new URLSearchParams(location.search).get("short"); if(/^[A-Za-z0-9_-]+$/.test(sh||"")) history.replaceState(null,"","/"+sh+location.hash) }
 // a tournament is over the day after its date: then it's hidden everywhere (the organiser can still open it with 🗂 Past)
 const todayStr = () => { if(window.DSF_TODAY) return window.DSF_TODAY; const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` };
 const isPast = t => !!t?.date && String(t.date) < todayStr();
@@ -1358,7 +1360,7 @@ document.addEventListener("click", async e=>{
   if(ds.xlsx){ downloadRecords(); return }
   if(ds.sheetsync){ await syncSheet(); return }
   if(ds.mailtest){ const r=await mailPost({test:true}); toast(r.ok?`Test email sent to ${DSF_ORG} ✓ Check your inbox`:`Didn't work: ${r.error}`); return }
-  if(ds.copyscript){ try{ const txt=await (await fetch("mailer.gs?v="+Date.now())).text(); await navigator.clipboard.writeText(txt); toast("Script copied ✓ Paste it into script.google.com") }catch{ window.open("mailer.gs","_blank") } return }
+  if(ds.copyscript){ try{ const txt=await (await fetch("/tourney/mailer.gs?v="+Date.now())).text(); await navigator.clipboard.writeText(txt); toast("Script copied ✓ Paste it into script.google.com") }catch{ window.open("mailer.gs","_blank") } return }
   if(ds.sendqr){ const x=teamById(ds.sendqr), t=S.tourneys.find(y=>y.id===x?.tid); if(x&&t) await sendQr(t,x); return }
   if(ds.copy){ try{ await navigator.clipboard.writeText(ds.copy); toast("Copied") }catch{ toast(ds.copy) } return }
   if(ds.psignin==="google"){ try{ const c=await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
@@ -1859,7 +1861,7 @@ async function scanQr(){
   let stream; try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}) }catch{ box.remove(); toast("Camera not available. Allow camera access, or type the team code instead."); return }
   const v=box.querySelector("video"); v.srcObject=stream; await v.play().catch(()=>{});
   let det=null; if("BarcodeDetector" in window){ try{ det=new BarcodeDetector({formats:["qr_code"]}) }catch{} }
-  if(!det && !window.jsQR) await new Promise(r=>{ const sc=document.createElement("script"); sc.src="jsqr.js?v=1"; sc.onload=r; sc.onerror=r; document.head.append(sc) });
+  if(!det && !window.jsQR) await new Promise(r=>{ const sc=document.createElement("script"); sc.src="/tourney/jsqr.js?v=1"; sc.onload=r; sc.onerror=r; document.head.append(sc) });
   const cv=document.createElement("canvas"), cx=cv.getContext("2d",{willReadFrequently:true});
   const stop=()=>{ stream.getTracks().forEach(k=>k.stop()); box.remove() }; scanQr.stop=stop;
   const read=async()=>{ if(det){ const r=await det.detect(v); return r[0]?.rawValue }
@@ -1978,7 +1980,7 @@ document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==
 /* ---------- stay up to date: reload when a newer version is published ---------- */
 const APP_VERSION = (document.currentScript?.src.match(/[?&]v=(\d+)/)||[])[1] || "";
 async function checkVersion(){
-  try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); if(!r.ok) return; const {v}=await r.json();
+  try{ const r=await fetch("/tourney/version.json?t="+Date.now(),{cache:"no-store"}); if(!r.ok) return; const {v}=await r.json();
     if(!v || !APP_VERSION || v===APP_VERSION) return;
     const live = S.tab==="ref" && matchesOf(T()).some(m=>m.status==="live"), typing=/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName||"");
     if(live || typing){ if(!checkVersion.told){ checkVersion.told=true; toast("A new version of the page is ready. It will load when you're between matches.") } return }

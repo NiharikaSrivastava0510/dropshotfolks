@@ -4,11 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Dropshot Folks Tournaments</title>
-<meta name="robots" content="noindex">
-<!-- Short link: dropshotfolks.co.uk/DSFtournaments → November Net Play registration -->
-<link rel="canonical" href="https://dropshotfolks.co.uk/tourney/?t=t20261121&tab=reg">
-<meta http-equiv="refresh" content="0; url=/tourney/?t=t20261121&amp;tab=reg">
-<script>location.replace("/tourney/?t=t20261121&tab=reg")</script>
+<!-- Short link: dropshotfolks.co.uk/DSFtournaments opens November Net Play registration; the app puts the short address back in the bar -->
+<meta http-equiv="refresh" content="0; url=/tourney/?t=t20261121&amp;tab=reg&amp;short=DSFtournaments">
+<script>(function(){ var q=new URLSearchParams(location.search); if(!q.has("t")) q.set("t","t20261121"); if(!location.search) q.set("tab","reg"); q.set("short","DSFtournaments");
+  location.replace("/tourney/?"+q.toString()+location.hash) })()</script>
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#F3E9D9;color:#7A2331;font:600 18px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}a{color:#7A2331}</style>
 </head>
 <body><p>Opening Dropshot Folks tournaments… <a href="/tourney/?t=t20261121&amp;tab=reg">Tap here if nothing happens</a></p></body>

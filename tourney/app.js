@@ -173,6 +173,69 @@ function priceHtml(t){ const e=esc(t.entry||""); if(!discOn(t)) return e; const 
   const m=String(t.entry).match(/£\s?(\d+(?:\.\d{1,2})?)/); if(!m) return e;
   return e.replace(esc(m[0]), `<s class="was">${esc(m[0])}</s> <b class="now">${money(Math.max(0,Number(m[1])-a))}</b>`) }
 const discBanner = t => discOn(t) ? `<p class="discban">🎉 <b>Early-bird: ${money(Number(t.discount.amount))} off</b> if you register by ${esc(new Date(t.discount.until+"T12:00:00").toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"long"}))}</p>` : "";
+/* ---------- parent / guardian consent for under-18 players ---------- */
+const DEFAULT_CONSENT = `I am the parent or legal guardian of the player named above and I give my consent for them to take part in this tournament.
+I understand that badminton is a physical sport with a risk of injury. They are fit to play, and I have told the organiser about any medical condition, allergy or injury.
+In an emergency I give permission for first aid, and for medical treatment advised by a qualified professional if I can't be reached.
+I, or the adult named on this form, will stay at the venue with them for the whole time they are there and will be responsible for them. They will not be left on their own.`;
+const juniorCat = c => /\b(u\s?-?1[0-8]|under[\s-]?1[0-8]s?|juniors?|kids?|youth|child(ren)?)\b/i.test(c?.name||"");
+const juniorsOn = t => !!t && (!!t.juniors || cats(t).some(juniorCat));
+const ageOn = (dob, day) => { const b=new Date(dob+"T12:00:00"), d=new Date((day||nowIso().slice(0,10))+"T12:00:00"); if(isNaN(b)||isNaN(d)) return null;
+  return d.getFullYear()-b.getFullYear()-((d.getMonth()<b.getMonth() || (d.getMonth()===b.getMonth() && d.getDate()<b.getDate()))?1:0) };
+const fmtDob = d => d ? new Date(d+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}) : "";
+function consentBlock(t, n){
+  return `<label class="chk u18chk"><input type="checkbox" id="rg-u${n}"> <span><b>Under 18</b> on the day of the tournament</span></label>
+    <div class="consent"><div class="consent-h">👪 Parent / guardian consent for player ${n} <span class="muted">· required for under-18s, filled in and signed by a parent or guardian</span></div>
+      <div class="grid2">
+        <label class="f">Player's date of birth *<input id="rg-dob${n}" type="date"></label>
+        <label class="f">Parent / guardian full name *<input id="rg-gn${n}" maxlength="60" autocomplete="off" placeholder="First and last name"></label>
+        <label class="f">Relationship to the player *<select id="rg-gr${n}"><option value="">Choose…</option>${["Mother","Father","Legal guardian","Other (with parental responsibility)"].map(r=>`<option>${r}</option>`).join("")}</select></label>
+        <label class="f">Parent / guardian mobile *<input id="rg-gp${n}" type="tel" maxlength="30" autocomplete="off" placeholder="07…"></label>
+        <label class="f">Parent / guardian email<input id="rg-ge${n}" type="email" maxlength="120" autocomplete="off" placeholder="name@example.com"></label>
+        <label class="f">Medical conditions or allergies<input id="rg-med${n}" maxlength="300" placeholder="e.g. asthma (has inhaler), or none"></label></div>
+      <div class="accomp-box"><span class="lbl">🧑‍🤝‍🧑 Adult who will be with them on the day</span>
+        <label class="chk samechk"><input type="checkbox" id="rg-gsame${n}" checked> <span>The parent / guardian above will be with them at the venue all day</span></label>
+        <div class="grid2 accomp">
+          <label class="f">Adult's full name (18+) *<input id="rg-an${n}" maxlength="60" autocomplete="off" placeholder="First and last name"></label>
+          <label class="f">Their relationship to the player *<input id="rg-ar${n}" maxlength="40" autocomplete="off" placeholder="e.g. Aunt, coach, family friend"></label>
+          <label class="f">Their mobile *<input id="rg-ap${n}" type="tel" maxlength="30" autocomplete="off" placeholder="07…"></label></div></div>
+      <div class="consent-text">${esc(t.consent||DEFAULT_CONSENT).replace(/\n/g,"<br>")}</div>
+      <label class="chk"><input type="checkbox" id="rg-gok${n}"> <span>I am the parent or legal guardian, I have read the above and <b>I give my consent</b> *</span></label>
+      <label class="chk"><input type="checkbox" id="rg-gphoto${n}"> <span>Photos and videos of this player may be shared on Dropshot Folks social media (optional)</span></label>
+      <div class="sigbox"><span class="lbl">✍️ Parent / guardian signature * <span class="muted">· sign with your finger or mouse</span></span>
+        <canvas data-sig="${n}" width="600" height="180" aria-label="Signature pad"></canvas>
+        <div class="row"><button type="button" class="btn small ghost" data-sigclear="${n}">Clear signature</button><span class="muted" style="font-size:.85rem">Signed ${esc(fmtDate(nowIso().slice(0,10)))}</span></div>
+        <label class="f">Type your full name to sign *<input id="rg-gsn${n}" maxlength="60" autocomplete="off" placeholder="Parent / guardian full name"></label></div></div>`;
+}
+// signature pads: draw with a finger, pen or mouse; kept in S.sig so a redraw of the page doesn't lose them
+const sigPt = (c, e) => { const r=c.getBoundingClientRect(); return [(e.clientX-r.left)*c.width/r.width, (e.clientY-r.top)*c.height/r.height] };
+document.addEventListener("pointerdown", e=>{ const c=e.target.closest?.("canvas[data-sig]"); if(!c) return; e.preventDefault(); c.setPointerCapture?.(e.pointerId);
+  const x=c.getContext("2d"); x.lineWidth=3.2; x.lineCap="round"; x.lineJoin="round"; x.strokeStyle="#1b2a4a"; const [px,py]=sigPt(c,e); x.beginPath(); x.moveTo(px,py); x.lineTo(px+.1,py+.1); x.stroke(); sigPad.on={c,x} });
+document.addEventListener("pointermove", e=>{ const p=sigPad.on; if(!p) return; e.preventDefault(); const [px,py]=sigPt(p.c,e); p.x.lineTo(px,py); p.x.stroke() });
+const sigEnd = ()=>{ const p=sigPad.on; if(!p) return; sigPad.on=null; S.sig={...(S.sig||{}), [p.c.dataset.sig]:p.c.toDataURL("image/png")} };
+document.addEventListener("pointerup", sigEnd); document.addEventListener("pointercancel", sigEnd);
+function sigPad(){ document.querySelectorAll("canvas[data-sig]").forEach(c=>{ const d=S.sig?.[c.dataset.sig]; if(!d) return; const im=new Image(); im.onload=()=>c.getContext("2d").drawImage(im,0,0); im.src=d }) }
+// what the organiser sees: each under-18 player's form, with a printable copy
+function consentInfo(t, x, full=true){
+  const k=S.consent?.[x.id]; if(!k?.kids?.length) return "";
+  const rows=k.kids.map(c=>{ const age=ageOn(c.dob,t.date);
+    return `<div class="cons-kid"><b>${esc(c.player||`Player ${c.n}`)}</b> <span class="muted">· born ${esc(fmtDob(c.dob))}${age!=null?` (${age} on the day)`:""}</span><br>
+      Parent / guardian: <b>${esc(c.gName)}</b> (${esc(c.gRel)}) · ${esc(c.gPhone)}${c.gEmail?` · ${esc(c.gEmail)}`:""}<br>
+      With them on the day: <b>${c.same?`${esc(c.gName)} (parent / guardian)`:`${esc(c.aName)} (${esc(c.aRel)}) · ${esc(c.aPhone)}`}</b>
+      ${full?`${c.medical?`<br>Medical: ${esc(c.medical)}`:""}<br>Photos: ${c.photo?"yes":"no"} · Signed by ${esc(c.signName)}${c.signedAt?` on ${esc(new Date(c.signedAt).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}))}`:""}
+      ${c.sig?`<br><img class="cons-sig" src="${esc(c.sig)}" alt="Signature of ${esc(c.signName)}">`:""}`:""}</div>` }).join("");
+  return `<details class="cons" id="cons-${esc(x.id)}"><summary>👪 Under 18 · parent consent signed ✓ (${k.kids.length})</summary>${rows}${full?`<button class="btn small" data-consprint="${esc(x.id)}">🖨 Print / save consent form</button>`:""}</details>`;
+}
+function consentPrint(t, x){
+  const k=S.consent?.[x.id]; if(!k) return; const w=window.open("","_blank"); if(!w){ toast("Allow pop-ups to print the form"); return }
+  const row=(l,v)=>`<tr><th>${l}</th><td>${esc(v||"—")}</td></tr>`;
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Parent consent · ${esc(x.name)}</title><style>body{font:14px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#222;max-width:720px;margin:24px auto;padding:0 16px}h1{font-size:20px;margin:0}h2{font-size:16px;margin:24px 0 6px;border-top:1px solid #ccc;padding-top:14px}table{border-collapse:collapse;width:100%}th{text-align:left;width:220px;color:#555;font-weight:600;vertical-align:top;padding:3px 8px 3px 0}td{padding:3px 0}.txt{background:#f6f2ea;border-radius:8px;padding:10px 12px;margin:10px 0}img{max-width:320px;border:1px solid #ccc;border-radius:6px;display:block;margin-top:4px}@media print{button{display:none}}</style></head><body>
+    <h1>Parent / guardian consent form</h1><p>Dropshot Folks · ${esc(t.name||"Tournament")} · ${esc(fmtDate(t.date))}${t.venue?` · ${esc(t.venue)}`:""}<br>Team: <b>${esc(x.name)}</b></p>
+    ${k.kids.map(c=>`<h2>${esc(c.player)}</h2><table>${row("Date of birth",`${fmtDob(c.dob)}${ageOn(c.dob,t.date)!=null?` (${ageOn(c.dob,t.date)} on the day)`:""}`)}${row("Parent / guardian",`${c.gName} (${c.gRel})`)}${row("Parent / guardian mobile",c.gPhone)}${row("Parent / guardian email",c.gEmail)}${row("Medical conditions / allergies",c.medical||"None given")}
+      ${row("Adult with them on the day",c.same?`${c.gName} (parent / guardian)`:`${c.aName} (${c.aRel}) · ${c.aPhone}`)}${row("Photos on social media",c.photo?"Yes":"No")}</table>
+      <div class="txt">${esc(k.text||DEFAULT_CONSENT).replace(/\n/g,"<br>")}</div><table>${row("Consent given","Yes")}${row("Signed by",c.signName)}${row("Date signed",c.signedAt?new Date(c.signedAt).toLocaleString("en-GB"):"")}</table>${c.sig?`<img src="${esc(c.sig)}" alt="Signature">`:""}`).join("")}
+    <p><button onclick="print()">🖨 Print or save as PDF</button></p></body></html>`); w.document.close();
+}
 const CAT_PRESETS = [["MD","Men's doubles"],["WD","Women's doubles"],["XD","Mixed doubles"]];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -870,7 +933,7 @@ function viewReg(){
           <label class="f">Mobile (WhatsApp) *<input id="rg-ph${n}" type="tel" maxlength="30" required autocomplete="${n===1?"tel":"off"}" placeholder="07…"></label>
           <label class="f">Email${n===1?" *":""}<input id="rg-em${n}" type="email" maxlength="120" ${n===1?'required autocomplete="email"':'autocomplete="off"'} placeholder="name@example.com"></label>
           <label class="f">Playing level *<select id="rg-lv${n}" required><option value="">Choose…</option>${LEVELS.map(l=>`<option>${esc(l)}</option>`).join("")}</select></label>
-          <label class="f">Gender *<select id="rg-g${n}" required><option value="">Choose…</option><option>Male</option><option>Female</option><option>Prefer not to say</option></select></label></div></fieldset>`).join("")}
+          <label class="f">Gender *<select id="rg-g${n}" required><option value="">Choose…</option><option>Male</option><option>Female</option><option>Prefer not to say</option></select></label></div>${juniorsOn(t)?consentBlock(t,n):""}</fieldset>`).join("")}
         <fieldset><legend>🚑 Emergency contact</legend><div class="grid2">
           <label class="f">Name *<input id="rg-emname" maxlength="60" required placeholder="Someone not playing"></label>
           <label class="f">Phone *<input id="rg-emphone" type="tel" maxlength="30" required placeholder="07…"></label>
@@ -1038,7 +1101,9 @@ function viewOrg(only){
       <div class="grid2">${f("max","Max teams per category (0 = no limit)",x?.maxTeams??0,"number",'min="0" max="128"')}${f("wa","WhatsApp group link",x?.wa||WA_GROUP,"url",'placeholder="https://chat.whatsapp.com/…"')}</div>
       <span class="lbl">💷 Bank details for entry fees · leave empty to switch payment off</span>
       <div class="grid2">${f("bname","Account name",x?.bank?.name)}${f("bsort","Sort code",x?.bank?.sort,"text",'placeholder="00-00-00" inputmode="numeric"')}${f("bacct","Account number",x?.bank?.acct,"text",'placeholder="12345678" inputmode="numeric"')}${f("bnote","Payment note (optional)",x?.bank?.note,"text",'placeholder="e.g. Use your team name as the reference"')}</div>
-      <div class="grid2">${ta("terms","Terms & conditions (players must agree)",x?.terms||DEFAULT_TERMS,6)}</div></div>
+      <div class="grid2">${ta("terms","Terms & conditions (players must agree)",x?.terms||DEFAULT_TERMS,6)}</div>
+      <label class="switch"><input type="checkbox" id="to-juniors" ${x?.juniors?"checked":""}><span>👪 Under-18 players can enter: a parent or guardian fills in and signs a consent form, and names the adult who'll be with them on the day <span class="muted">(always on for categories like "U18" or "Junior")</span></span></label>
+      <div class="grid2">${ta("consent","Parent / guardian consent wording (shown on the form they sign)",x?.consent||DEFAULT_CONSENT,5)}</div></div>
     <div class="ogrp"><h3>🏸 Format & scoring</h3><div class="grid2">
       <label class="f">Tournament type<select id="to-mode"><option value="pairs" ${!isTeam(x)?"selected":""}>Doubles pairs</option><option value="team" ${isTeam(x)?"selected":""}>Team Cup: teams of 4 (MD, WD, 2 × XD)</option></select></label>
       ${f("gsize","Teams per group",x?.groupSize??(isTeam(x)?3:4),"number",'min="3" max="8"')}${f("adv","Teams through per group",x?.advance??2,"number",'min="1" max="4"')}
@@ -1153,7 +1218,7 @@ function teamCard(t, x){
   const more=[...[2,3,4].map(k=>c["phone"+k]||c["email"+k]?`P${k}: ${c["phone"+k]||""} ${c["email"+k]||""}`:""), c.emName?`Emergency: ${c.emName} ${c.emPhone||""}`:"", c.notes?`Notes: ${c.notes}`:""].filter(Boolean);
   return `<div class="otc"><div class="otc-h"><b>${esc(x.name)}</b>${x.status==="confirmed"?'<span class="chip st-confirmed">Confirmed</span>':'<span class="chip st-awaiting">Pending</span>'}${c.paid?`<span class="chip st-awaiting">${c.payName?`Paid as ${esc(c.payName)}`:"Says paid"} · check bank</span>`:""}${c.wa?'<span class="chip st-confirmed">WhatsApp ✓</span>':""}</div>
     <div class="muted">${esc(playersOf(x).join(" · "))}</div>
-    ${c.email||c.phone?`<div class="otc-c">${esc([c.email,c.phone].filter(Boolean).join(" · "))}</div>`:""}${more.length?`<details class="otc-m"><summary>More details</summary><div>${more.map(esc).join("<br>")}</div></details>`:""}
+    ${c.email||c.phone?`<div class="otc-c">${esc([c.email,c.phone].filter(Boolean).join(" · "))}</div>`:""}${more.length?`<details class="otc-m"><summary>More details</summary><div>${more.map(esc).join("<br>")}</div></details>`:""}${consentInfo(t,x)}
     ${x.status==="confirmed"&&S.codes[x.id]?(()=>{ const code=S.codes[x.id].code, msg=confirmMsg(t,x), ph=ukPhone(c.phone);
       return `<div class="otc-code"><span>🎟 Code <b class="code">${esc(code)}</b>${S.codes[x.id].mailedAt?` <span class="chip st-confirmed" title="${esc(S.codes[x.id].mailedTo||"")}">📧 Emailed ${esc(new Date(S.codes[x.id].mailedAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))}</span>`:c.email?"":' <span class="chip st-awaiting">No email saved</span>'}${x.checkedIn?' <span class="chip st-confirmed">✅ Checked in</span>':""}</span>
         <div class="row">${S.mail?.url&&c.email?`<button class="btn small" data-mailteam="${esc(x.id)}">📧 ${S.codes[x.id].mailedAt?"Email again":"Email now"}</button>`:c.email?`<a class="btn small" href="mailto:${esc(c.email)}?subject=${encodeURIComponent(`${x.name} is confirmed · ${t.name||"Tournament"}`)}&body=${encodeURIComponent(msg)}">📧 Email</a>`:""}<button class="btn small primary" data-sendqr="${esc(x.id)}">📲 Send QR</button><a class="btn small" href="https://wa.me/${ph?esc(ph):""}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener" title="${ph?"Opens a chat with the captain":"No phone saved: pick the chat in WhatsApp"}">💬 WhatsApp</a><button class="btn small ghost" data-copy="${esc(msg)}">Copy message</button><a class="btn small ghost" href="${esc(passUrl(t,code))}" target="_blank" rel="noopener">🎫 Pass</a></div></div>` })():""}
@@ -1226,6 +1291,7 @@ function render(){
   $("#main").innerHTML = !S.loaded ? `<section class="panel"><div class="empty loading">Loading…</div></section>` : scanCard() + (S.edit?editPanel():"") + views[S.tab]();
   Object.entries(keep).forEach(([id,k])=>{ const el=document.getElementById(id); if(!el) return; if("c" in k) el.checked=k.c; else el.value=k.v });
   document.querySelectorAll("#main details[id]").forEach(d=>{ if(openD.has(d.id)) d.open=true });
+  sigPad();
 }
 function tickClock(){ const c=$("#clock"); if(c) c.textContent=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}) }
 setInterval(()=>{ if(S.tab==="screen"){ tickClock() } },15000);
@@ -1278,6 +1344,8 @@ document.addEventListener("click", async e=>{
   if(e.target.closest("select,input,.plan")) return;   // court/time pickers inside a match card
   const t0=e.target.closest("button,a,[data-medit]"); if(!t0) return;
   const ds=t0.dataset, t=T();
+  if(ds.sigclear){ const c=document.querySelector(`canvas[data-sig="${ds.sigclear}"]`); c?.getContext("2d").clearRect(0,0,c.width,c.height); if(S.sig) delete S.sig[ds.sigclear]; return }
+  if(ds.consprint && S.isAdmin){ const x=teamById(ds.consprint); if(x && T()) consentPrint(T(),x); return }
   if(ds.readopen){ const t2=T(); if(!t2) return; const k=ds.readopen, box=document.createElement("div"); box.className="readmodal"; box.setAttribute("role","dialog"); box.setAttribute("aria-modal","true");
     box.innerHTML=`<div class="readcard"><h2>${k==="format"?"📋 Game format":"📜 Terms & conditions"}</h2><div class="readtxt">${k==="format"?formatVisual(t2):richTxt(t2.terms||DEFAULT_TERMS)}</div><button type="button" class="btn primary" data-readdone="${k}">I've read this ✓</button></div>`;
     document.body.appendChild(box); box.querySelector("[data-readdone]").focus(); return }
@@ -1372,7 +1440,7 @@ document.addEventListener("click", async e=>{
     catch(e){ toast(e?.code==="auth/operation-not-allowed"?"Email sign-in isn't switched on yet":"Couldn't send the link. Check the address.") } return }
   if(ds.signin){ try{ await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); location.reload() }catch{ toast("Sign-in didn't finish") } return }
   if(ds.withdraw){ const x=teamById(ds.withdraw); if(!x||!confirm(`Withdraw ${x.name}?`)) return;
-    await db.collection("tcontacts").doc(x.id).delete().catch(()=>{}); await db.collection("tteams").doc(x.id).delete().then(()=>toast("Team withdrawn"),()=>toast("Couldn't withdraw")); return }
+    await db.collection("tcontacts").doc(x.id).delete().catch(()=>{}); await db.collection("tconsent").doc(x.id).delete().catch(()=>{}); await db.collection("tteams").doc(x.id).delete().then(()=>toast("Team withdrawn"),()=>toast("Couldn't withdraw")); return }
   // referee
   if(ds.refopen){ const code=($("#ref-code")?.value||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,""), name=($("#ref-name")?.value||"").trim().slice(0,40);
     if(!name){ toast("Add your name"); $("#ref-name")?.focus(); return } if(code.length<4){ toast("Enter the referee code"); return } ls.set("dsf:refname",name); tryRefUnlock(code, name); return }
@@ -1421,7 +1489,7 @@ document.addEventListener("click", async e=>{
     const data={name:g("name").value.trim(), date:g("date").value, venue:g("venue").value.trim(), entry:g("entry").value.trim(), info:g("info").value.trim(), prize1:g("p1").value.trim().slice(0,200), prize2:g("p2").value.trim().slice(0,200), prize3:g("p3").value.trim().slice(0,200),
       maxTeams:Number(g("max").value)||0, courts:Math.min(12,Math.max(1,Number(g("courts").value)||4)), groupSize:Math.min(8,Math.max(3,Number(g("gsize").value)||4)), advance:Math.min(4,Math.max(1,Number(g("adv").value)||2)),
       pointsTo:Number(g("to").value)||21, deuce:g("deuce").value!=="0", bestOf:Number(g("bo").value)||1, startTime:g("start").value||"10:00", matchMins:Math.min(60,Math.max(5,Number(g("mins").value)||15)),
-      address:g("address").value.trim(), directions:g("dirs").value.trim(), format:g("format").value.trim().slice(0,2000), terms:(g("terms").value.trim()||DEFAULT_TERMS).slice(0,5000),
+      address:g("address").value.trim(), directions:g("dirs").value.trim(), format:g("format").value.trim().slice(0,2000), terms:(g("terms").value.trim()||DEFAULT_TERMS).slice(0,5000), juniors:g("juniors").checked, consent:(g("consent").value.trim()||DEFAULT_CONSENT).slice(0,3000),
       bank:{name:g("bname").value.trim().slice(0,60), sort:g("bsort").value.trim().slice(0,12), acct:g("bacct").value.trim().slice(0,20), note:g("bnote").value.trim().slice(0,200)}, wa:/^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]+/.test(g("wa").value.trim())?g("wa").value.trim().split("?")[0]:WA_GROUP, ...(S.posterDraft!==undefined?{poster:S.posterDraft}:{}), regOpen:g("open").checked,
       koSize:Math.min(64,Math.max(0,Number(g("kosize").value)||0)),
       stageRules:Object.fromEntries([["ko","k"],["final","f"]].map(([key,k])=>[key,{pointsTo:Number(g(k+"to").value)||0, cap:Math.min(40,Math.max(0,Number(g(k+"cap").value)||0)), bestOf:Number(g(k+"bo").value)||0}])),
@@ -1436,7 +1504,7 @@ document.addEventListener("click", async e=>{
     if(ds.v==="confirmed"){ const x=teamById(ds.tconfirm); if(x) x.status="confirmed"; const made=await ensureCodes(t,[ds.tconfirm]); if(S.mail?.url && x && S.contacts[x.id]?.email && !S.codes[x.id]?.mailedAt) await mailTeam(t,x); else if(made) toast("Confirmed ✓ Team code made. Send it with 📧 Email or 💬 WhatsApp.") } return }
   if(ds.confirmall){ const b=db.batch(), ids=teamsOf(t,ds.confirmall).filter(x=>x.status!=="confirmed").map(x=>x.id); ids.forEach(id=>b.update(db.collection("tteams").doc(id),{status:"confirmed"})); await b.commit();
     ids.forEach(id=>{ const x=teamById(id); if(x) x.status="confirmed" }); await ensureCodes(t); toast("All confirmed, team codes made"); if(S.mail?.url) await mailAll(t); return }
-  if(ds.tdel){ const x=teamById(ds.tdel); if(!x||!confirm(`Delete ${x.name}?`)) return; await db.collection("tcontacts").doc(x.id).delete().catch(()=>{}); await db.collection("tteams").doc(x.id).delete(); return }
+  if(ds.tdel){ const x=teamById(ds.tdel); if(!x||!confirm(`Delete ${x.name}?`)) return; await db.collection("tcontacts").doc(x.id).delete().catch(()=>{}); if(S.consent?.[x.id]) await db.collection("tconsent").doc(x.id).delete().catch(()=>{}); await db.collection("tteams").doc(x.id).delete(); return }
   if(ds.oadd){ const v=id=>($(`#oa-${id}`)?.value||"").trim(), ks=Array.from({length:nPl(t)},(_,i)=>"p"+(i+1)); if(!v("name")||ks.some(k=>!v(k))){ toast(`Add a team name and all ${ks.length} players`); return }
     await db.collection("tteams").add({tid:t.id, cat:ds.oadd, name:v("name"), ...Object.fromEntries(ks.map(k=>[k,v(k)])), createdBy:S.uid, createdAt:nowIso(), status:"confirmed"}); ["name",...ks].forEach(k=>$(`#oa-${k}`).value=""); toast("Team added"); return }
   if(ds.preset){ const p=PRESETS.find(x=>x.key===ds.preset); if(!p) return; const x=p.find();
@@ -1460,7 +1528,7 @@ document.addEventListener("click", async e=>{
   if(ds.tdelt){ const x=S.tourneys.find(y=>y.id===ds.tdelt); if(!x) return;
     const typed=prompt(`This deletes ${x.name} with all ${teamsOf(x).length} teams, fixtures and results. It can't be undone.\n\nType DELETE to confirm.`); if(typed!=="DELETE") return;
     if(S.mail?.sheetUrl){ toast("Saving it to your Google Sheet first…"); await syncSheet(true) }
-    try{ const docs=[...matchesOf(x).map(m=>db.collection("tmatches").doc(m.id)), ...teamsOf(x).flatMap(tm=>[db.collection("tcontacts").doc(tm.id), db.collection("tteams").doc(tm.id)]), db.collection("tsecrets").doc(x.id), db.collection("tourneys").doc(x.id)];
+    try{ const docs=[...matchesOf(x).map(m=>db.collection("tmatches").doc(m.id)), ...teamsOf(x).flatMap(tm=>[db.collection("tcontacts").doc(tm.id), ...(S.consent?.[tm.id]?[db.collection("tconsent").doc(tm.id)]:[]), db.collection("tteams").doc(tm.id)]), db.collection("tsecrets").doc(x.id), db.collection("tourneys").doc(x.id)];
       for(let i=0;i<docs.length;i+=400){ const b=db.batch(); docs.slice(i,i+400).forEach(d=>b.delete(d)); await b.commit() }
       if(S.tid===x.id){ S.tid=null; ls.set("dsf:tid",null) } toast(`${x.name} deleted`) }catch{ toast("Couldn't delete it all. Try again.") } return }
   if(ds.gen){ if(matchesOf(t,ds.gen).length && !confirm("This replaces all fixtures and results for this category. Carry on?")) return; await generateGroups(t, ds.gen); return }
@@ -1491,6 +1559,7 @@ document.addEventListener("input", e=>{ if(e.target.id!=="ci-find") return; S.ci
 // remember whether the final-details panel is open, so redraws keep it that way
 document.addEventListener("toggle", e=>{ if(e.target.classList?.contains("finalset")) S.finalOpen=e.target.open; if(e.target.classList?.contains("adjbox")) S.adjOpen=e.target.open?e.target.dataset.adjg:null }, true);
 document.addEventListener("change", async e=>{
+  if(e.target.id==="rg-cat"){ const t=T(); if(t && juniorCat(cats(t).find(c=>c.id===e.target.value))) document.querySelectorAll("#regForm input[id^='rg-u']").forEach(i=>{ if(/^rg-u\d$/.test(i.id)) i.checked=true }); return }
   if(e.target.dataset?.koteam && S.isAdmin){ const sd=e.target.dataset.koteam, key=e.target.dataset.kotie, v=e.target.value||null, xs=S.matches.filter(m=>m.tie===key||m.id===key);
     const b=db.batch(); xs.forEach(m=>b.update(db.collection("tmatches").doc(m.id),{[sd]:v, updatedAt:nowIso()})); await b.commit().then(()=>toast(v?`${tName(v)} put in ✓`:"Back to automatic ✓"),()=>toast("Couldn't save")); return }
   if(e.target.dataset?.kostart && S.isAdmin){ const t=T(), k=Number(e.target.value); if(!t||!k||!t.groups?.[S.cat]) return; await setKo(t, koSizeUpd(t,k)); return }
@@ -1537,16 +1606,35 @@ document.addEventListener("submit", async e=>{
   if(!$("#rg-fmt")?.checked) return bad("fmt", S.read?.format?"Tick to confirm you've read the game format":"Read the game format first. It's required");
   if(!$("#rg-terms")?.checked) return bad("terms", S.read?.terms?"Tick to agree to the terms & conditions":"Read the terms & conditions first. They're required");
   if(!$("#rg-ok")?.checked) return bad("ok","Tick the box to say the organiser can contact you");
+  const jc=juniorCat(cats(t).find(c=>c.id===cat)), kids=juniorsOn(t)?ns.filter(n=>$(`#rg-u${n}`)?.checked):[];
+  if(jc) for(const n of ns) if(!kids.includes(n)) return bad("u"+n, `This is an under-18 category: tick "Under 18" for player ${n} and fill in the parent consent`);
+  for(const n of kids){ const age=ageOn(v("dob"+n), t.date);
+    if(!v("dob"+n)) return bad("dob"+n, `Add player ${n}'s date of birth`);
+    if(age==null || age<4) return bad("dob"+n, `Check player ${n}'s date of birth`);
+    if(age>=18) return bad("dob"+n, `Player ${n} is 18 or over on the day: untick "Under 18" (no consent form needed)`);
+    if(!v("gn"+n)) return bad("gn"+n, `Add the parent or guardian's name for player ${n}`);
+    if(!v("gr"+n)) return bad("gr"+n, `Choose the parent or guardian's relationship to player ${n}`);
+    if(!phoneOk(v("gp"+n))) return bad("gp"+n, `Add the parent or guardian's mobile for player ${n}`);
+    if(v("ge"+n) && !emailOk(v("ge"+n))) return bad("ge"+n, `Check the parent or guardian's email for player ${n}`);
+    if(!$(`#rg-gsame${n}`)?.checked){ if(!v("an"+n)) return bad("an"+n, `Add the name of the adult who'll be with player ${n} on the day`);
+      if(!v("ar"+n)) return bad("ar"+n, `Add how that adult is related to player ${n}`); if(!phoneOk(v("ap"+n))) return bad("ap"+n, `Add a mobile for the adult who'll be with player ${n}`) }
+    if(!$(`#rg-gok${n}`)?.checked) return bad("gok"+n, `The parent or guardian needs to tick to give consent for player ${n}`);
+    if(!S.sig?.[n]){ toast(`The parent or guardian needs to sign for player ${n}`); document.querySelector(`canvas[data-sig="${n}"]`)?.scrollIntoView({block:"center",behavior:"smooth"}); return }
+    if(!v("gsn"+n)) return bad("gsn"+n, `Type the parent or guardian's name to sign for player ${n}`); }
   const btn=e.target.querySelector("button[type=submit]"); btn.disabled=true;
   try{
     const u=await ensureSignedIn();
     const ref=db.collection("tteams").doc();
     await ref.set({tid:t.id, cat, name:v("name"), ...Object.fromEntries(ns.map(n=>["p"+n,v("p"+n)])), createdBy:u.uid, createdAt:nowIso(), status:"pending"});
+    if(kids.length) try{ const at=nowIso();   // the signed parent consent, private like the contact details
+      await db.collection("tconsent").doc(ref.id).set({tid:t.id, createdBy:u.uid, createdAt:at, text:(t.consent||DEFAULT_CONSENT).slice(0,5000), kids:kids.map(n=>({n, player:v("p"+n), dob:v("dob"+n), gName:v("gn"+n), gRel:v("gr"+n), gPhone:v("gp"+n), gEmail:v("ge"+n),
+        medical:v("med"+n), same:!!$(`#rg-gsame${n}`)?.checked, ...($(`#rg-gsame${n}`)?.checked?{}:{aName:v("an"+n), aRel:v("ar"+n), aPhone:v("ap"+n)}), photo:!!$(`#rg-gphoto${n}`)?.checked, agreed:true, signName:v("gsn"+n), signedAt:at, sig:S.sig[n]}))});
+    }catch(err){ await ref.delete().catch(()=>{}); throw {code:"consent"} }
     await db.collection("tcontacts").doc(ref.id).set({email:v("em1"), phone:v("ph1"), ...Object.fromEntries(ns.slice(1).flatMap(n=>[["email"+n,v("em"+n)],["phone"+n,v("ph"+n)]])), ...Object.fromEntries(ns.flatMap(n=>[["lv"+n,v("lv"+n)],["g"+n,v("g"+n)]])),
       emName:v("emname"), emPhone:v("emphone"), notes:v("notes"), wa:true, agreed:true, ...(bankOf(t)?{paid:true, payName:v("payname")}:{}), createdBy:u.uid});
-    const nm=v("name"); $("#regForm")?.reset(); S.waOpened=false; S.read={}; render();   // the form may have been redrawn while saving
+    const nm=v("name"); $("#regForm")?.reset(); S.waOpened=false; S.read={}; S.sig={}; render();   // the form may have been redrawn while saving
     toast(`${nm||"Team"} registered! 🎉`); burst();
-  }catch(err){ toast(err?.code==="permission-denied"?"Registration is closed or that category is full":err?.code==="auth/operation-not-allowed"?"Registration isn't switched on yet":"Couldn't register. Check your connection.") }
+  }catch(err){ toast(err?.code==="consent"?"Couldn't save the parent consent form. Please try again, or message the organiser.":err?.code==="permission-denied"?"Registration is closed or that category is full":err?.code==="auth/operation-not-allowed"?"Registration isn't switched on yet":"Couldn't register. Check your connection.") }
   btn.disabled=false;
 });
 /* ---------- first organiser visit: set up the Team Cup (teams + fixtures) and the official Net Play details ---------- */
@@ -1851,7 +1939,7 @@ function recordsPanel(){
 function scanCard(){
   if(!S.scan || !(S.isAdmin || S.desk)) return ""; const p=S.scan, x=teamById(p.team), t=S.tourneys.find(y=>y.id===p.tid);
   if(!x) return `<section class="panel scancard"><h2>📷 Scanned code ${esc(p.code||"")}</h2><p>${p.err==="rules"?"Couldn't look the code up: the latest Firebase rules aren't published yet.":p.err==="net"?"Couldn't look the code up. Check the internet connection.":"No team found for this code. Check it was typed right, or find the team in the list below."}</p><button class="btn small ghost" data-scanx="1">Close</button></section>`;
-  return `<section class="panel scancard ${x.checkedIn?"in":""}"><span class="lbl">📷 Scanned · ${esc(t?.name||"")}</span><h2>${esc(x.name)}</h2><p>${esc(playersOf(x).join(" · "))}</p>
+  return `<section class="panel scancard ${x.checkedIn?"in":""}"><span class="lbl">📷 Scanned · ${esc(t?.name||"")}</span><h2>${esc(x.name)}</h2><p>${esc(playersOf(x).join(" · "))}</p>${S.isAdmin&&t?consentInfo(t,x,false).replace("<details ","<details open "):""}
     <div class="row">${x.status==="confirmed"?'<span class="chip st-confirmed">Confirmed</span>':'<span class="chip st-awaiting">Not confirmed</span>'}${x.checkedIn?`<span class="chip st-confirmed">✅ Checked in ${x.checkedInAt?esc(new Date(x.checkedInAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})):""}</span>`:""}</div>
     <div class="row">${x.checkedIn?`<button class="btn small ghost" data-checkin="${esc(x.id)}" data-v="0">Undo check-in</button>`:`<button class="btn primary" data-checkin="${esc(x.id)}" data-v="1">✅ Check in</button>`}${`<button class="btn small" data-scanqr="1">📷 Scan next</button>`}<button class="btn small ghost" data-scanx="1">Close</button></div></section>`;
 }
@@ -2014,6 +2102,7 @@ setTimeout(checkVersion, 4000); setInterval(checkVersion, 120000);
     db.collection("tunlocks").onSnapshot(sn=>{ S.refs=sn.docs.map(d=>({id:d.id,...d.data()})); render() },()=>{});
     db.collection("config").doc("mail").onSnapshot(d=>{ S.mail=d.exists&&d.data().url?d.data():null; render() },()=>{});
     listen("tcontacts", d=>{ S.contacts=Object.fromEntries(d.map(x=>[x.id,x])); render() });
+    db.collection("tconsent").onSnapshot(sn=>{ S.consent=Object.fromEntries(sn.docs.map(d=>[d.id,d.data()])); render() },e=>{ if(e?.code==="permission-denied"){ S.rulesOld=true; render() } });
     db.collection("tcodes").onSnapshot(sn=>{ S.codes=Object.fromEntries(sn.docs.map(d=>[d.id,d.data()])); const first=!S.codesLoaded; S.codesLoaded=true; render();
       if(first) setTimeout(async()=>{ for(const t of S.tourneys) await ensureCodes(t) },2500); S.rulesOld=false },e=>{ if(e?.code==="permission-denied"){ S.rulesOld=true; render() } });
     const go=()=>{ if(S.loaded) autoSetup(); else setTimeout(go,300) }; setTimeout(go,1200);

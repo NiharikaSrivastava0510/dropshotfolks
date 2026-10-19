@@ -191,6 +191,17 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
     }
+    // Parent / guardian consent for under-18 players (with the signature): private, organiser and the family who sent it only.
+    match /tconsent/{teamId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.keys().hasOnly(['tid', 'createdBy', 'createdAt', 'text', 'kids'])
+        && request.resource.data.createdBy == request.auth.uid && request.resource.data.tid is string
+        && shortText(request.resource.data.text, 5000) && shortText(request.resource.data.createdAt, 40)
+        && request.resource.data.kids is list && request.resource.data.kids.size() > 0 && request.resource.data.kids.size() <= 4
+        && get(/databases/$(database)/documents/tteams/$(teamId)).data.createdBy == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
+    }
     // Main website text, links and photos the organiser has changed: public to read, organiser only to change.
     match /site/{doc} {
       allow read: if true;

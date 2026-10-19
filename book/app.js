@@ -1,65 +1,76 @@
 /* ---------- Club rules ---------- */
 const LEVELS = [
-  {code:"E", key:"E", name:"Beginner", court:null, desc:"Still learning to hold the racket, can't yet clear from one end of the court to the other, or doesn't know the doubles rules yet. Not for Thursday sessions: start with coaching or a beginners' session."},
+  {code:"E-", key:"Em", name:"New Beginner", court:null, desc:"Can hit the shuttle back and forth from one spot to another, but not yet the different shots, a full game or any pace. Not for Thursday sessions: start with coaching or a beginners' session."},
+  {code:"E", key:"E", name:"Beginner", court:null, desc:"Plays proper games, but clears don't reach the back yet, there's no real smash or drop, and fast shuttles get past. Not for Thursday sessions: start with coaching or a beginners' session."},
   {code:"D-", key:"Dm", name:"Lower Intermediate", court:1, desc:"Social player. Clears from one end to the other, smashes from the front, tries drops, knows the basic serves and how doubles works, but medium-paced games are still a stretch."},
   {code:"D+", key:"Dp", name:"Intermediate", court:2, desc:"Rallies of 6–10 shots, knows doubles rotation, plays clears, smashes and net shots, and enjoys fast-paced badminton."},
   {code:"C-", key:"Cm", name:"Mid Intermediate", court:3, desc:"Fast-paced player. Hits smashes, keeps rallies of 10–15 shots, kills at the net, clears and smashes with only a few mistakes."},
   {code:"C+", key:"Cp", name:"High Intermediate (upper)", court:4, desc:"Plays tournaments regularly, knows every shot and makes hardly any mistakes."}
 ];
-// Club rule: no beginners (E) on Thursday sessions, whatever the court setup says.
+// Club rule: no beginners (E- or E) on Thursday sessions, whatever the court setup says.
 const NO_BEGINNER_DAYS = [4];   // 0 = Sunday … 4 = Thursday
 const beginnersBarred = s => !!s?.date && NO_BEGINNER_DAYS.includes(new Date(s.date+"T12:00:00").getDay());
 const lvByCode = c => LEVELS.find(l=>l.code===c);
+const BEGINNER = ["E-","E"];
 const lvByCourt = n => LEVELS.find(l=>l.court===n);
 const CLR = {1:"var(--d1)",2:"var(--d2)",3:"var(--c1)",4:"var(--c2)"};
 const COACHING = "https://dropshotfolks.co.uk/#coaching";
 const PER_COURT = 7, GAME_MINS = 12;
-// Level quiz: "about you" answers score 0 (beginner) to 4 (upper high intermediate);
-// quick-quiz questions have one right answer and show why.
+// Level quiz: 12 questions on what you can actually do on court, doubles rotation and tournaments.
+// On-court answers run from 0 to 4: 0 only hits the shuttle back and forth (E-), 1 beginner playing games (E),
+// 2 lower intermediate (D-), 3 intermediate to mid (D+/C-), 4 upper (C+).
+// Placement is strict: your weaker shots count as much as your average, and each level needs every shot that defines it.
 const QUIZ = [
-  {e:"⏳", img:"hero-hall", call:"Pre-match chat", k:"years", q:"First things first: how long have you been playing badminton?", ic:["🐣","🌱","🌿","🌳","🦸"], a:["I'm just starting out","Less than a year","1–3 years","3–5 years","5+ years, it's my life"]},
-  {e:"🤝", img:"ready-stance", call:"Warm-up", k:"grip", q:"Pick up your racket. How do you hold it?", ic:["🍳","🤔","🤝","🔄","🪄"], a:["Like a frying pan, or not sure","I'm still learning the proper grip","Handshake grip, comfortably","I switch between forehand and backhand grips","I change grips without even thinking"]},
-  {e:"📆", img:"court-wide-2", call:"Warm-up", k:"week", q:"How many times a week do you get on court?", ic:["😴","1️⃣","2️⃣","3️⃣","🏠"], a:["Hardly ever, maybe once a month","About once a week","Twice a week","Three times a week","Four or more, I basically live here"]},
-  {e:"🏸", img:"service-ready", call:"Rally 1 · the serve", tag:"serve", q:"Love all, play! You're serving to start a doubles rally. Which serve do most players use?", a:["High serve to the back line","Smash it down","Low serve, just over the net","Drive it at their body"], correct:2, why:"The low serve stays tight to the net so the receiver can't attack it."},
-  {e:"🌈", img:"court-wide-1", call:"Warm-up", k:"clear", q:"Can you clear the shuttle from your back line all the way to the other end?", ic:["🙈","🤏","👍","🚀","🎯"], a:["Not yet, it lands mid-court","Sometimes, if I really go for it","Yes, most of the time","Yes, high and deep every time","Yes, and I attack with flat clears too"]},
-  {e:"📏", img:"service-ready", call:"Rally 2 · doubles rules", tag:"rules", q:"Doubles serve: where must it land to be in?", a:["Anywhere on the other side","In the box straight in front of you","In the box diagonally opposite, not past the doubles back service line","Only between the back tramlines"], correct:2, why:"Diagonally opposite, and in doubles the serve is short at the back: the inner back line."},
-  {e:"🔁", img:"court-lunge", call:"Warm-up", k:"rally", q:"How long can your rallies go with players at your level?", ic:["🐣","🙂","💪","🔥","🦸"], a:["I'm just learning to hit the shuttle","A few shots, under 6","6–10 shots","10–15 shots","15+, and I build the point to win it"]},
-  {e:"🦘", img:"jump-reach", call:"Rally 3 · read the receiver", tag:"serve", q:"The receiver is creeping right up to the front line, ready to pounce on your low serve. What do you serve?", a:["A flick serve over their head","The same low serve, just faster","Serve it into the net","Wait for them to step back"], correct:0, why:"A flick serve flies just over their reach to the back of the court."},
-  {e:"⚡", img:"backhand-defence", call:"Warm-up", k:"pace", q:"What pace of game feels comfortable?", ic:["🐢","🚶","🏃","🏎️","🚀"], a:["Slow and gentle","Social pace; medium-paced games are a stretch","Medium to fast","Fast-paced rallies, all game","Tournament pace"]},
-  {e:"👀", img:"kneel-celebrate", call:"Rally 4 · spot the shot", tag:"shot", q:"Coach jumps at the back and hits it fast and steep, straight down at you. What shot was that?", a:["Clear","Lift","Smash","Net shot"], correct:2, why:"That's the smash: the big attacking shot to win the point."},
-  {e:"💥", img:"backhand-defence", call:"Warm-up", k:"shots", q:"Which shots do you play on purpose?", ic:["🤷","➡️","🪶","💥","🎩"], a:["I don't know the different shots yet","Clears and front-court smashes","Clears, smashes, drops and net shots","All of those, plus drives and lifts under pressure","Every shot, including deception"]},
-  {e:"🧑‍🏫", img:"net-high-five", call:"Change of ends", k:"coach", q:"Ever had a coach in your corner?", ic:["🙅","👋","📚","📈","🎓"], a:["Never, self-taught all the way","A taster session or two","Some lessons or group classes","Regular coaching for a while","Years of coaching or squad training"]},
-  {e:"🪶", img:"court-three", call:"Rally 5 · spot the shot", tag:"shot", q:"Coach is at the back again, but this time it's soft and drops just over the net. What shot was that?", a:["Drive","Drop shot","Clear","Smash"], correct:1, why:"The drop shot pulls you forward and opens up the back of your court."},
-  {e:"🥅", img:"net-high-five", call:"Warm-up", k:"net", q:"The shuttle pops up just above the net on your side. You…", ic:["🙈","↩️","👇","🔨","🎩"], a:["Duck!","Push it back over","Tap it down sometimes","Kill it, most of the time","Kill it or play a tight net shot, my choice"]},
-  {e:"🔢", img:"group-high-five", call:"Rally 6 · scoring", tag:"rules", q:"How does a game of badminton finish?", a:["First to 15","First to 21, win by 2, and 30 wins if it's still close","First to 11, three times","First to 25"], correct:1, why:"21 points, you need a 2-point lead, and at 29–all the next point (30) wins."},
-  {e:"🎯", img:"court-three", call:"Warm-up", k:"errors", q:"Be honest: how often do you make unforced errors?", ic:["😅","🙃","🙂","😎","🧊"], a:["Most rallies","Quite often","Sometimes","Only a few","Hardly ever"]},
-  {e:"👯", img:"group-high-five", call:"Warm-up", k:"doubles", q:"How do you play doubles?", ic:["🙋","🧭","🔄","🛡️","♟️"], a:["I haven't played doubles","I'm still working out where to stand","Front-and-back and side-by-side, and we rotate","We rotate smoothly and cover every gap","We play tactical formations"]},
-  {e:"🧭", img:"court-wide-1", call:"Match point · positions", tag:"court", q:"Your side is attacking. Where do you and your partner stand?", a:["Side by side","Both at the net","Both at the back","One at the front, one at the back"], correct:3, why:"Front-and-back when attacking, side-by-side when defending."},
-  {e:"🏆", img:"kneel-celebrate", call:"Cool-down", k:"tour", q:"Tournaments: what's your story?", ic:["🙈","🎪","🤝","🏅","🥇"], a:["Never played one","Tried a fun one once","A few social tournaments","I play tournaments regularly","Regular competitive tournaments, medals included"]}
+  {e:"🌈", img:"court-wide-1", call:"Warm-up · clear", k:"clear", q:"You're right at your back line. Hit a forehand clear. Where does it land, honestly?", ic:["🙈","🤏","👍","🚀","🎯"], a:["Mid-court or shorter","In the back half, but only if I wind up and I'm standing still","Near the back line most times, when I have time","Between the back lines nearly every time, even when I'm moving","Deep every time, and I can play it flat and fast to attack"]},
+  {e:"🏸", img:"service-ready", call:"Rally 1 · after the serve", tag:"serve", q:"Doubles. You low-serve. The receiver pushes it flat past you to the mid-court sideline. Your partner is behind you. Who takes it, and what do they play?", a:["You, the server: turn and chase it","Your partner: lift it high and deep to reset","Your partner: drive or push it flat back, keeping the attack","Leave it: pushes like that usually go out"], correct:2, why:"After a low serve the server holds the net. The back player takes the mid-court and keeps it flat, because lifting hands them the attack."},
+  {e:"🧰", img:"court-three", call:"Warm-up · your shots", k:"shots", multi:true, q:"Tick every shot you can play on purpose in a real game and land where you meant. Be strict: only the ones that work most of the time.", ic:["🌈","🪶","💥","🥅","➡️","🎈","👉","⚡"], a:["Clear to the back line","Drop shot from the back","Smash from the back","Tight net shot","Flat drive","Deep lift from the net","Push to mid-court","Flick serve"]},
+  {e:"🔙", img:"backhand-defence", call:"Warm-up · backhand", k:"backhand", q:"A high shuttle drops into your backhand back corner and you can't get round it. What happens?", ic:["🏃","😬","↗️","🎯","🪄"], a:["I miss it or frame it","It gets over the net, but short and high","Lifts to mid-court, so they attack it","A backhand clear to the back third, or a decent drop, most times","Backhand clear, drop or smash, with control"]},
+  {e:"💥", img:"jump-reach", call:"Warm-up · smash", k:"smash", q:"Smashing from the back of the court against players at your level:", ic:["🤷","📉","👌","⚡","🔨"], a:["I don't really smash from the back","It goes flat, long or into the net a lot","It's steep, but they get it back easily","Steep and fast, and it often wins the point or forces a weak reply","I can smash, follow it in and finish the reply, rally after rally"]},
+  {e:"🔁", img:"court-wide-2", call:"Rally 2 · after a lift", tag:"rotation", q:"You and your partner are front-and-back, attacking. Your partner at the back gets stuck and has to lift. You're at the net. What now?", a:["Stay at the net to cut off their reply","Step back to the service line and wait","Go side by side with your partner, ready to defend","Swap: you go back, your partner comes forward"], correct:2, why:"Once your side lifts, you're defending. Get side by side and cover the smash; staying at the net leaves a hole behind you."},
+  {e:"🥅", img:"net-high-five", call:"Warm-up · at the net", k:"net", multi:true, q:"At the net, tick everything you can do in a game, most of the time:", ic:["🎯","🔨","🎈","↗️","🌀"], a:["Play a tight net shot from below the tape","Kill a shuttle that pops up above the net","Lift from the net right to the back line","Play a cross-court net shot","Hold the shot, then flick it to the back"]},
+  {e:"🛡️", img:"backhand-defence", call:"Warm-up · defence", k:"defence", multi:true, q:"When they smash at you, tick everything you can do most of the time:", ic:["🎈","🧱","🔙","🔄","🎯"], a:["Lift a smash back deep to the back line","Block a smash short to the net","Return a smash on my backhand side","Counter-drive a smash back flat","Return a smash aimed at my body"]},
+  {e:"🧱", img:"court-wide-1", call:"Rally 3 · after a block", tag:"defence", q:"You're defending side by side. You block their smash short to the net and it's a good block. What do you do next?", a:["Stay side by side and wait","Go back to the baseline","Follow your block in to the net; your partner covers the back","Both rush forward to the net"], correct:2, why:"A good block turns defence into attack. Follow it in to take the net, and your partner moves back: front-and-back."},
+  {e:"⚡", img:"court-wide-2", call:"Warm-up · pace", k:"pace", q:"What pace can you keep up with for a whole game, not just a few rallies?", ic:["🐌","🐢","🚶","🏃","🚀"], a:["Gentle hitting back and forth; I don't play real games yet","Slow games; fast shuttles get past me","Social pace; medium-paced games are a stretch","Medium to fast rallies, all game","Fast tournament pace, game after game"]},
+  {e:"👯", img:"group-high-five", call:"Warm-up · doubles", k:"doubles", multi:true, q:"In a fast doubles game, tick everything you do without being told:", ic:["↕️","↔️","🏃","🧭","🎯","🗣️"], a:["Go front-and-back when my side attacks","Go side by side when my side lifts","Follow my drop or block into the net","Take the back after a low serve or return","Cover the middle with my partner without clashing","Pick which opponent to target"]},
+  {e:"🏆", img:"kneel-celebrate", call:"Match point · tournaments", k:"tgrade", q:"Tournaments: what's the highest grade you've played, and won at least one match?", ic:["🙈","🎪","🥉","🥈","🥇"], a:["I've never played one","Fun or social tournaments only","E or D grade","C grade","B grade or higher (A, open, county)"]}
 ];
-const packQuiz = ans => ({v:2, a:QUIZ.map((_,i)=>ans?.[i] ?? "").join(",")});
+// answers that describe your shots and game (the tournament answer is counted separately)
+const SHOT_KEYS = ["clear","shots","backhand","smash","net","defence","pace","doubles"];
+const packQuiz = ans => ({v:7, a:QUIZ.map((_,i)=>ans?.[i] ?? "").join(",")});
 const knowCount = ans => QUIZ.filter((x,i)=>x.correct!=null && ans?.[i]===x.correct).length;
-const qv = (ans,k) => ans[QUIZ.findIndex(x=>x.k===k)];
-const rulesRight = ans => QUIZ.some((x,i)=>x.tag==="rules" && ans[i]===x.correct);
+// tick-box questions store a bitmask; their value 0–4 comes from how many boxes are ticked (all of them for a 4)
+const ticks = a => { let n=0; for(let b=Number(a)||0; b; b>>=1) n+=b&1; return n };
+const qval = (x,a) => { if(a==null || !x.multi) return a; const c=ticks(a), f=c/x.a.length; return c===0?0 : f<0.34?1 : f<0.6?2 : f<1?3 : 4 };
+const qv = (ans,k) => { const i=QUIZ.findIndex(x=>x.k===k); return qval(QUIZ[i], ans[i]) };
+const LV_ORDER = ["E-","E","D-","D+","C-","C+"];
 function levelFrom(ans){
   if(QUIZ.some((_,i)=>ans?.[i]==null)) return null;
-  const self = QUIZ.map((x,i)=>x.correct==null ? ans[i] : null).filter(v=>v!=null);
-  const nKnow = QUIZ.filter(x=>x.correct!=null).length, know = knowCount(ans);
-  // E: can't hold the racket yet, can't clear end to end, or doesn't know the doubles rules
-  if(qv(ans,"grip")===0 || qv(ans,"clear")===0 || !rulesRight(ans)) return "E";
-  // "about you" answers scaled to 0–20 and quiz to 0–5, so the number of questions doesn't shift levels
-  const t = self.reduce((a,b)=>a+b,0)*20/(self.length*4) + know*5/nKnow;
-  if(t<=4 || self.filter(v=>v===0).length >= Math.ceil(self.length*.6)) return "E";
-  const order=["D-","D+","C-","C+"];
-  let lv = t<=9?"D-":t<=15?"D+":t<=20?"C-":"C+";
-  // each level also needs what defines it
+  const v = k => qv(ans,k), shots = SHOT_KEYS.map(v).sort((a,b)=>a-b);
+  const mean = shots.reduce((a,b)=>a+b,0)/shots.length, weak = shots[2];
+  // half your average, half your third-weakest answer: one or two strong answers can't lift you
+  const sc = (mean+weak)/2;
+  let i = sc<0.9 ? 0 : sc<1.6 ? 1 : sc<2.25 ? 2 : sc<2.85 ? 3 : sc<3.45 ? 4 : 5;
+  // only hits it back and forth, no proper games yet: new beginner
+  if(v("pace")===0 || v("shots")===0 && v("clear")===0) i = 0;
+  // can't clear past mid-court, has 1 or no shots, or hasn't played doubles: beginner at most
+  if(v("clear")===0 || v("shots")===0 || v("doubles")===0) i = Math.min(i,1);
+  // each level needs every shot that defines it
+  const core = ["clear","net","defence","pace","doubles"].map(v), g = v("tgrade");
   const can = {
-    "C+": qv(ans,"tour")>=3 && qv(ans,"errors")>=3 && know>=nKnow-1,
-    "C-": qv(ans,"rally")>=3 && qv(ans,"pace")>=3 && qv(ans,"net")>=3 && qv(ans,"errors")>=2 && know>=nKnow-2,
-    "D+": qv(ans,"rally")>=2 && qv(ans,"pace")>=2 && qv(ans,"doubles")>=2 && qv(ans,"shots")>=2 && know>=Math.ceil(nKnow/2)
+    2: core.every(x=>x>=1) && v("shots")>=2,
+    3: core.every(x=>x>=2) && v("shots")>=2 && v("smash")>=2,
+    4: core.every(x=>x>=3) && v("backhand")>=2 && v("smash")>=3 && v("shots")>=3,
+    5: SHOT_KEYS.every(k=>v(k)>=3) && shots.filter(x=>x===4).length>=4 && g>=3
   };
-  while(lv!=="D-" && !can[lv]) lv=order[order.indexOf(lv)-1];
-  return lv;
+  while(i>=2 && !can[i]) i--;
+  // the 3 doubles situations: players at a level read these without thinking
+  const know = knowCount(ans);
+  if(know<3) i = Math.min(i,3);
+  if(know<2) i = Math.min(i,2);
+  if(know<1) i = Math.min(i,1);
+  // tournament grade is hard evidence: B grade or higher = at least C-, C grade = D+, E/D grade = D-
+  const floor = g===4 ? 4 : g===3 ? 3 : g===2 ? 2 : 0;
+  return LV_ORDER[Math.max(i, floor)];
 }
 const STATUS = {
   awaiting:{label:"Awaiting payment", cls:"st-awaiting"},
@@ -152,14 +163,14 @@ async function save(coll,id,data,okMsg){
 
 /* ---------- state ---------- */
 const TABS = {
-  player:[["book","Book a session"],["live","Live courts"],["mine","My bookings"],["court","Host view"],["level","Level guide"],["venue","Venue & contact"]],
+  player:[["book","Book a session"],["live","Live courts"],["mine","My bookings"],["court","Host view"],["partners","Partners"],["level","Level guide"],["venue","Venue & contact"]],
   organiser:[["o-overview","Overview"],["o-sessions","Sessions & bookings"],["live","Live courts"],["o-players","Players"],["o-club","Club details"]]
 };
 const S = {
   view: ls.get("dsf:view","player"),
   tab: ls.get("dsf:kiosk",null) ? "court" : ls.get("dsf:tab","book"),
   cfg: {...DEFAULT_CFG},
-  sessions: [], bookings: [], players: [], photos: {},
+  sessions: [], bookings: [], players: [], photos: {}, partners: {},   // partners: player id → ids they want to play with
   me: null, uid: null, isAdmin:false, loaded:false,
   quiz: {},                         // level-guide self-check
   reg: {ans:{}, photo:null},        // registration questions and photo
@@ -178,12 +189,16 @@ const cap = (s,court) => { const v = Number(s.capacity?.[court] ?? s.capacity ??
 const courtsOf = s => [1,2,3,4].filter(c => cap(s,c) > 0);
 // each session can name its courts and choose which levels play on each (default: court n = level n)
 const courtLevels = (s,c) => { const v=s?.courts?.[c]?.levels, l=Array.isArray(v) && v.length ? v : [lvByCourt(c).code];
-  return beginnersBarred(s) ? l.filter(x=>x!=="E") : l };
+  return beginnersBarred(s) ? l.filter(x=>!BEGINNER.includes(x)) : l };
 const courtName = (s,c) => s?.courts?.[c]?.label || lvByCourt(c).name;
 const courtChips = (s,c) => courtLevels(s,c).map(lvChip).join(" ");
 // a player only ever goes on a court that includes their level: the first one with space, else the first one (waiting list)
 const courtFor = (s,level) => { const cs=courtsOf(s).filter(c=>courtLevels(s,c).includes(level)); return cs.find(c=>activeIn(s.id,c).length<cap(s,c)) ?? cs[0] ?? null };
 const myBookings = () => S.bookings.filter(b=>b.playerId===S.me || b.hostId===S.me);
+// partners: you pick up to MAX_PARTNERS players; when two players pick each other they team up whenever they share a court
+const MAX_PARTNERS = 3;
+const partnerIds = id => { const v=S.partners[id]; return Array.isArray(v) ? v.filter(x=>typeof x==="string").slice(0,MAX_PARTNERS) : [] };
+const mates = (a,b) => partnerIds(a).includes(b) && partnerIds(b).includes(a);
 
 /* ---------- rotation: same answer for everyone, worked out from the roster and the clock ---------- */
 function rotInfo(s){
@@ -195,16 +210,22 @@ function rotInfo(s){
   return {startT, mins, total, idx, live: now>=startT && now<end, done: now>=end, at:i=>new Date(startT.getTime()+i*ms)};
 }
 function courtRoster(s,c){ return S.bookings.filter(b=>b.sessionId===s.id && b.court===c && ACTIVE.includes(b.status) && !b.absent).sort((a,b)=>String(a.createdAt).localeCompare(b.createdAt)) }
-function schedule(ids,total){
+function schedule(ids,total,mate=mates){
   const n=ids.length; if(n<4) return [];
   const played={}, last={}, pc={}, key=(a,b)=>a<b?a+"|"+b:b+"|"+a;
   ids.forEach(i=>{played[i]=0;last[i]=-1});
   const out=[];
   for(let g=0; g<total; g++){
-    const four = ids.map((id,ix)=>({id,ix})).sort((x,y)=>played[x.id]-played[y.id] || last[x.id]-last[y.id] || ((x.ix-g)%n+n)%n-((y.ix-g)%n+n)%n).slice(0,4).map(o=>o.id);
+    const order = ids.map((id,ix)=>({id,ix})).sort((x,y)=>played[x.id]-played[y.id] || last[x.id]-last[y.id] || ((x.ix-g)%n+n)%n-((y.ix-g)%n+n)%n).map(o=>o.id);
+    const four = order.slice(0,4);
+    // bring a partner into the game in place of someone who hasn't played less than them, so nobody sits out extra
+    four.slice().forEach(p=>{ if(!four.includes(p)) return; const q=order.slice(4).find(x=>mate(p,x) && !four.includes(x)); if(!q) return;
+      const out=[...four].reverse().find(x=>x!==p && !four.some(y=>y!==x && mate(x,y)) && played[x]>=played[q]);
+      if(out) four[four.indexOf(out)]=q });
     const [a,b,c,d]=four, opts=[[[a,b],[c,d]],[[a,c],[b,d]],[[a,d],[b,c]]];
     let best=opts[0], bs=1e9;
-    opts.forEach(o=>{const sc=(pc[key(...o[0])]||0)+(pc[key(...o[1])]||0); if(sc<bs){bs=sc;best=o}});
+    // partners always play on the same side; otherwise mix up who plays with whom
+    opts.forEach(o=>{const sc=(pc[key(...o[0])]||0)+(pc[key(...o[1])]||0) - 1000*(mate(...o[0])+mate(...o[1])); if(sc<bs){bs=sc;best=o}});
     best.forEach(t=>pc[key(...t)]=(pc[key(...t)]||0)+1);
     four.forEach(i=>{played[i]++;last[i]=g});
     out.push({teams:best, sit:ids.filter(i=>!four.includes(i))});
@@ -453,7 +474,7 @@ function render(){
   const p = meP();
   $("#who").innerHTML = (view==="organiser" ? `<span class="org-flag">Organiser</span>` : p ? `${avatar(p.id,p.name,"sm")}<span>${esc(p.name)}</span> ${lvChip(p.level)}` : "")
     + (Store.mode==="db" && S.uid ? ` <button class="btn small" id="signOut" type="button">Sign out</button>` : "");
-  const views = {court:viewCourt, book:viewBook, live:viewLive, mine:viewMine, level:viewLevel, venue:viewVenue,
+  const views = {court:viewCourt, book:viewBook, live:viewLive, mine:viewMine, partners:viewPartners, level:viewLevel, venue:viewVenue,
     "o-overview":orgOverview, "o-sessions":orgSessions, "o-players":orgPlayers, "o-club":orgClub};
   const head = view==="organiser" ? modeBanner() : reminderBanner() + modeBanner();
   $("#main").innerHTML = (Store.mode!=="db" && !LOCAL) ? setupPanel() : head + (views[tab]||viewBook)();
@@ -483,7 +504,7 @@ function reminderBanner(){
 /* ----- registration (new players answer the level questions first) ----- */
 /* ---- level check as a mini match against the coach ---- */
 const qScore = ans => { let you=0, coach=0, power=0;
-  QUIZ.forEach((x,k)=>{ const a=ans[k]; if(a==null) return; if(x.correct==null) power+=a; else if(a===x.correct) you++; else coach++ }); return {you,coach,power} };
+  QUIZ.forEach((x,k)=>{ const a=ans[k]; if(a==null) return; if(x.correct==null) power+=qval(x,a); else if(a===x.correct) you++; else coach++ }); return {you,coach,power} };
 function quizFields(prefix, ans){
   const n=QUIZ.length; let i=S.qpos[prefix];
   if(i==null){ i=QUIZ.findIndex((_,k)=>ans[k]==null); if(i<0) i=n }
@@ -497,7 +518,7 @@ function quizFields(prefix, ans){
   if(i>=n){
     const lv=levelFrom(ans), l=lv&&lvByCode(lv), right=k=>ans[k]===QUIZ[k].correct;
     const tagged=t=>QUIZ.every((x,k)=>x.tag!==t || right(k));
-    const badges=[["🏸","Serve savvy",tagged("serve")],["👀","Shot spotter",tagged("shot")],["📏","Rules ref",tagged("rules")],["🧭","Court sense",tagged("court")]];
+    const badges=[["🏸","Serve sense",tagged("serve")],["🔄","Rotation pro",tagged("rotation")],["🛡️","Defence to attack",tagged("defence")]];
     const confetti=Array.from({length:18},(_,k)=>`<span style="left:${(k*53)%100}%;animation-delay:${(k%6)*.18}s">${["🏸","🎉","✨","🏆","🪶","🎊"][k%6]}</span>`).join("");
     return `<div class="qcard qres">${board}${fb}<div class="qconf" aria-hidden="true">${confetti}</div>
       <div class="qemoji">🏆</div><p class="lbl">Game, set and match</p>
@@ -512,9 +533,11 @@ function quizFields(prefix, ans){
       <div class="qcourt" aria-hidden="true"><span class="qnet"></span><span class="qshuttle">🏸</span></div></div>
     <div class="row" style="justify-content:space-between"><span class="lbl">${know?"Rally":"Warm-up"} · ${i+1} of ${n}</span>${i>0?`<button type="button" class="btn small ghost" data-qback="${prefix}">← Back</button>`:""}</div>
     <fieldset class="q"><legend class="qq">${esc(x.q)}</legend>
-      <div class="qopts">${x.a.map((t,j)=>`<label class="qopt ${a===j?"picked":""}"><input type="radio" id="${prefix}${i}_${j}" name="${prefix}${i}" value="${j}" ${a===j?"checked":""}><span>${x.ic?`<span class="qic">${x.ic[j]}</span> `:""}${esc(t)}</span></label>`).join("")}</div>
+      ${x.multi?`<p class="muted" style="font-size:.85rem;margin:0 0 6px">Tick all that apply, then tap Next. ${ticks(a)} ticked.</p>`:""}
+      <div class="qopts">${x.a.map((t,j)=>{ const on = x.multi ? !!((Number(a)||0)&(1<<j)) : a===j;
+        return `<label class="qopt ${on?"picked":""}"><input type="${x.multi?"checkbox":"radio"}" id="${prefix}${i}_${j}" name="${prefix}${i}" value="${j}" ${on?"checked":""}><span>${x.ic?`<span class="qic">${x.ic[j]}</span> `:""}${esc(t)}</span></label>` }).join("")}</div>
     </fieldset>
-    ${a!=null?`<div class="row qnav"><button type="button" class="btn small primary" data-qnext="${prefix}">${i===n-1?"🏆 See my level":"Next rally →"}</button></div>`:""}
+    ${a!=null||x.multi?`<div class="row qnav"><button type="button" class="btn small primary" data-qnext="${prefix}">${i===n-1?"🏆 See my level":"Next rally →"}</button></div>`:""}
   </div>`;
 }
 /* umpire voice and racket sounds (Web Speech and Web Audio, nothing to download) */
@@ -620,7 +643,7 @@ function viewBook(){
         <span>${myB?`<span class="chip st-confirmed">✓ Booked</span> Court ${myB.court} ${stChip(myB.status)}`:closed?`<span class="chip st-waitlist">${noCourt?`Not running for ${esc(lv.code)} players`:"Booking closed"}</span>`:left>0?`Court ${ct} · ${esc(courtName(s,ct))}: <b>${left} of ${cap(s,ct)}</b> places left`:`Court ${ct} · ${esc(courtName(s,ct))} is full. You'll go on the waiting list for your level (players can't join another level's court).`}</span></span></label>`}).join("")}</div>
   </section>
   <section class="panel">
-    <div><h2>Bring a guest</h2><p class="muted">Guests answer the same five questions and are placed on the court for their level. They're added to every session you tick above.</p></div>
+    <div><h2>Bring a guest</h2><p class="muted">Guests answer the same questions and are placed on the court for their level. They're added to every session you tick above.</p></div>
     ${S.guests.length?`<div class="picks">${S.guests.map((g,i)=>`<div class="pick booked">${avatar("guest"+i,g.name)}<span class="t"><b>${esc(g.name)}</b><span>${lvChip(g.level)} ${esc(lvByCode(g.level).name)}</span></span><button class="btn small ghost danger" data-rmguest="${i}" style="margin-left:auto">Remove</button></div>`).join("")}</div>`:""}
     <details id="guestBox"><summary><b>Add a guest</b></summary>
       <div class="quiz" style="margin-top:10px">
@@ -801,9 +824,36 @@ function bookingCard(b,s){
 }
 
 /* ----- level guide ----- */
+/* ----- partners ----- */
+function viewPartners(){
+  const p = meP();
+  if(!p) return registerPanel();
+  // players you can pick: everyone who has booked a session (names come from bookings; contact details stay private)
+  const known = {};
+  S.bookings.forEach(b=>{ if(!b.hostId && b.playerId && b.playerId!==p.id && !String(b.playerId).startsWith("guest-") && b.status!=="cancelled") known[b.playerId]=b.name });
+  const mine = partnerIds(p.id), full = mine.length>=MAX_PARTNERS;
+  const askingMe = Object.keys(S.partners).filter(id=>id!==p.id && partnerIds(id).includes(p.id) && !mine.includes(id));
+  const nm = id => known[id] || "A player";
+  const chosen = mine.length ? mine.map(id=>`<div class="pcard">${avatar(id,nm(id))}<div class="grow"><b>${esc(nm(id))}</b><br>${mates(p.id,id)?`<span class="chip st-confirmed">🤝 Partners</span> <span class="muted" style="font-size:.85rem">You play on the same side whenever you're on the same court.</span>`:`<span class="chip st-awaiting">Waiting for ${esc(nm(id).split(" ")[0])}</span> <span class="muted" style="font-size:.85rem">You'll team up once they pick you too.</span>`}</div><button class="btn small ghost danger" data-unpartner="${esc(id)}">Remove</button></div>`).join("")
+    : `<div class="empty">No partners yet. Pick someone below.</div>`;
+  const asks = askingMe.length ? `<section class="panel"><h2>Want to partner you</h2><div style="display:grid;gap:10px">${askingMe.map(id=>`<div class="pcard">${avatar(id,nm(id))}<div class="grow"><b>${esc(nm(id))}</b> picked you as a partner.</div><button class="btn small primary" data-partner="${esc(id)}" ${full?"disabled":""}>Partner up</button></div>`).join("")}</div>${full?`<p class="muted" style="font-size:.85rem">You have ${MAX_PARTNERS} partners already. Remove one to add another.</p>`:""}</section>` : "";
+  const others = Object.entries(known).filter(([id])=>!mine.includes(id)).sort((a,b)=>String(a[1]).localeCompare(String(b[1])));
+  return `<section class="panel"><div><h2>My partners</h2><p class="muted">Pick up to ${MAX_PARTNERS} people you want to practise and play with. When you both pick each other, the court rotation puts you on the same side whenever you're on the same court. You can change this at any time, even during a session.</p></div>
+    <div style="display:grid;gap:10px">${chosen}</div></section>
+    ${asks}
+    <section class="panel"><h2>Choose a partner</h2>
+      ${others.length ? `<div class="row"><select id="partnerPick" style="max-width:320px"><option value="">Choose a player…</option>${others.map(([id,n])=>`<option value="${esc(id)}">${esc(n)}</option>`).join("")}</select><button class="btn small primary" id="partnerAdd" ${full?"disabled":""}>Add partner</button></div>
+        ${full?`<p class="muted" style="font-size:.85rem">You have ${MAX_PARTNERS} partners. Remove one to choose someone else.</p>`:""}
+        <p class="muted" style="font-size:.85rem">Partners only play together on a court that suits both your levels, so book the same session and you'll be paired when you land on the same court.</p>`
+      : `<div class="empty">Players appear here once they've booked a session.</div>`}
+    </section>`;
+}
+async function setPartners(ids){
+  if(await save("partners", S.me, {ids:[...new Set(ids)].slice(0,MAX_PARTNERS), updatedAt:nowIso()})) toast("Partners updated");
+}
 function viewLevel(){
   const res = levelFrom(S.quiz), p = meP();
-  return `<section class="panel"><div><h2>Level guide</h2><p class="muted">Each court is for one level. You book a session and we put you on the court for your level. Beginners (E) can book sessions that have a beginners' court, but not Thursday sessions.</p></div>
+  return `<section class="panel"><div><h2>Level guide</h2><p class="muted">Each court is for one level. You book a session and we put you on the court for your level. Beginners (E- and E) can book sessions that have a beginners' court, but not Thursday sessions.</p></div>
     <div class="levels">${LEVELS.map(l=>`<div class="lvrow"><span class="lv lv-${l.key}">${l.code}</span><div><b>${l.name}</b>${l.court?` · Court ${l.court}`:" · court set per session"}<p class="muted">${l.desc}</p></div></div>`).join("")}</div></section>
   <section class="panel"><div><h2>Think you've moved up?</h2><p class="muted">Take the questions again. If the answer changes, ask the organiser to move you.</p></div>
     <form class="quiz" id="quiz">${quizFields("q", S.quiz)}</form>
@@ -1193,7 +1243,7 @@ async function bookSelected(){
     const myId=`${s.id}_${p.id}`;
     const pickCourt=lvl=>{ const cs=courtsOf(s).filter(c=>courtLevels(s,c).includes(lvl)); return cs.find(c=>used(c)<cap(s,c)) ?? cs[0] ?? null };
     const myCourt=pickCourt(p.level);
-    if(!myCourt){ ok=false; lines.push(p.level==="E" && beginnersBarred(s) ? `${fmtDate(s.date)}: Thursday sessions aren't for beginners (E). Coaching is a great way to start.` : `${fmtDate(s.date)}: this session isn't running a court for ${esc(p.level)} players`); continue }
+    if(!myCourt){ ok=false; lines.push(BEGINNER.includes(p.level) && beginnersBarred(s) ? `${fmtDate(s.date)}: Thursday sessions aren't for beginners (E- and E). Coaching is a great way to start.` : `${fmtDate(s.date)}: this session isn't running a court for ${esc(p.level)} players`); continue }
     if(!S.bookings.find(b=>b.id===myId && b.status!=="cancelled")) await place(myId, {playerId:p.id, name:p.name, level:p.level}, myCourt, "You");
     let k = S.bookings.filter(b=>b.sessionId===s.id && b.hostId===p.id).length;
     for(const g of S.guests){
@@ -1260,7 +1310,7 @@ document.addEventListener("click", async e=>{
   if(t.id==="addGuest"){
     const name=$("#g-name").value.trim(), level=levelFrom(S.gq);
     if(!name){ toast("Add your guest's name"); return }
-    if(!level){ toast("Answer all five questions for your guest"); return }
+    if(!level){ toast("Answer all the questions for your guest"); return }
     S.guests.push({name, level, ans:{...S.gq}}); S.gq={}; $("#g-name").value=""; render(); toast(`${name} added`); return }
   if(ds.rmguest!=null){ S.guests.splice(Number(ds.rmguest),1); render(); return }
   if(ds.copy!=null){ copyText(ds.copy); return }
@@ -1273,6 +1323,10 @@ document.addEventListener("click", async e=>{
   if(ds.ics){ downloadIcs(S.bookings.find(b=>b.id===ds.ics)); return }
   if(t.id==="signOut"){ if(Store.mode==="db"){ await firebase.auth().signOut(); location.reload() } else { S.me=null; ls.set("dsf:me",null); render() } return }
   if(t.id==="googleIn"){ try{ await firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()) }catch(err){ if(err?.code!=="auth/popup-closed-by-user") toast("Couldn't sign in with Google. Try the email link instead.") } return }
+  if(t.id==="partnerAdd"){ const id=$("#partnerPick").value; if(!id){ toast("Choose a player first"); return }
+    await setPartners([...partnerIds(S.me), id]); return }
+  if(ds.partner){ await setPartners([...partnerIds(S.me), ds.partner]); return }
+  if(ds.unpartner){ await setPartners(partnerIds(S.me).filter(x=>x!==ds.unpartner)); return }
   if(t.id==="reqBtn" || t.id==="quizReq"){
     const lv = t.id==="reqBtn" ? $("#reqLevel").value : ds.lv;
     if(await savePlayer({...meP(), levelRequest:lv})) toast("Request sent to the organiser"); return }
@@ -1331,6 +1385,7 @@ document.addEventListener("click", async e=>{
   if(ds.qnext||ds.qback||ds.qredo){ const k=ds.qnext||ds.qback||ds.qredo, ans=k==="rq"?S.reg.ans:k==="gq"?S.gq:S.quiz;
     let i=S.qpos[k]; if(i==null){ i=QUIZ.findIndex((_,j)=>ans[j]==null); if(i<0) i=QUIZ.length }
     S.qfb[k]=null;
+    if(ds.qnext && QUIZ[i]?.multi){ ans[i] ??= 0; S.qfb[k]={i, self:true, v:qval(QUIZ[i],ans[i])}; sfx("power") }
     if(ds.qredo){ if(k==="rq") S.reg.ans={}; else if(k==="gq") S.gq={}; else S.quiz={}; S.qpos[k]=0 }
     else S.qpos[k] = ds.qnext ? Math.min(QUIZ.length,i+1) : Math.max(0,i-1);
     render(); sfx("hit"); quizCall(k, ds.qredo ? {} : ans); return }
@@ -1384,6 +1439,8 @@ document.addEventListener("click", async e=>{
 document.addEventListener("change", async e=>{
   const t=e.target;
   const m=/^(rq|gq|q)(\d+)$/.exec(t.name||"");
+  if(m && QUIZ[Number(m[2])]?.multi){ const target = m[1]==="rq"?S.reg.ans : m[1]==="gq"?S.gq : S.quiz, qi=Number(m[2]);
+    target[qi]=(Number(target[qi])||0) ^ (1<<Number(t.value)); S.qpos[m[1]]=qi; render(); sfx("hit"); return }
   if(m){ const target = m[1]==="rq"?S.reg.ans : m[1]==="gq"?S.gq : S.quiz, qi=Number(m[2]), x=QUIZ[qi]; target[qi]=Number(t.value);
     // swipe on to the next card; quick-quiz answers show why on the next card
     const ok = target[qi]===x.correct;
@@ -1500,6 +1557,7 @@ render();
   } else Store.listen("players", d=>{S.players=d; once("players")});
   if(Store.mode==="db" && S.uid) Store.db.collection("unlocks").doc(S.uid).onSnapshot(d=>{ S.unlock=d.exists?d.data():null; render() }, ()=>{});
   if(Store.mode==="db" && S.isAdmin) Store.listen("secrets", d=>{ S.secrets=Object.fromEntries(d.map(x=>[x.id,x.code])); render() });
+  Store.listen("partners", d=>{S.partners=Object.fromEntries(d.map(x=>[x.id,x.ids])); render()});
   Store.listen("photos", d=>{S.photos=Object.fromEntries(d.map(x=>[x.id,x.img])); once("photos")});
   Store.listen("config", d=>{const m=d.find(x=>x.id==="main"); S.cfg={...DEFAULT_CFG,...(m||{})}; delete S.cfg.id; once("config")});
 })();

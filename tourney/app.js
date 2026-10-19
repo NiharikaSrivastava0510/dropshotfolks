@@ -87,9 +87,9 @@ function formatForm(t){
   const sel=(id,val,opts)=>`<select id="fe-${id}">${opts.map(([v,l])=>`<option value="${v}" ${String(val)===String(v)?"selected":""}>${l}</option>`).join("")}</select>`;
   const num=(id,val,min,max)=>`<input id="fe-${id}" type="number" min="${min}" max="${max}" value="${esc(val??"")}">`;
   const row=(label,k,src)=>`<div class="fe-row"><b>${label}</b>
-    <label class="f">Points ${sel(k+"to",src.pointsTo??(k?"0":21),[...(k?[["0",k==="k"?"Same as round robin":"Same as knockouts"]]:[]),["11","11"],["15","15"],["21","21"]])}</label>
+    <label class="f">Points ${sel(k+"to",src.pointsTo??(k?"0":21),[...(k?[["0","Same as round robin"]]:[]),["11","11"],["15","15"],["21","21"]])}</label>
     <label class="f">Deuce max (0 = standard) ${num(k+"cap",src.cap??0,0,40)}</label>
-    <label class="f">Games ${sel(k+"bo",src.bestOf??(k?"0":1),[...(k?[["0",k==="k"?"Same as round robin":"Same as knockouts"]]:[]),["1","1 game"],...(k?[]:[["2","2 games (total points at 1–1)"]]),["3","Best of 3"]])}</label></div>`;
+    <label class="f">Games ${sel(k+"bo",src.bestOf??(k?"0":1),[...(k?[["0","Same as round robin"]]:[]),["1","1 game"],...(k?[]:[["2","2 games (total points at 1–1)"]]),["3","Best of 3"]])}</label></div>`;
   return `<div class="fmtform">
     <div class="fv-box"><h4>🔁 Round robin & who goes through</h4><div class="grid2">
       <label class="f">Teams per group ${num("gsize",t.groupSize??(isTeam(t)?3:4),3,8)}</label>
@@ -97,10 +97,10 @@ function formatForm(t){
       <label class="f">Knockout size, filled with best runners-up (0 = off) ${num("kosize",t.koSize??0,0,64)}</label>
       <label class="f">Deuce ${sel("deuce",t.deuce===false?0:1,[["1","On: win by 2"],["0","Off: first to the points"]])}</label>
       <label class="row" style="gap:6px;align-self:end"><input type="checkbox" id="fe-bronze" style="width:auto" ${bronzeOn(t)?"checked":""}> 🥉 3rd-place match</label></div></div>
-    <div class="fv-box"><h4>🏸 Scoring</h4>${row("🔁 Round robin","",{pointsTo:t.pointsTo,cap:t.cap,bestOf:t.bestOf})}${row("⚔️ All knockout rounds","k",t.stageRules?.ko||{})}
-      ${(S.rndDraft||[]).map(k=>row(`${k==="final"?"🏆":k==="bronze"?"🥉":"⚔️"} ${roundLabel(k)} <button class="btn small ghost danger" data-rnddel="${k}" aria-label="Remove ${roundLabel(k)} scoring">✕</button>`,"r_"+k,t.stageRules?.[k]||{})).join("")}
+    <div class="fv-box"><h4>🏸 Scoring</h4>${row("🔁 Round robin","",{pointsTo:t.pointsTo,cap:t.cap,bestOf:t.bestOf})}
+      ${(S.rndDraft||[]).map(k=>row(`${k==="final"?"🏆":k==="bronze"?"🥉":"⚔️"} ${roundLabel(k)} <button class="btn small ghost danger" data-rnddel="${k}" aria-label="Remove ${roundLabel(k)} scoring">✕</button>`,"r_"+k,roundSrc(t,k))).join("")}
       ${ROUNDS.some(([k])=>!(S.rndDraft||[]).includes(k))?`<div class="row rndadd"><label class="f" style="margin:0">Give a round its own scoring <select id="fe-rndadd">${ROUNDS.filter(([k])=>!(S.rndDraft||[]).includes(k)).map(([k])=>`<option value="${k}">${roundLabel(k)}</option>`).join("")}</select></label><button class="btn small" data-rndadd="1">➕ Add round</button></div>`:""}
-      <p class="muted" style="font-size:.82rem">Rounds without their own row use "All knockout rounds"${(S.rndDraft||[]).includes("final")&&!(S.rndDraft||[]).includes("bronze")?"; 3rd place follows the Final":""}.</p></div>
+      <p class="muted" style="font-size:.82rem">Each knockout round has its own row. A round you remove plays like the round robin${(S.rndDraft||[]).includes("final")&&!(S.rndDraft||[]).includes("bronze")?"; 3rd place follows the Final":""}.</p></div>
     <div class="fv-box"><h4>📝 Good to know</h4><textarea id="fe-format" rows="4" placeholder="e.g. 2 minutes warm-up, 20 seconds between games…">${esc(t.format||"")}</textarea></div>
     <div class="fv-box"><h4>➕ Your own sections</h4><p class="muted">Add anything players should know: rules, what to bring, timings, parking, prizes… Each section shows as its own box in the game format.</p>
       ${(S.secDraft||[]).map((x,i)=>`<div class="secrow"><div class="row"><input class="sec-t" data-sec="${i}" maxlength="60" placeholder="Title, e.g. 🎒 What to bring" value="${esc(x.title||"")}"><button class="btn small ghost danger" data-secdel="${i}" aria-label="Delete section">🗑</button>${i?`<button class="btn small ghost" data-secup="${i}" aria-label="Move up">↑</button>`:""}</div><textarea class="sec-x" data-sec="${i}" rows="3" maxlength="2000" placeholder="Write the details here. New lines are kept.">${esc(x.text||"")}</textarea></div>`).join("")}
@@ -204,6 +204,9 @@ const CAP_FOR = {11:15, 15:21, 21:30};
 // each knockout round can also have its own scoring: stageRules.r32 / r16 / qf / sf / final / bronze (3rd place falls back to the final's)
 const ROUNDS = [["r32","Round of 32"],["r16","Round of 16"],["qf","Quarter-finals"],["sf","Semi-finals"],["final","Final"],["bronze","Bronze medal match"]];
 const roundKey = m => (ROUNDS.find(([,n])=>n===m?.roundName)||[])[0] || null;
+// a round's scoring as shown in the editor: its own, else what it plays now
+const roundSrc = (t, k) => { const own=t.stageRules?.[k]; if(own && Object.values(own).some(v=>Number(v)>0)) return own;
+  const n=(ROUNDS.find(([x])=>x===k)||[])[1], r=rules(t,{stage:"ko", roundName:n}), g=rules(t); return ruleTxt(r)===ruleTxt(g)&&r.bestOf===g.bestOf ? {} : {pointsTo:r.to, cap:r.cap, bestOf:r.bestOf} };
 const roundLabel = k => k==="bronze" ? "3rd place" : (ROUNDS.find(([x])=>x===k)||[,k])[1];
 // the knockout rounds this tournament plays, first to last, from the bracket if made, else from the settings
 function koRounds(t){
@@ -1274,7 +1277,7 @@ document.addEventListener("click", async e=>{
   if(ds.scanx){ S.scan=null; history.replaceState(null,"",location.pathname+(T()?`?t=${T().id}`:"")); render(); return }
   if(ds.fxcode){ const p=await useCode($("#fx-code")?.value); if(p){ render(); toast(`Welcome, ${teamById(p.team)?.name||p.name}! 🏸`) } return }
   if(ds.fxout){ ls.set(`dsf:fx:${T()?.id}`,null); render(); return }
-  if(ds.editfmt!=null){ S.editFmt=ds.editfmt==="1"; if(S.editFmt){ const sr=T()?.stageRules||{}; S.secDraft=(T()?.sections||[]).map(x=>({...x})); S.rndDraft=ROUNDS.map(([k])=>k).filter(k=>Object.values(sr[k]||{}).some(v=>Number(v)>0)) } render(); return }
+  if(ds.editfmt!=null){ S.editFmt=ds.editfmt==="1"; if(S.editFmt){ const sr=T()?.stageRules||{}; S.secDraft=(T()?.sections||[]).map(x=>({...x})); const play=koRounds(T()).map(n=>roundKey({roundName:n})); S.rndDraft=ROUNDS.map(([k])=>k).filter(k=>play.includes(k)||Object.values(sr[k]||{}).some(v=>Number(v)>0)) } render(); return }
   if((ds.rndadd!=null || ds.rnddel) && S.editFmt){ const keep=fmtSnapshot(); if(ds.rndadd!=null){ const k=$("#fe-rndadd")?.value; if(k) S.rndDraft=ROUNDS.map(([x])=>x).filter(x=>x===k||(S.rndDraft||[]).includes(x)) } else S.rndDraft=(S.rndDraft||[]).filter(x=>x!==ds.rnddel);
     S.secDraft=readSecs(); render(); fmtRestore(keep); return }
   if(ds.secadd!=null || ds.secdel!=null || ds.secup!=null){ S.secDraft=readSecs(); if(ds.secadd!=null) S.secDraft.push({title:"", text:""});

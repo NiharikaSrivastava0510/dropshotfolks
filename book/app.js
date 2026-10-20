@@ -11,6 +11,11 @@ const LEVELS = [
 const NO_BEGINNER_DAYS = [4];   // 0 = Sunday … 4 = Thursday
 const beginnersBarred = s => !!s?.date && NO_BEGINNER_DAYS.includes(new Date(s.date+"T12:00:00").getDay());
 const lvByCode = c => LEVELS.find(l=>l.code===c);
+// a session can have its own fee (e.g. coaching); otherwise the club's usual fee
+const feeOf = s => String(s?.price || S.cfg?.price || "");
+const feeNum = s => parseFloat(feeOf(s).replace(/[^0-9.]/g,""));
+// Saturday Train & Play with Coach at Mulberry: all levels on every court
+const TRAIN_PLAY = {start:"13:00", end:"16:00", title:"Train & Play with Coach", venue:"Mulberry Sports & Leisure Centre", address:"Richard St, London E1 2JR", price:"£30", note:"Coaching first, then games. All levels welcome."};
 const BEGINNER = ["E-","E"];
 const lvByCourt = n => LEVELS.find(l=>l.court===n);
 const CLR = {1:"var(--d1)",2:"var(--d2)",3:"var(--c1)",4:"var(--c2)"};
@@ -639,7 +644,7 @@ function viewBook(){
       const ct = courtFor(s,lv.code), left = ct ? cap(s,ct) - activeIn(s.id,ct).length : 0, v=venueOf(s), noCourt = !ct, closed = s.open===false || noCourt;
       return `<label class="pick ${myB||closed?"booked":""}"><input type="checkbox" id="pick-${s.id}" data-pick="${s.id}" ${myB||closed?"disabled":""} ${myB||(!closed&&S.picks.has(s.id))?"checked":""}>
         <span class="t"><b>${fmtLong(s.date)} · ${esc(s.start)}–${esc(s.end)}</b>
-        <span class="muted">${esc(v.venue||"Venue to be confirmed")}${s.title?" · "+esc(s.title):""}</span>
+        <span class="muted">${esc(v.venue||"Venue to be confirmed")}${s.title?" · "+esc(s.title):""}${s.price?` · <b>${esc(s.price)}</b>`:""}</span>
         <span>${myB?`<span class="chip st-confirmed">✓ Booked</span> Court ${myB.court} ${stChip(myB.status)}`:closed?`<span class="chip st-waitlist">${noCourt?`Not running for ${esc(lv.code)} players`:"Booking closed"}</span>`:left>0?`Court ${ct} · ${esc(courtName(s,ct))}: <b>${left} of ${cap(s,ct)}</b> places left`:`Court ${ct} · ${esc(courtName(s,ct))} is full. You'll go on the waiting list for your level (players can't join another level's court).`}</span></span></label>`}).join("")}</div>
   </section>
   <section class="panel">
@@ -655,7 +660,8 @@ function viewBook(){
     </details>
   </section>
   <section class="panel bookbar ${nPick?"on":""}">
-    <div class="row" style="justify-content:space-between"><div><h3>${nPick?`${nPick} session${nPick>1?"s":""} selected`:"Ready to book?"}</h3><p class="muted">${nPick?"Your place isn't held until you press Book. ":"Tick the sessions you want above. "}${S.cfg.price?`${esc(S.cfg.price)} per person per session. `:""}You'll see how to pay in My bookings.</p></div>
+    <div class="row" style="justify-content:space-between"><div><h3>${nPick?`${nPick} session${nPick>1?"s":""} selected`:"Ready to book?"}</h3><p class="muted">${nPick?"Your place isn't held until you press Book. ":"Tick the sessions you want above. "}${(()=>{ const ps=[...S.picks].map(id=>ups.find(x=>x.id===id)).filter(Boolean), tot=ps.reduce((a,x)=>a+(feeNum(x)||0),0);
+      return nPick && tot>0 ? `£${tot.toFixed(2).replace(/\.00$/,"")} per person in total. ` : S.cfg.price?`${esc(S.cfg.price)} per person per session${ups.some(x=>x.price)?", unless a session shows its own fee":""}. `:"" })()}You'll see how to pay in My bookings.</p></div>
     <button class="btn primary" id="bookSel" ${nPick?"":"disabled"}>${nPick?`Book ${nPick} session${nPick>1?"s":""}`:"Book selected sessions"}${S.guests.length?` + ${S.guests.length} guest${S.guests.length>1?"s":""}`:""}</button></div>
   </section>
   ${remindPanel(p)}`;
@@ -786,12 +792,12 @@ function bookingCard(b,s){
   const c = S.cfg, past = sessEnd(s) < new Date(), v = venueOf(s), isGuest = !!b.hostId;
   const guests = isGuest ? [] : S.bookings.filter(x=>x.hostId===b.playerId && x.sessionId===s.id && x.status==="awaiting");
   // amount to transfer: the session fee (e.g. "£15") times you + guests, when the fee is a plain number
-  const people = guests.length+1, fee = parseFloat(String(c.price||"").replace(/[^0-9.]/g,""));
+  const people = guests.length+1, fee = feeNum(s);
   const off = pointsState().off[b.id] || 0;
   const amount = Number.isFinite(fee) && fee>0 ? "£"+Math.max(0,fee*people-off).toFixed(2).replace(/\.00$/,"") : "";
   const allDetails = [c.accountName&&`Name: ${c.accountName}`, c.sortCode&&`Sort code: ${c.sortCode}`, c.accountNumber&&`Account number: ${c.accountNumber}`, amount&&`Amount: ${amount}`, `Reference: ${b.ref}`].filter(Boolean).join("\n");
   const pay = b.status==="awaiting" && !isGuest ? `
-    <p><b>Pay ${amount?amount:(c.price?esc(c.price):"the session fee")}${guests.length?` (you + ${guests.length} guest${guests.length>1?"s":""})`:""}</b>${off?` <span class="chip off">£${off} points reward taken off</span>`:""} by bank transfer from your banking app, using this reference so the organiser can match it.</p>
+    <p><b>Pay ${amount?amount:(feeOf(s)?esc(feeOf(s)):"the session fee")}${guests.length?` (you + ${guests.length} guest${guests.length>1?"s":""})`:""}</b>${off?` <span class="chip off">£${off} points reward taken off</span>`:""} by bank transfer from your banking app, using this reference so the organiser can match it.</p>
     <dl class="paybox">
       ${c.accountName?`<dt>Name</dt><dd>${esc(c.accountName)}</dd><span></span>`:""}
       ${c.bankName?`<dt>Bank</dt><dd>${esc(c.bankName)}</dd><span></span>`:""}
@@ -906,7 +912,9 @@ function orgParts(){
         <label class="f">Note for players (optional)<input id="s-note" placeholder="Bring indoor shoes"></label>
         <label class="f">Venue<input id="s-venue" placeholder="Swanlea School" value="${esc(c.venue)}"></label>
         <label class="f">Venue address<input id="s-address" placeholder="Street, postcode" value="${esc(c.address)}"></label>
-        <div class="row" style="grid-column:1/-1"><button class="btn primary">Add sessions</button></div>
+        <label class="f">Session fee (optional)<input id="s-price" placeholder="Leave empty for the usual ${esc(c.price||"fee")}"></label>
+        <label class="row" style="gap:6px;align-self:end"><input type="checkbox" style="width:auto" id="s-alllv"> All levels on every court (coaching, mixed sessions)</label>
+        <div class="row" style="grid-column:1/-1"><button class="btn primary">Add sessions</button><button type="button" class="btn" data-trainplay="1">🏸 Fill in: Train &amp; Play with Coach (Saturdays)</button></div>
       </form></details>
   </section>`;
   const players = `<section class="panel"><h2>Players</h2>
@@ -1069,7 +1077,8 @@ function adminSession(s){
         <label class="f">Title<input id="es-title-${s.id}" value="${esc(s.title||"")}"></label>
         <label class="f">Venue<input id="es-venue-${s.id}" value="${esc(s.venue||"")}"></label>
         <label class="f">Venue address<input id="es-address-${s.id}" value="${esc(s.address||"")}"></label>
-        <label class="f" style="grid-column:1/-1">Note for players<input id="es-note-${s.id}" value="${esc(s.note||"")}"></label>
+        <label class="f">Session fee<input id="es-price-${s.id}" value="${esc(s.price||"")}" placeholder="Usual ${esc(S.cfg.price||"fee")}"></label>
+        <label class="f">Note for players<input id="es-note-${s.id}" value="${esc(s.note||"")}"></label>
         <h3 style="grid-column:1/-1;margin-top:6px">Courts</h3>
         ${[1,2,3,4].map(n=>`<div class="bk" style="gap:6px"><b>Court ${n}</b>
           <label class="f">Name<input id="es-label${n}-${s.id}" value="${esc(courtName(s,n))}"></label>
@@ -1365,6 +1374,11 @@ document.addEventListener("click", async e=>{
     const name=typed, ts=Date.now().toString(36), b={sessionId:sid, playerId:`walkin-${ts}`, name, gender:($("#ap-gender-"+sid)?.value||""), level:courtLevels(s,court)[0], court, status, ref:payRef(name,s), createdAt:nowIso(), addedBy:"organiser", log:[]};
     if(await save("bookings",`${sid}_w${ts}`, addLog(b,`Added to Court ${court} by the organiser.`), `${name} added to Court ${court} as a walk-in`)) $("#ap-name-"+sid).value="";
     return }
+  if(ds.trainplay && S.isAdmin){ const d=new Date(); d.setDate(d.getDate()+((6-d.getDay()+7)%7||7));
+    const set=(id,x)=>{ const el=$("#"+id); if(el) el.value=x };
+    set("s-date",`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`);
+    Object.entries(TRAIN_PLAY).forEach(([k,x])=>set("s-"+k,x)); set("s-weeks","12"); const al=$("#s-alllv"); if(al) al.checked=true;
+    toast("Filled in. Check the first date, then press Add sessions."); return }
   if(ds.savesess){ const sid=ds.savesess, s=S.sessions.find(x=>x.id===sid), v=k=>$(`#es-${k}-${sid}`).value.trim();
     if(!v("date")||!v("start")||!v("end")){ toast("Add a date, start and end time"); return }
     const capacity={}, courts={};
@@ -1375,7 +1389,7 @@ document.addEventListener("click", async e=>{
       courts[n]={label:$(`#es-label${n}-${sid}`).value.trim() || lvByCourt(n).name, levels:levels.length?levels:[lvByCourt(n).code]};
     }
     const {id,...body}=s;
-    if(!await save("sessions",id,{...body, date:v("date"), start:v("start"), end:v("end"), title:v("title"), venue:v("venue"), address:v("address"), note:v("note"), capacity, courts},"Session updated")) return;
+    if(!await save("sessions",id,{...body, date:v("date"), start:v("start"), end:v("end"), title:v("title"), venue:v("venue"), address:v("address"), note:v("note"), price:v("price"), capacity, courts},"Session updated")) return;
     if($(`#es-all-${sid}`)?.checked){
       const same=upcoming().filter(x=>x.id!==sid && slotKey(x)===slotKey(s));
       for(const x of same){ const {id:xid,...xb}=x; await save("sessions",xid,{...xb, capacity, courts}) }
@@ -1489,7 +1503,8 @@ document.addEventListener("submit", async e=>{
   if(e.target.id==="sessForm"){
     const date=$("#s-date").value, start=$("#s-start").value, end=$("#s-end").value, c=Number($("#s-cap").value)||PER_COURT, weeks=Number($("#s-weeks").value)||1;
     if(!date||!start||!end){ toast("Add a date, start and end time"); return }
-    const base={start,end,gameMins:Number($("#s-mins").value)||GAME_MINS,title:$("#s-title").value.trim(),note:$("#s-note").value.trim(),venue:$("#s-venue").value.trim(),address:$("#s-address").value.trim(),capacity:{1:c,2:c,3:c,4:c},open:true};
+    const base={start,end,gameMins:Number($("#s-mins").value)||GAME_MINS,title:$("#s-title").value.trim(),note:$("#s-note").value.trim(),venue:$("#s-venue").value.trim(),address:$("#s-address").value.trim(),capacity:{1:c,2:c,3:c,4:c},open:true,
+      ...($("#s-price").value.trim()?{price:$("#s-price").value.trim()}:{}), ...($("#s-alllv").checked?{courts:Object.fromEntries([1,2,3,4].map(n=>[n,{label:`Court ${n}`, levels:LEVELS.map(l=>l.code)}]))}:{})};
     for(let w=0; w<weeks; w++){
       const d=new Date(date+"T12:00:00"); d.setDate(d.getDate()+7*w);
       const day=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;

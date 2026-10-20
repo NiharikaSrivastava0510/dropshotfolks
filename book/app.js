@@ -905,6 +905,7 @@ function orgParts(){
         <label class="f">First date<input id="s-date" type="date" required></label>
         <label class="f">Start<input id="s-start" type="time" value="18:30" required></label>
         <label class="f">End<input id="s-end" type="time" value="21:30" required></label>
+        <label class="f">Courts available<select id="s-courts">${[1,2,3,4].map(n=>`<option value="${n}" ${n===4?"selected":""}>${n} court${n>1?"s":""}</option>`).join("")}</select></label>
         <label class="f">Players per court<input id="s-cap" type="number" min="4" max="20" value="${PER_COURT}"></label>
         <label class="f">Minutes per game<select id="s-mins">${[10,12,15,20].map(m=>`<option ${m===GAME_MINS?"selected":""}>${m}</option>`).join("")}</select></label>
         <label class="f">Repeat weekly for<select id="s-weeks"><option value="1">Just this date</option><option value="4">4 weeks</option><option value="8">8 weeks</option><option value="12">12 weeks</option></select></label>
@@ -914,6 +915,7 @@ function orgParts(){
         <label class="f">Venue address<input id="s-address" placeholder="Street, postcode" value="${esc(c.address)}"></label>
         <label class="f">Session fee (optional)<input id="s-price" placeholder="Leave empty for the usual ${esc(c.price||"fee")}"></label>
         <label class="row" style="gap:6px;align-self:end"><input type="checkbox" style="width:auto" id="s-alllv"> All levels on every court (coaching, mixed sessions)</label>
+        <p class="muted" style="grid-column:1/-1;font-size:.85rem;margin:0">With fewer than 4 courts, only the first courts run (Court 1 D-, Court 2 D+, …) unless you tick "All levels". You can change each court's levels and places later under Edit session &amp; courts.</p>
         <div class="row" style="grid-column:1/-1"><button class="btn primary">Add sessions</button><button type="button" class="btn" data-trainplay="1">🏸 Fill in: Train &amp; Play with Coach (Saturdays)</button></div>
       </form></details>
   </section>`;
@@ -1503,7 +1505,7 @@ document.addEventListener("submit", async e=>{
   if(e.target.id==="sessForm"){
     const date=$("#s-date").value, start=$("#s-start").value, end=$("#s-end").value, c=Number($("#s-cap").value)||PER_COURT, weeks=Number($("#s-weeks").value)||1;
     if(!date||!start||!end){ toast("Add a date, start and end time"); return }
-    const base={start,end,gameMins:Number($("#s-mins").value)||GAME_MINS,title:$("#s-title").value.trim(),note:$("#s-note").value.trim(),venue:$("#s-venue").value.trim(),address:$("#s-address").value.trim(),capacity:{1:c,2:c,3:c,4:c},open:true,
+    const base={start,end,gameMins:Number($("#s-mins").value)||GAME_MINS,title:$("#s-title").value.trim(),note:$("#s-note").value.trim(),venue:$("#s-venue").value.trim(),address:$("#s-address").value.trim(),capacity:Object.fromEntries([1,2,3,4].map(n=>[n, n<=(Number($("#s-courts").value)||4)?c:0])),open:true,
       ...($("#s-price").value.trim()?{price:$("#s-price").value.trim()}:{}), ...($("#s-alllv").checked?{courts:Object.fromEntries([1,2,3,4].map(n=>[n,{label:`Court ${n}`, levels:LEVELS.map(l=>l.code)}]))}:{})};
     for(let w=0; w<weeks; w++){
       const d=new Date(date+"T12:00:00"); d.setDate(d.getDate()+7*w);

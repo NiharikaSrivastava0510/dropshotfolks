@@ -645,11 +645,11 @@ function viewBook(){
     <div><h2>Book a session</h2><p class="muted">Tick as many sessions as you like. You're ${lvChip(lv.code)} ${esc(lv.name)}, and we'll put you on the court for your level at each session, with rotating doubles.</p></div>
     <div class="picks">${ups.map(s=>{
       const myB = S.bookings.find(b=>b.sessionId===s.id && b.playerId===p.id && b.status!=="cancelled");
-      const ct = courtFor(s,lv.code), left = ct ? cap(s,ct) - activeIn(s.id,ct).length : 0, v=venueOf(s), noCourt = !ct, closed = s.open===false || noCourt;
+      const ct = courtFor(s,lv.code), left = ct ? cap(s,ct) - activeIn(s.id,ct).length : 0, v=venueOf(s), noCourt = !ct, closed = s.open===false || noCourt || s.cancelled;
       return `<label class="pick ${myB||closed?"booked":""}"><input type="checkbox" id="pick-${s.id}" data-pick="${s.id}" ${myB||closed?"disabled":""} ${myB||(!closed&&S.picks.has(s.id))?"checked":""}>
         <span class="t"><b>${fmtLong(s.date)} · ${esc(s.start)}–${esc(s.end)}</b>
         <span class="muted">${esc(v.venue||"Venue to be confirmed")}${s.title?" · "+esc(s.title):""}${s.price?` · <b>${esc(s.price)}</b>`:""}</span>
-        <span>${myB?`<span class="chip st-confirmed">✓ Booked</span> Court ${myB.court} ${stChip(myB.status)}`:closed?`<span class="chip st-waitlist">${noCourt?`Not running for ${esc(lv.code)} players`:"Booking closed"}</span>`:left>0?`Court ${ct} · ${esc(courtName(s,ct))}: <b>${left} of ${cap(s,ct)}</b> places left`:`Court ${ct} · ${esc(courtName(s,ct))} is full. You'll go on the waiting list for your level (players can't join another level's court).`}</span></span></label>`}).join("")}</div>
+        <span>${myB?`<span class="chip st-confirmed">✓ Booked</span> Court ${myB.court} ${stChip(myB.status)}`:closed?`<span class="chip st-waitlist">${s.cancelled?"Cancelled":noCourt?`Not running for ${esc(lv.code)} players`:"Booking closed"}</span>`:left>0?`Court ${ct} · ${esc(courtName(s,ct))}: <b>${left} of ${cap(s,ct)}</b> places left`:`Court ${ct} · ${esc(courtName(s,ct))} is full. You'll go on the waiting list for your level (players can't join another level's court).`}</span></span></label>`}).join("")}</div>
   </section>
   <section class="panel">
     <div><h2>Bring a guest</h2><p class="muted">Guests answer the same questions and are placed on the court for their level. They're added to every session you tick above.</p></div>
@@ -824,7 +824,7 @@ function bookingCard(b,s){
   return `<div class="bk">
     <div class="row" style="justify-content:space-between"><h3>${isGuest?`Guest: ${esc(b.name)} · `:""}${fmtLong(s.date)} · ${esc(s.start)}–${esc(s.end)}</h3>${stChip(b.status)}</div>
     <p>Court ${esc(b.court)} · ${esc(courtName(s,b.court))} ${courtChips(s,b.court)}${v.venue?` · ${esc(v.venue)}`:""}${offChip(b)}</p>
-    ${b.status==="waitlist"?`<p class="muted">This court is full. If a place opens up, the organiser will offer it to you before you pay.</p>`:""}
+    ${b.status==="waitlist"?(freeOn(s,b.court)>0&&!past?`<div class="banner ok"><div class="grow"><b>🎉 A place is free on Court ${esc(b.court)}!</b> The first person on the waiting list to take it gets it.</div><button class="btn small primary" data-takeplace="${esc(b.id)}">Take the place</button></div>`:`<p class="muted">This court is full. If someone cancels, you'll get an email, and the first person to tap Take the place gets it.</p>`):""}
     ${b.status==="paid"?`<p class="muted">Thanks. The organiser will confirm once the payment arrives.</p>`:""}
     ${isGuest&&b.status==="awaiting"?`<p class="muted">Paid together with your own place for this session.</p>`:""}
     ${pay}${games}${cal}
@@ -905,7 +905,7 @@ function orgParts(){
   const sessions = `<section class="panel"><h2>Sessions &amp; bookings</h2>
     ${ups.length?`<p class="muted">Tap a session to open it. Everything for that session (bookings, adding players, check-in, emails and editing) is inside.</p>
       ${S.mail?.url?"":`<p class="muted" style="font-size:.85rem">📧 Emails to players open in your mail app. To send them straight to players' inboxes, set up 📧 Emails to players in Club details.</p>`}
-      <div class="row selbar">${S.selOn?`<b>${S.sel?.size||0} selected</b><button class="btn small" data-selall="1">Select all</button><button class="btn small ghost danger" data-seldel="1" ${S.sel?.size?"":"disabled"}>🗑 Delete selected</button><button class="btn small ghost" data-selx="1">Done</button>`:`<button class="btn small" data-selon="1">☑ Select sessions to delete</button>`}</div>
+      <div class="row selbar">${S.selOn?`<b>${S.sel?.size||0} selected</b><button class="btn small" data-selall="1">Select all</button><button class="btn small ghost danger" data-selcanc="1" ${S.sel?.size?"":"disabled"}>Cancel selected</button><button class="btn small ghost danger" data-seldel="1" ${S.sel?.size?"":"disabled"}>🗑 Delete selected</button><button class="btn small ghost" data-selx="1">Done</button>`:`<button class="btn small" data-selon="1">☑ Select sessions to cancel or delete</button>`}</div>
       <div>${ups.map(x=>S.selOn?`<div class="selrow"><input type="checkbox" data-sesssel="${esc(x.id)}" ${S.sel?.has(x.id)?"checked":""} aria-label="Select ${esc(fmtLong(x.date))}">${adminSession(x)}</div>`:adminSession(x)).join("")}</div>`:`<div class="empty">No upcoming sessions. Add one below.</div>`}
     <details id="addSess"><summary><b>Add sessions</b></summary>
       <form id="sessForm" class="grid2" style="margin-top:10px">
@@ -1074,7 +1074,9 @@ function adminSession(s){
     <span class="chev" aria-hidden="true">›</span>
   </summary>
   <div class="sess-body">
-    <div class="row">${v.address?`<span class="muted" style="flex:1;min-width:200px">${esc(v.address)}</span>`:""}<button class="btn small" data-msg="${s.id}">Copy reminder message</button><button class="btn small" data-emails="${s.id}">Copy player emails</button><button class="btn small" data-mailrem="${s.id}">📧 Email reminder + rules</button>${s.remindedAt?`<span class="chip st-confirmed">Reminder sent ${esc(new Date(s.remindedAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))}</span>`:""}<button class="btn small" data-toggle="${s.id}">${s.open===false?"Open booking":"Close booking"}</button><button class="btn small ghost danger" data-delsess="${s.id}">Delete session</button></div>
+    <div class="row">${v.address?`<span class="muted" style="flex:1;min-width:200px">${esc(v.address)}</span>`:""}<button class="btn small" data-msg="${s.id}">Copy reminder message</button><button class="btn small" data-emails="${s.id}">Copy player emails</button><button class="btn small" data-mailrem="${s.id}">📧 Email reminder + rules</button>${s.remindedAt?`<span class="chip st-confirmed">Reminder sent ${esc(new Date(s.remindedAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))}</span>`:""}<button class="btn small" data-toggle="${s.id}">${s.open===false?"Open booking":"Close booking"}</button>${s.cancelled?`<span class="chip st-cancelled">Cancelled</span>`:`<button class="btn small ghost danger" data-cancsess="${s.id}">Cancel session</button>`}<button class="btn small ghost danger" data-delsess="${s.id}">Delete session</button></div>
+    ${(()=>{ const cs=courtsOf(s).filter(c=>freeOn(s,c)>0 && waitersOn(s,c).length); if(!cs.length) return "";
+      return `<div class="banner info"><div class="grow"><b>A place is free and people are waiting:</b> ${cs.map(c=>`Court ${c}: ${freeOn(s,c)} free, ${waitersOn(s,c).length} waiting`).join(" · ")}. Waiting players can tap <b>Take the place</b> in My bookings.</div><button class="btn small primary" data-mailwait="${s.id}">📧 Email the waiting list</button></div>` })()}
     ${sub("bkl", `<b>Bookings</b> <span class="muted">(${booked} booked${cnt("waitlist")?`, ${cnt("waitlist")} waiting`:""})</span>`, `<div class="tbl"><table><thead><tr><th>Player</th><th>Ref</th><th>Status</th><th>Court</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`, true)}
     ${sub("pr", `<b>Partners &amp; game style</b> <span class="muted">(${(s.pairs||[]).length} pair${(s.pairs||[]).length===1?"":"s"}${courtsOf(s).some(c=>(s.style?.[c]||"any")!=="any")?" · styles set":""})</span>`, partnersPanel(s), S.pairPick?.sid===s.id)}
     ${sub("ci", `<b>Check-in list</b> <span class="muted">(${here} of ${booked} here)</span>`, `<div style="display:grid;gap:10px">${checkinList(s)}</div>`)}
@@ -1322,10 +1324,11 @@ async function emailReminder(s){
   const miss=noEmail(s); if(miss.length) setTimeout(()=>toast(`No email for: ${miss.map(b=>b.name).join(", ")}. Message them yourself.`),2500);
 }
 // delete one or more sessions; anyone booked gets a cancellation email first, and their bookings are marked cancelled
-async function deleteSessions(ids){
+async function endSessions(ids, mode){
+  const del=mode==='delete', verb=del?'Delete':'Cancel';
   const ss=ids.map(id=>S.sessions.find(x=>x.id===id)).filter(Boolean); if(!ss.length) return;
   const booked=ss.flatMap(s=>S.bookings.filter(b=>b.sessionId===s.id && b.status!=="cancelled"));
-  if(!confirm(`Delete ${ss.length===1?`the ${fmtLong(ss[0].date)} session`:`${ss.length} sessions`}?${booked.length?` ${booked.length} booking${booked.length>1?"s":""} will be cancelled.`:""}`)) return;
+  if(!confirm(`${verb} ${ss.length===1?`the ${fmtLong(ss[0].date)} session`:`${ss.length} sessions`}?${booked.length?` ${booked.length} booking${booked.length>1?"s":""} will be cancelled.`:""}`)) return;
   if(booked.length && confirm(`Email everyone booked to say ${ss.length===1?"it's":"they're"} cancelled?`)){
     const reason=(prompt("Anything to add to the email? (optional, e.g. the reason)","")||"").trim();
     const by={}; ss.forEach(s=>bookedPeople(s).forEach(r=>{ const k=r.email.toLowerCase(); (by[k] ||= {...r, bookings:[], ss:[]}); by[k].bookings.push(...r.bookings); if(!by[k].ss.includes(s)) by[k].ss.push(s) }));
@@ -1335,9 +1338,40 @@ async function deleteSessions(ids){
     const miss=ss.flatMap(noEmail); if(miss.length) setTimeout(()=>toast(`No email for: ${miss.map(b=>b.name).join(", ")}. Message them yourself.`),2500);
   }
   for(const b of booked) await setBooking(b.id,{status:"cancelled"},"Session cancelled by the organiser.",null);
-  let n=0; for(const s of ss){ try{ await Store.del("sessions",s.id); n++ }catch{} }
+  let n=0; for(const s of ss){ try{ if(del) await Store.del("sessions",s.id); else { const {id,...body}=s; await Store.set("sessions",id,{...body, cancelled:true, open:false}) } n++ }catch{} }
   S.sel=new Set([...(S.sel||[])].filter(id=>!ids.includes(id))); if(!S.sel.size) S.selOn=false;
-  toast(n===ss.length?`${n} session${n>1?"s":""} deleted`:`Deleted ${n} of ${ss.length}`); render();
+  toast(n===ss.length?`${n} session${n>1?"s":""} ${del?"deleted":"cancelled"}`:`${del?"Deleted":"Cancelled"} ${n} of ${ss.length}`); render();
+}
+const deleteSessions = ids => endSessions(ids,"delete"), cancelSessions = ids => endSessions(ids,"cancel");
+
+/* ---------- waiting list: when a place frees up, everyone waiting for that court is emailed, and the first to tap Take the place gets it ---------- */
+const freeOn = (s,c) => s && s.open!==false && !s.cancelled ? cap(s,c) - activeIn(s.id,c).length : 0;
+const waitersOn = (s,c) => S.bookings.filter(b=>b.sessionId===s.id && b.court===c && b.status==="waitlist");
+// the player's phone tells the Google script: it remembers who's waiting, checks a place is really free, and emails them
+const wlPing = (kind, sid) => S.mail?.url && Store.mode==="db" ? mailPost({wl:kind, sid}).catch(()=>{}) : null;
+async function takePlace(b){
+  const s=S.sessions.find(x=>x.id===b.sessionId); if(!s || freeOn(s,b.court)<=0){ toast("Sorry, that place has just been taken. You're still on the waiting list."); return }
+  const {id,...body}=b, log=[...(b.log||[]), {at:nowIso(), text:"A place opened up and was taken from the waiting list. Please pay to confirm."}].slice(-30);
+  try{ await Store.set("bookings",id,{...body, status:"cancelled", log}); await Store.set("bookings",id,{...body, status:"awaiting", log}) }
+  catch{ toast("Couldn't take the place. Try again."); return }
+  burst(); toast("It's yours! Pay to confirm your place."); render();
+}
+function offerMail(s, r){
+  const v=venueOf(s), when=`${fmtLong(s.date)}, ${s.start}–${s.end}`;
+  const text=`Hi ${r.name.split(" ")[0]},\n\nGood news: a place has opened up on ${s.title||"the Dropshot Folks session"}, ${when}${v.venue?` at ${v.venue}`:""}.\n\nYou're on the waiting list. The first person to take it gets it: open My bookings and tap "Take the place".\n${BOOK_URL}\n\nDropshot Folks`;
+  const html=mailBox(`A place is free · ${fmtLong(s.date)}`, `<p style="margin:0 0 12px">Hi ${esc(r.name.split(" ")[0])}, good news: a place has opened up on <b>${esc(s.title||"the session")}</b>, ${esc(when)}${v.venue?` at ${esc(v.venue)}`:""}.</p>
+    <p style="margin:0 0 12px">You're on the waiting list. <b>The first person to take it gets it.</b></p>
+    <p style="text-align:center;margin:18px 0 0"><a href="${esc(BOOK_URL)}" style="display:inline-block;background:#7A2331;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px">Take the place →</a></p>`);
+  return {to:r.email, subject:`A place is free: ${s.title||"Dropshot Folks"} · ${fmtLong(s.date)}`, text, html};
+}
+// organiser: tell everyone waiting on courts that have space
+async function emailWaiters(s){
+  const courts=courtsOf(s).filter(c=>freeOn(s,c)>0 && waitersOn(s,c).length);
+  const people=bookedPeople(s,["waitlist"]).filter(r=>r.bookings.some(b=>courts.includes(b.court)));
+  if(!people.length){ toast("No one on the waiting list has an email, or there's no free place"); return }
+  if(!confirm(`Email ${people.length} waiting player${people.length>1?"s":""} that a place is free?`)) return;
+  const mails=people.map(r=>offerMail(s,r)), n=await sendAll(mails, mails[0].subject, mails[0].text.replace(/^Hi [^,]+,/,"Hi,"));
+  if(n>0) toast(`Waiting list emailed (${n}) ✓`);
 }
 
 /* ---------- actions ---------- */
@@ -1355,7 +1389,7 @@ async function bookSelected(){
       let b={...body, sessionId:s.id, court, status: full?"waitlist":"awaiting", ref:payRef(p.name,s), createdAt:nowIso(), log:[]};
       b=addLog(b, full?`Court ${court} is full. On the waiting list.`:`Place held on Court ${court}. Please pay to confirm.`);
       if(!await save("bookings",id,b)) { ok=false; lines.push(`${fmtDate(s.date)}: couldn't book ${esc(label)}`); return }
-      if(!full) taken[court]++;
+      if(!full) taken[court]++; else wlPing("join", s.id);
       lines.push(`${fmtDate(s.date)} · ${esc(label)}: Court ${court} — ${full?"full, added to the waiting list":"place held, pay to confirm"}`);
       if(full) ok=false;
     };
@@ -1440,7 +1474,9 @@ document.addEventListener("click", async e=>{
     await setBooking(ds.paid,{status:"paid"},"You marked this as paid. Waiting for the organiser to check.","Thanks, the organiser will check");
     for(const g of S.bookings.filter(x=>x.hostId===b.playerId && x.sessionId===b.sessionId && x.status==="awaiting")) await setBooking(g.id,{status:"paid"},"Paid by host.",null);
     return }
-  if(ds.cancel){ arm(t,"Tap again to cancel",()=>setBooking(ds.cancel,{status:"cancelled"},"Cancelled by player.","Booking cancelled")); return }
+  if(ds.cancel){ arm(t,"Tap again to cancel",async()=>{ const b=S.bookings.find(x=>x.id===ds.cancel), was=b?.status;
+    await setBooking(ds.cancel,{status:"cancelled"},"Cancelled by player.","Booking cancelled");
+    if(b && ACTIVE.includes(was)) wlPing("freed", b.sessionId) }); return }
   if(ds.ics){ downloadIcs(S.bookings.find(b=>b.id===ds.ics)); return }
   if(t.id==="signOut"){ if(Store.mode==="db"){ await firebase.auth().signOut(); location.reload() } else { S.me=null; ls.set("dsf:me",null); render() } return }
   if(t.id==="googleIn"){ try{ await firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()) }catch(err){ if(err?.code!=="auth/popup-closed-by-user") toast("Couldn't sign in with Google. Try the email link instead.") } return }
@@ -1455,7 +1491,9 @@ document.addEventListener("click", async e=>{
   if(ds.confirm){ setBooking(ds.confirm,{status:"confirmed"},"Payment received. Your place is confirmed — see you on court!","Confirmed"); return }
   if(ds.offer){ setBooking(ds.offer,{status:"awaiting"},"A place opened up. Please pay to confirm."); return }
   if(ds.absent){ const b=S.bookings.find(x=>x.id===ds.absent); setBooking(ds.absent,{absent:!b.absent},null, b.absent?"Back in the rotation":"Taken out of the rotation"); return }
-  if(ds.acancel){ arm(t,"Confirm cancel",()=>setBooking(ds.acancel,{status:"cancelled"},"The organiser cancelled this booking.")); return }
+  if(ds.acancel){ arm(t,"Confirm cancel",async()=>{ const b=S.bookings.find(x=>x.id===ds.acancel), was=b?.status;
+    await setBooking(ds.acancel,{status:"cancelled"},"The organiser cancelled this booking.");
+    if(b && ACTIVE.includes(was)) wlPing("freed", b.sessionId) }); return }
   if(ds.approve){ const p=S.players.find(x=>x.id===ds.approve), lv=p.levelRequest;
     if(await savePlayer({...p, level:lv, levelRequest:null, verified:true})){ const n=await moveToLevelCourt(p.id, lv); toast(n?`Level updated. ${n} upcoming booking${n>1?"s":""} moved to their new court.`:"Level updated") } return }
   if(ds.decline){ const p=S.players.find(x=>x.id===ds.decline); await savePlayer({...p, levelRequest:null}); toast("Request declined"); return }
@@ -1574,6 +1612,10 @@ document.addEventListener("click", async e=>{
   if(ds.selon){ S.selOn=true; S.sel=new Set(); render(); return }
   if(ds.selx){ S.selOn=false; S.sel=new Set(); render(); return }
   if(ds.selall){ const all=upcoming().map(x=>x.id); S.sel=new Set(S.sel?.size===all.length?[]:all); render(); return }
+  if(ds.cancsess){ await cancelSessions([ds.cancsess]); return }
+  if(ds.selcanc){ if(S.sel?.size) await cancelSessions([...S.sel]); return }
+  if(ds.mailwait){ const s=S.sessions.find(x=>x.id===ds.mailwait); if(s) await emailWaiters(s); return }
+  if(ds.takeplace){ const b=S.bookings.find(x=>x.id===ds.takeplace); if(b) await takePlace(b); return }
   if(ds.seldel){ if(S.sel?.size) await deleteSessions([...S.sel]); return }
 });
 document.addEventListener("change", async e=>{

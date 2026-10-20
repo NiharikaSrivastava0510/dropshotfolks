@@ -1,9 +1,10 @@
-// Dropshot Folks · tournament emails
-// Sends each confirmed team its confirmation, team code and QR pass from your own Gmail.
-// Also keeps the "Dropshot Folks — Tournament records" Google Sheet in your Drive up to date (Teams tab → 📊 Records).
+// Dropshot Folks · emails from your own Gmail
+// Club sessions: reminders with the session rules, and cancellation notices (booking page → Club details).
+// Tournaments: each confirmed team's confirmation, team code and QR pass, and the
+// "Dropshot Folks — Tournament records" Google Sheet in your Drive (Teams tab → 📊 Records).
 // Set up once: script.google.com → New project → paste this whole file → Deploy → New deployment →
-// type "Web app", Execute as "Me", Who has access "Anyone" → Deploy → copy the Web app URL into the
-// tournament page (Teams tab → 📧 Automatic emails).
+// type "Web app", Execute as "Me", Who has access "Anyone" → Deploy → copy the Web app URL into
+// the booking page (Club details → 📧 Emails to players). One script does both.
 // Only the organiser account below can send through it: every request carries the organiser's
 // sign-in token, which is checked with Google before anything is sent.
 

@@ -951,14 +951,17 @@ function orgParts(){
     </form>
   </section>`;
   const mailOn=!!S.mail?.url;
+  if(S.mailerTxt==null && !S.mailerLoading){ S.mailerLoading=true; fetch("/tourney/mailer.gs?v="+Date.now()).then(r=>r.ok?r.text():Promise.reject()).then(t=>{ S.mailerTxt=t; render(); const ta=$("[data-bmscript]"); if(ta) ta.value=t }).catch(()=>{ S.mailerLoading=false }) }
+  const scriptBox = `<li><b>Copy the script:</b> <button class="btn small primary" data-bmcopy="1">📋 Copy the script</button> <span class="muted">or click in the box, press ⌘A then ⌘C</span>
+        <textarea data-bmscript="1" readonly rows="6" style="width:100%;margin-top:6px;font:12px/1.4 ui-monospace,Menlo,monospace">${esc(S.mailerTxt||"Loading the script…")}</textarea></li>`;
   const mail = `<section class="panel"><h2>📧 Emails to players</h2>
     <p>${mailOn?`<b>On ✓</b> Session reminders with the rules, and cancellation notices, go straight to players' inboxes from your Gmail.`:`<b>Off.</b> Reminder and cancellation emails open in your mail app with everyone in BCC, and you press Send.`}</p>
     ${mailOn?`<div class="row"><button class="btn small" data-bmtest="1">Send me a test email</button></div>`:""}
     <details id="bmSetup" ${mailOn?"":"open"}><summary><b>${mailOn?"Update the Google script":"Set it up (once, free)"}</b></summary><ol class="mailsteps" style="line-height:1.7">
-      ${mailOn?`<li><button class="btn small" data-bmcopy="1">📋 Copy the script</button> In <a href="https://script.google.com/home" target="_blank" rel="noopener">script.google.com</a> open your Dropshot Folks project, click in the code, press ⌘A then ⌘V, and 💾 Save.</li>
+      ${mailOn?`${scriptBox}<li>In <a href="https://script.google.com/home" target="_blank" rel="noopener">script.google.com</a> open your Dropshot Folks project, click in the code, press ⌘A then ⌘V, and 💾 Save.</li>
       <li>Click <b>Deploy → Manage deployments</b>, click ✏️, set <b>Version</b> to <b>New version</b> and click <b>Deploy</b>. The web address stays the same.</li>`:`
       <li>Sign in to Google as the club's account, then open <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com → New project</a>.</li>
-      <li><button class="btn small" data-bmcopy="1">📋 Copy the script</button> Delete what's in the editor, paste, then press 💾 Save.</li>
+      ${scriptBox}<li>Delete what's in the editor, paste the script, then press 💾 Save.</li>
       <li>Click <b>Deploy → New deployment</b>, choose <b>Web app</b>, set <b>Execute as: Me</b> and <b>Who has access: Anyone</b>, then <b>Deploy</b> and <b>Authorise access</b>.</li>
       <li>Copy the <b>Web app URL</b> and paste it here:
         <div class="row"><input id="bm-url" placeholder="https://script.google.com/macros/s/…/exec" style="flex:1;min-width:220px"><button class="btn small primary" data-bmsave="1">Save &amp; send test email</button></div></li>`}
@@ -1560,7 +1563,10 @@ document.addEventListener("click", async e=>{
   if(ds.delsess){ await deleteSessions([ds.delsess]); return }
   if(ds.regquick!=null){ S.reg.quick=ds.regquick==="1"; render(); return }
   if(ds.bmtest){ const r=await mailPost({test:true}); toast(r.ok?"Test email sent ✓ Check your inbox":`Didn't send: ${r.error}`); return }
-  if(ds.bmcopy){ try{ const txt=await (await fetch("/tourney/mailer.gs?v="+Date.now())).text(); await navigator.clipboard.writeText(txt); toast("Script copied ✓ Paste it into script.google.com") }catch{ window.open("/tourney/mailer.gs","_blank") } return }
+  if(ds.bmcopy){ const ta=$("[data-bmscript]"); if(!S.mailerTxt||!ta){ toast("The script is still loading. Try again in a second."); return }
+    ta.value=S.mailerTxt; ta.focus(); ta.select(); let done=false; try{ done=document.execCommand("copy") }catch{}   // copies straight away, inside the tap (Safari blocks it later)
+    if(!done) navigator.clipboard?.writeText(S.mailerTxt).then(()=>toast("Script copied ✓ Paste it into script.google.com"),()=>toast("Press ⌘C to copy the selected script"));
+    else toast("Script copied ✓ Paste it into script.google.com"); return }
   if(ds.bmsave){ const url=($("#bm-url")?.value||"").trim(); if(!/^https:\/\/script\.google\.com\/(a\/macros\/[\w.-]+|macros)\/s\/[\w-]+\/exec$/.test(url)){ toast("Paste the Web app URL: it starts https://script.google.com/macros/s/ and ends /exec"); return }
     const {id:_m,...prev}=S.mail||{}; if(!await save("config","mail",{...prev, url, updatedAt:nowIso()})) return;
     S.mail={...prev, url}; render(); toast("Saved ✓ Sending a test email…"); const r=await mailPost({test:true}); toast(r.ok?"Test email sent ✓ Check your inbox":`Test email didn't send: ${r.error}`); return }

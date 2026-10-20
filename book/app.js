@@ -178,7 +178,7 @@ const S = {
   sessions: [], bookings: [], players: [], photos: {}, partners: {},   // partners: player id → ids they want to play with
   me: null, uid: null, isAdmin:false, loaded:false,
   quiz: {},                         // level-guide self-check
-  reg: {ans:{}, photo:null},        // registration questions and photo
+  reg: {ans:{}, photo:null, quick:new URLSearchParams(location.search).has("tp")},   // registration questions and photo; quick = Train & Play only, no level check
   gq: {}, guests: [],               // guest questions and guests waiting to be booked
   liveSess: null, result: null, liveKey: "",
   picks: new Set(),                 // sessions ticked but not booked yet
@@ -617,9 +617,12 @@ function registerPanel(){
         <label class="f">Your photo (shown on the live courts)<input id="r-photo" type="file" accept="image/*"></label>
       </div>
       ${S.reg.photo?`<div class="row"><img class="av lg" src="${esc(S.reg.photo)}" alt="Your photo"><span class="muted">Looking good.</span></div>`:""}
+      <div class="row regmode"><button type="button" class="btn small ${S.reg.quick?"primary":""}" data-regquick="1">🏸 Train &amp; Play with Coach only</button><button type="button" class="btn small ${S.reg.quick?"":"primary"}" data-regquick="0">Thursday games too (level check)</button></div>
+      ${S.reg.quick?`<p class="muted" style="margin:0">No level check needed for Train &amp; Play: the coach sees you on the day. Want Thursday games later? Take the level check from the Level guide tab.</p>
+      <label class="f" style="max-width:360px">How do you play? (optional)<select id="r-qlv">${[["E","Not sure / beginner"],["E-","Brand new to badminton"],["D-","Social player"],["D+","Intermediate"],["C-","Advanced"]].map(([c,l])=>`<option value="${c}">${l}</option>`).join("")}</select></label>`:`
       <h3>Your level</h3>
       ${quizFields("rq", S.reg.ans)}
-      ${levelVerdict(lv)}
+      ${levelVerdict(lv)}`}
       <div class="row"><button class="btn primary" type="submit" >${Store.mode==="db"?"Register":"Continue"}</button><span class="muted" style="font-size:.85rem">The organiser checks levels on the night and can move you.</span></div>
     </form>
   </section>`;
@@ -1555,6 +1558,7 @@ document.addEventListener("click", async e=>{
   if(ds.reall){ const s=S.sessions.find(x=>x.id===ds.reall), c=ds.c; const {id,...body}=s, rot={...(s.rot||{})}; rot[c]={};
     arm(t,"Tap again to reset",()=>save("sessions",id,{...body, rot},"Rotation back to automatic")); return }
   if(ds.delsess){ await deleteSessions([ds.delsess]); return }
+  if(ds.regquick!=null){ S.reg.quick=ds.regquick==="1"; render(); return }
   if(ds.bmtest){ const r=await mailPost({test:true}); toast(r.ok?"Test email sent ✓ Check your inbox":`Didn't send: ${r.error}`); return }
   if(ds.bmcopy){ try{ const txt=await (await fetch("/tourney/mailer.gs?v="+Date.now())).text(); await navigator.clipboard.writeText(txt); toast("Script copied ✓ Paste it into script.google.com") }catch{ window.open("/tourney/mailer.gs","_blank") } return }
   if(ds.bmsave){ const url=($("#bm-url")?.value||"").trim(); if(!/^https:\/\/script\.google\.com\/(a\/macros\/[\w.-]+|macros)\/s\/[\w-]+\/exec$/.test(url)){ toast("Paste the Web app URL: it starts https://script.google.com/macros/s/ and ends /exec"); return }
@@ -1604,7 +1608,7 @@ document.addEventListener("submit", async e=>{
     catch{ toast("Couldn't send the link. Check the address and try again.") }
     return }
   if(e.target.id==="regForm"){
-    const email=$("#r-email").value.trim(), name=$("#r-name").value.trim(), phone=$("#r-phone").value.trim(), level=levelFrom(S.reg.ans);
+    const quick=S.reg.quick, email=$("#r-email").value.trim(), name=$("#r-name").value.trim(), phone=$("#r-phone").value.trim(), level=quick?($("#r-qlv")?.value||"E"):levelFrom(S.reg.ans);
     if(!validEmail(email)){ toast("Enter a valid email address"); return }
     const id = Store.mode==="db" ? S.uid : emailKey(email);
     if(!id){ toast("Sign in to register"); return }
@@ -1612,9 +1616,9 @@ document.addEventListener("submit", async e=>{
     if(ex && Store.mode!=="db"){ S.me=id; ls.set("dsf:me",id); toast(`Welcome back, ${ex.name}`); render(); return }
     if(!name){ toast("Add your full name"); return }
     if(!level){ toast("Answer all five level questions"); return }
-    if(await savePlayer({id,email,name,phone,level,quiz:packQuiz(S.reg.ans),verified:false,levelRequest:null,createdAt:nowIso()})){
+    if(await savePlayer({id,email,name,phone,level,...(quick?{}:{quiz:packQuiz(S.reg.ans)}),verified:false,levelRequest:null,createdAt:nowIso()})){
       if(S.reg.photo) await savePhoto(id,S.reg.photo);
-      S.me=id; if(Store.mode!=="db") ls.set("dsf:me",id); S.reg={ans:{},photo:null}; burst(); toast(`Welcome! You're ${level} ${lvByCode(level).name}.`); render() }
+      S.me=id; if(Store.mode!=="db") ls.set("dsf:me",id); S.reg={ans:{},photo:null}; burst(); toast(quick?`Welcome, ${name.split(" ")[0]}! Tick the Train & Play sessions you want.`:`Welcome! You're ${level} ${lvByCode(level).name}.`); render() }
   }
   if(e.target.id==="sessForm"){
     const date=$("#s-date").value, start=$("#s-start").value, end=$("#s-end").value, c=Number($("#s-cap").value)||PER_COURT, weeks=Number($("#s-weeks").value)||1;

@@ -33,13 +33,16 @@ function doPost(e) {
     const to = String(d.to || '').trim();
     if (!email(to)) return reply({ ok: false, error: 'No valid email for this team.' });
     const cc = (d.cc || []).map(s => String(s).trim()).filter(email).filter(s => s.toLowerCase() !== to.toLowerCase()).slice(0, 5).join(',');
-    const qr = Utilities.newBlob(Utilities.base64Decode(String(d.png || '')), 'image/png', String(d.file || 'team-pass.png').slice(0, 80));
-    MailApp.sendEmail({
+    const mail = {
       to: to, cc: cc, replyTo: ORGANISER, name: 'Dropshot Folks',
       subject: String(d.subject || 'Your team is confirmed').slice(0, 200),
-      body: String(d.text || ''), htmlBody: String(d.html || ''),
-      inlineImages: { qr: qr }, attachments: [qr]
-    });
+      body: String(d.text || ''), htmlBody: String(d.html || '')
+    };
+    if (d.png) {   // tournament emails carry the team's QR pass; session emails have none
+      const qr = Utilities.newBlob(Utilities.base64Decode(String(d.png)), 'image/png', String(d.file || 'team-pass.png').slice(0, 80));
+      mail.inlineImages = { qr: qr }; mail.attachments = [qr];
+    }
+    MailApp.sendEmail(mail);
     return reply({ ok: true, left: MailApp.getRemainingDailyQuota() });
   } catch (err) {
     return reply({ ok: false, error: String(err && err.message || err) });

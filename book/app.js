@@ -85,7 +85,7 @@ const STATUS = {
   cancelled:{label:"Cancelled", cls:"st-cancelled"}
 };
 const ACTIVE = ["awaiting","paid","confirmed"];
-const DEFAULT_CFG = {club:"Dropshot Folks", venue:"", address:"", price:"", bankName:"", accountName:"", sortCode:"", accountNumber:"", payLink:"", orgName:"", orgPhone:"", orgEmail:"", whatsapp:"", policy:"Pay within 24 hours to keep your place. Cancel at least 24 hours before for a refund."};
+const DEFAULT_CFG = {club:"Dropshot Folks", venue:"", address:"", price:"", bankName:"", accountName:"", sortCode:"", accountNumber:"", payLink:"", orgName:"", orgPhone:"", orgEmail:"", whatsapp:"", rules:"", policy:"Pay within 24 hours to keep your place. Cancel at least 24 hours before for a refund."};
 
 /* ---------- helpers ---------- */
 const LOCAL = location.protocol==="file:" || ["localhost","127.0.0.1"].includes(location.hostname);
@@ -638,6 +638,7 @@ function viewBook(){
   if(S.result) html += `<div class="banner ${S.result.ok?"ok":"warn"}"><div class="grow"><b>${esc(S.result.title)}</b><ul>${S.result.lines.map(l=>`<li>${l}</li>`).join("")}</ul></div><button class="btn small" data-go="mine">Go to payment</button></div>`;
   if(!ups.length) return html + `<section class="panel"><h2>Book a session</h2><div class="empty">No sessions are open yet. They'll appear here as soon as the organiser adds them.</div></section>`;
   html += `<section class="panel">
+    <details class="rulesbox" id="rulesBox"><summary>📜 Session rules</summary><div class="rules-t">${htmlText(S.cfg.rules||DEFAULT_RULES)}${[...new Map(ups.filter(x=>x.rules).map(x=>[(x.title||"")+x.rules,x])).values()].map(x=>`<p><b>${esc(x.title||"This session")}</b><br>${htmlText(x.rules)}</p>`).join("")}</div></details>
     <div><h2>Book a session</h2><p class="muted">Tick as many sessions as you like. You're ${lvChip(lv.code)} ${esc(lv.name)}, and we'll put you on the court for your level at each session, with rotating doubles.</p></div>
     <div class="picks">${ups.map(s=>{
       const myB = S.bookings.find(b=>b.sessionId===s.id && b.playerId===p.id && b.status!=="cancelled");
@@ -899,7 +900,10 @@ function orgParts(){
     ${reqs.map(p=>`<tr><td>${esc(p.name)} <span class="muted">${esc(p.email)}</span></td><td>${lvChip(p.level)}</td><td>${lvChip(p.levelRequest)}</td><td class="row"><button class="btn small primary" data-approve="${esc(p.id)}">Approve</button><button class="btn small ghost" data-decline="${esc(p.id)}">Decline</button></td></tr>`).join("")}
   </tbody></table></div></section>`:"";
   const sessions = `<section class="panel"><h2>Sessions &amp; bookings</h2>
-    ${ups.length?`<p class="muted">Tap a session to open it. Everything for that session (bookings, adding players, check-in and editing) is inside.</p><div>${ups.map(adminSession).join("")}</div>`:`<div class="empty">No upcoming sessions. Add one below.</div>`}
+    ${ups.length?`<p class="muted">Tap a session to open it. Everything for that session (bookings, adding players, check-in, emails and editing) is inside.</p>
+      ${S.mail?.url?"":`<p class="muted" style="font-size:.85rem">📧 Emails to players open in your mail app. To send them automatically, set up 📧 Automatic emails once on the Tournaments page (Organiser).</p>`}
+      <div class="row selbar">${S.selOn?`<b>${S.sel?.size||0} selected</b><button class="btn small" data-selall="1">Select all</button><button class="btn small ghost danger" data-seldel="1" ${S.sel?.size?"":"disabled"}>🗑 Delete selected</button><button class="btn small ghost" data-selx="1">Done</button>`:`<button class="btn small" data-selon="1">☑ Select sessions to delete</button>`}</div>
+      <div>${ups.map(x=>S.selOn?`<div class="selrow"><input type="checkbox" data-sesssel="${esc(x.id)}" ${S.sel?.has(x.id)?"checked":""} aria-label="Select ${esc(fmtLong(x.date))}">${adminSession(x)}</div>`:adminSession(x)).join("")}</div>`:`<div class="empty">No upcoming sessions. Add one below.</div>`}
     <details id="addSess"><summary><b>Add sessions</b></summary>
       <form id="sessForm" class="grid2" style="margin-top:10px">
         <label class="f">First date<input id="s-date" type="date" required></label>
@@ -914,6 +918,7 @@ function orgParts(){
         <label class="f">Venue<input id="s-venue" placeholder="Swanlea School" value="${esc(c.venue)}"></label>
         <label class="f">Venue address<input id="s-address" placeholder="Street, postcode" value="${esc(c.address)}"></label>
         <label class="f">Session fee (optional)<input id="s-price" placeholder="Leave empty for the usual ${esc(c.price||"fee")}"></label>
+        <label class="f" style="grid-column:1/-1">Extra rules for these sessions (optional, added to the club rules)<textarea id="s-rules" rows="2" placeholder="e.g. Coaching starts at 13:00 sharp"></textarea></label>
         <label class="row" style="gap:6px;align-self:end"><input type="checkbox" style="width:auto" id="s-alllv"> All levels on every court (coaching, mixed sessions)</label>
         <p class="muted" style="grid-column:1/-1;font-size:.85rem;margin:0">With fewer than 4 courts, only the first courts run (Court 1 D-, Court 2 D+, …) unless you tick "All levels". You can change each court's levels and places later under Edit session &amp; courts.</p>
         <div class="row" style="grid-column:1/-1"><button class="btn primary">Add sessions</button><button type="button" class="btn" data-trainplay="1">🏸 Fill in: Train &amp; Play with Coach (Saturdays)</button></div>
@@ -938,6 +943,7 @@ function orgParts(){
       ${f("accountName","Account name")}${f("bankName","Bank")}${f("sortCode","Sort code","00-00-00")}${f("accountNumber","Account number")}
       ${f("orgName","Organiser name")}${f("orgPhone","Organiser phone")}${f("orgEmail","Organiser email")}${f("whatsapp","WhatsApp number (if different)")}
       <label class="f" style="grid-column:1/-1">Payment &amp; cancellation policy<textarea id="c-policy" rows="2">${esc(c.policy)}</textarea></label>
+      <label class="f" style="grid-column:1/-1">📜 Session rules (players see them when booking, and they go out with every reminder email)<textarea id="c-rules" rows="6">${esc(c.rules||DEFAULT_RULES)}</textarea></label>
       <div class="row" style="grid-column:1/-1"><button class="btn primary">Save club details</button></div>
     </form>
   </section>`;
@@ -1049,7 +1055,7 @@ function adminSession(s){
     <span class="chev" aria-hidden="true">›</span>
   </summary>
   <div class="sess-body">
-    <div class="row">${v.address?`<span class="muted" style="flex:1;min-width:200px">${esc(v.address)}</span>`:""}<button class="btn small" data-msg="${s.id}">Copy reminder message</button><button class="btn small" data-emails="${s.id}">Copy player emails</button><button class="btn small" data-toggle="${s.id}">${s.open===false?"Open booking":"Close booking"}</button><button class="btn small ghost danger" data-delsess="${s.id}">Delete session</button></div>
+    <div class="row">${v.address?`<span class="muted" style="flex:1;min-width:200px">${esc(v.address)}</span>`:""}<button class="btn small" data-msg="${s.id}">Copy reminder message</button><button class="btn small" data-emails="${s.id}">Copy player emails</button><button class="btn small" data-mailrem="${s.id}">📧 Email reminder + rules</button>${s.remindedAt?`<span class="chip st-confirmed">Reminder sent ${esc(new Date(s.remindedAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))}</span>`:""}<button class="btn small" data-toggle="${s.id}">${s.open===false?"Open booking":"Close booking"}</button><button class="btn small ghost danger" data-delsess="${s.id}">Delete session</button></div>
     ${sub("bkl", `<b>Bookings</b> <span class="muted">(${booked} booked${cnt("waitlist")?`, ${cnt("waitlist")} waiting`:""})</span>`, `<div class="tbl"><table><thead><tr><th>Player</th><th>Ref</th><th>Status</th><th>Court</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`, true)}
     ${sub("pr", `<b>Partners &amp; game style</b> <span class="muted">(${(s.pairs||[]).length} pair${(s.pairs||[]).length===1?"":"s"}${courtsOf(s).some(c=>(s.style?.[c]||"any")!=="any")?" · styles set":""})</span>`, partnersPanel(s), S.pairPick?.sid===s.id)}
     ${sub("ci", `<b>Check-in list</b> <span class="muted">(${here} of ${booked} here)</span>`, `<div style="display:grid;gap:10px">${checkinList(s)}</div>`)}
@@ -1081,6 +1087,7 @@ function adminSession(s){
         <label class="f">Venue address<input id="es-address-${s.id}" value="${esc(s.address||"")}"></label>
         <label class="f">Session fee<input id="es-price-${s.id}" value="${esc(s.price||"")}" placeholder="Usual ${esc(S.cfg.price||"fee")}"></label>
         <label class="f">Note for players<input id="es-note-${s.id}" value="${esc(s.note||"")}"></label>
+        <label class="f" style="grid-column:1/-1">Extra rules for this session (added to the club rules)<textarea id="es-rules-${s.id}" rows="2">${esc(s.rules||"")}</textarea></label>
         <h3 style="grid-column:1/-1;margin-top:6px">Courts</h3>
         ${[1,2,3,4].map(n=>`<div class="bk" style="gap:6px"><b>Court ${n}</b>
           <label class="f">Name<input id="es-label${n}-${s.id}" value="${esc(courtName(s,n))}"></label>
@@ -1229,7 +1236,89 @@ function reminderText(s){
     t+=`Court ${n} (${courtName(s,n)}): ${names.length?names.join(", "):"places available"}\n`});
   const unpaid=S.bookings.filter(b=>b.sessionId===s.id&&b.status==="awaiting").map(b=>b.name);
   if(unpaid.length) t+=`\nStill to pay: ${unpaid.join(", ")}\n`;
-  return t+"\nYour game rotation is live on the booking page. See you on court!";
+  return t+`\n📜 Rules\n${rulesOf(s)}\n\nYour game rotation is live on the booking page. See you on court!`;
+}
+
+
+/* ---------- session rules and emails to booked players ---------- */
+const DEFAULT_RULES = `1. Arrive 10 minutes early and check in with the host.
+2. Wear non-marking indoor shoes and bring your own racket. Shuttles are provided.
+3. Pay before the session to keep your place.
+4. Can't come? Cancel at least 24 hours before, so someone on the waiting list can play.
+5. Rotate fairly, call lines honestly, and respect other players and the venue.`;
+const rulesOf = s => [S.cfg.rules || DEFAULT_RULES, s?.rules].filter(Boolean).join("\n");
+// everyone with a place (or on the waiting list) for a session, one entry per email: the player and any guests they booked
+function bookedPeople(s, statuses=[...ACTIVE,"waitlist"]){
+  const by={};
+  S.bookings.filter(b=>b.sessionId===s.id && statuses.includes(b.status)).forEach(b=>{
+    const p=S.players.find(x=>x.id===(b.hostId||b.playerId)); if(!p?.email) return;
+    const k=p.email.toLowerCase(); (by[k] ||= {email:p.email, name:p.name, bookings:[]}).bookings.push(b) });
+  return Object.values(by);
+}
+const noEmail = s => S.bookings.filter(b=>b.sessionId===s.id && [...ACTIVE,"waitlist"].includes(b.status) && !S.players.find(x=>x.id===(b.hostId||b.playerId))?.email);
+// sends through the organiser's Google Apps Script (set up once on the Tournaments page); without it, emails open in the mail app
+async function mailPost(body){
+  if(!S.mail?.url) return {ok:false, error:"no-script"};
+  try{ const token=await firebase.auth().currentUser.getIdToken();
+    const r=await fetch(S.mail.url,{method:"POST", body:JSON.stringify({...body, token})}); return await r.json() }
+  catch(e){ return {ok:false, error:"Couldn't reach the email script"} }
+}
+const mailBox = (title, inner) => `<div style="background:#F3E9D9;padding:24px 12px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif"><div style="max-width:560px;margin:0 auto;background:#FCF7EE;border-radius:18px;overflow:hidden;border:1px solid #DFCDAE">
+  <div style="background:#7A2331;color:#fff;padding:20px 24px;text-align:center"><div style="font-size:22px;font-weight:800;letter-spacing:.04em">DROPSHOT FOLKS</div><div style="color:#EBD9BA;font-size:15px;margin-top:4px">${esc(title)}</div></div>
+  <div style="padding:22px 24px;color:#24100F;font-size:16px;line-height:1.55">${inner}<p style="margin:18px 0 0">See you on court! 🏸<br><b>Dropshot Folks</b></p></div></div></div>`;
+const htmlText = t => esc(t).replace(/\n/g,"<br>");
+function reminderMail(s, r){
+  const v=venueOf(s), when=`${fmtLong(s.date)}, ${s.start}–${s.end}`, fee=feeOf(s);
+  const lines=r.bookings.map(b=>`• ${b.name}: Court ${b.court} (${courtName(s,b.court)}) · ${b.status==="waitlist"?"on the waiting list":b.status==="awaiting"?`not paid yet${fee?`: please pay ${fee}`:""}, reference ${b.ref}`:"place confirmed"}`);
+  const text=`Hi ${r.name.split(" ")[0]},\n\nA reminder for your Dropshot Folks session${s.title?` (${s.title})`:""}:\n\n📅 ${when}\n📍 ${[v.venue,v.address].filter(Boolean).join(", ")}${v.address||v.venue?`\n${mapsFor(v)}`:""}\n\n${lines.join("\n")}\n\n📜 Session rules\n${rulesOf(s)}\n\nYour bookings and game rotation: ${BOOK_URL}\n\nSee you on court!\nDropshot Folks`;
+  const html=mailBox(`${s.title||"Session reminder"} · ${fmtLong(s.date)}`, `<p style="margin:0 0 12px">Hi ${esc(r.name.split(" ")[0])}, a reminder for your session:</p>
+    <p style="margin:0 0 6px">📅 <b>${esc(when)}</b></p><p style="margin:0 0 12px">📍 ${esc([v.venue,v.address].filter(Boolean).join(", "))}${v.address||v.venue?` · <a href="${esc(mapsFor(v))}">Directions</a>`:""}</p>
+    <p style="margin:0 0 12px">${lines.map(esc).join("<br>")}</p>
+    <div style="background:#fff;border:1px solid #EAD9BD;border-radius:12px;padding:12px 14px;margin:14px 0"><b>📜 Session rules</b><br>${htmlText(rulesOf(s))}</div>
+    <p style="text-align:center;margin:18px 0 0"><a href="${esc(BOOK_URL)}" style="display:inline-block;background:#7A2331;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px">Your bookings →</a></p>`);
+  return {to:r.email, subject:`Reminder: ${s.title||"Dropshot Folks"} · ${fmtLong(s.date)} ${s.start}`, text, html};
+}
+function cancelMail(ss, r, reason){
+  const list=ss.map(s=>`• ${s.title?s.title+": ":""}${fmtLong(s.date)}, ${s.start}–${s.end}${venueOf(s).venue?` at ${venueOf(s).venue}`:""}`);
+  const one=ss.length===1, paid=r.bookings.some(b=>["paid","confirmed"].includes(b.status));
+  const text=`Hi ${r.name.split(" ")[0]},\n\nSorry, ${one?"this session has":"these sessions have"} been cancelled:\n\n${list.join("\n")}\n\n${reason?reason+"\n\n":""}${paid?"You've paid, so we'll refund you. ":""}Reply to this email if you have any questions.\n\nBook another session: ${BOOK_URL}\n\nDropshot Folks`;
+  const html=mailBox(one?`Cancelled · ${fmtLong(ss[0].date)}`:"Sessions cancelled", `<p style="margin:0 0 12px">Hi ${esc(r.name.split(" ")[0])}, sorry, ${one?"this session has":"these sessions have"} been <b>cancelled</b>:</p>
+    <p style="margin:0 0 12px">${list.map(esc).join("<br>")}</p>${reason?`<p style="margin:0 0 12px">${htmlText(reason)}</p>`:""}
+    <p style="margin:0 0 12px">${paid?"You've paid, so we'll refund you. ":""}Reply to this email if you have any questions.</p>
+    <p style="text-align:center;margin:18px 0 0"><a href="${esc(BOOK_URL)}" style="display:inline-block;background:#7A2331;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px">Book another session →</a></p>`);
+  return {to:r.email, subject:`Cancelled: ${one?`${ss[0].title||"Dropshot Folks"} · ${fmtLong(ss[0].date)}`:`${ss.length} Dropshot Folks sessions`}`, text, html};
+}
+// send one email per person; returns how many went. Without the script, opens one email in the mail app with everyone in BCC
+async function sendAll(mails, fallbackSubject, fallbackText){
+  if(!mails.length) return 0;
+  if(!S.mail?.url){ location.href=`mailto:?bcc=${encodeURIComponent(mails.map(m=>m.to).join(","))}&subject=${encodeURIComponent(fallbackSubject)}&body=${encodeURIComponent(fallbackText)}`; return -1 }
+  let n=0; for(const m of mails){ toast(`Emailing ${n+1} of ${mails.length}…`); const r=await mailPost(m); if(r.ok) n++; else { toast(`Email to ${m.to} didn't send: ${r.error||"unknown error"}`); await new Promise(x=>setTimeout(x,1500)) } }
+  return n;
+}
+async function emailReminder(s){
+  const people=bookedPeople(s); if(!people.length){ toast("No one with an email is booked on this session yet"); return }
+  if(!confirm(`Email the reminder and session rules to ${people.length} player${people.length>1?"s":""}?`)) return;
+  const mails=people.map(r=>reminderMail(s,r)), n=await sendAll(mails, mails[0].subject.replace(/^Reminder/,"Reminder"), reminderText(s));
+  if(n>0){ const {id,...body}=s; await save("sessions",id,{...body, remindedAt:nowIso()}); toast(`Reminder and rules emailed to ${n} of ${mails.length} ✓`) }
+  const miss=noEmail(s); if(miss.length) setTimeout(()=>toast(`No email for: ${miss.map(b=>b.name).join(", ")}. Message them yourself.`),2500);
+}
+// delete one or more sessions; anyone booked gets a cancellation email first, and their bookings are marked cancelled
+async function deleteSessions(ids){
+  const ss=ids.map(id=>S.sessions.find(x=>x.id===id)).filter(Boolean); if(!ss.length) return;
+  const booked=ss.flatMap(s=>S.bookings.filter(b=>b.sessionId===s.id && b.status!=="cancelled"));
+  if(!confirm(`Delete ${ss.length===1?`the ${fmtLong(ss[0].date)} session`:`${ss.length} sessions`}?${booked.length?` ${booked.length} booking${booked.length>1?"s":""} will be cancelled.`:""}`)) return;
+  if(booked.length && confirm(`Email everyone booked to say ${ss.length===1?"it's":"they're"} cancelled?`)){
+    const reason=(prompt("Anything to add to the email? (optional, e.g. the reason)","")||"").trim();
+    const by={}; ss.forEach(s=>bookedPeople(s).forEach(r=>{ const k=r.email.toLowerCase(); (by[k] ||= {...r, bookings:[], ss:[]}); by[k].bookings.push(...r.bookings); if(!by[k].ss.includes(s)) by[k].ss.push(s) }));
+    const mails=Object.values(by).map(r=>cancelMail(r.ss, r, reason));
+    const n=await sendAll(mails, mails[0]?.subject||"Session cancelled", mails.length?`Hi,\n\nSorry, ${ss.length===1?"this session has":"these sessions have"} been cancelled:\n\n${ss.map(s=>`• ${fmtLong(s.date)}, ${s.start}–${s.end}`).join("\n")}\n\n${reason?reason+"\n\n":""}If you've paid, we'll refund you.\n\nDropshot Folks`:"");
+    if(n>0) toast(`Cancellation emailed to ${n} of ${mails.length} ✓`);
+    const miss=ss.flatMap(noEmail); if(miss.length) setTimeout(()=>toast(`No email for: ${miss.map(b=>b.name).join(", ")}. Message them yourself.`),2500);
+  }
+  for(const b of booked) await setBooking(b.id,{status:"cancelled"},"Session cancelled by the organiser.",null);
+  let n=0; for(const s of ss){ try{ await Store.del("sessions",s.id); n++ }catch{} }
+  S.sel=new Set([...(S.sel||[])].filter(id=>!ids.includes(id))); if(!S.sel.size) S.selOn=false;
+  toast(n===ss.length?`${n} session${n>1?"s":""} deleted`:`Deleted ${n} of ${ss.length}`); render();
 }
 
 /* ---------- actions ---------- */
@@ -1306,6 +1395,8 @@ function gcalUrl(b,s){
   return "https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent(`Dropshot Folks – Court ${esc(b.court)}`)+
     `&dates=${d(s.date)}T${d(s.start)}00/${d(s.date)}T${d(s.end)}00&ctz=Europe/London&location=`+encodeURIComponent([venueOf(s).venue,venueOf(s).address].filter(Boolean).join(", "));
 }
+// organiser: tick sessions to delete several at once
+document.addEventListener("change", e=>{ const id=e.target.dataset?.sesssel; if(!id) return; S.sel ||= new Set(); e.target.checked?S.sel.add(id):S.sel.delete(id); render() });
 function arm(t,label,fn){ if(t.dataset.armed){ fn(); return } t.dataset.armed="1"; const old=t.textContent; t.textContent=label; setTimeout(()=>{ if(t.isConnected){ delete t.dataset.armed; t.textContent=old } },4000) }
 
 document.addEventListener("click", async e=>{
@@ -1391,7 +1482,7 @@ document.addEventListener("click", async e=>{
       courts[n]={label:$(`#es-label${n}-${sid}`).value.trim() || lvByCourt(n).name, levels:levels.length?levels:[lvByCourt(n).code]};
     }
     const {id,...body}=s;
-    if(!await save("sessions",id,{...body, date:v("date"), start:v("start"), end:v("end"), title:v("title"), venue:v("venue"), address:v("address"), note:v("note"), price:v("price"), capacity, courts},"Session updated")) return;
+    if(!await save("sessions",id,{...body, date:v("date"), start:v("start"), end:v("end"), title:v("title"), venue:v("venue"), address:v("address"), note:v("note"), price:v("price"), rules:v("rules").slice(0,2000), capacity, courts},"Session updated")) return;
     if($(`#es-all-${sid}`)?.checked){
       const same=upcoming().filter(x=>x.id!==sid && slotKey(x)===slotKey(s));
       for(const x of same){ const {id:xid,...xb}=x; await save("sessions",xid,{...xb, capacity, courts}) }
@@ -1450,7 +1541,12 @@ document.addEventListener("click", async e=>{
     save("sessions",id,{...body, rot},`Game ${Number(gi)+1} back to automatic`); return }
   if(ds.reall){ const s=S.sessions.find(x=>x.id===ds.reall), c=ds.c; const {id,...body}=s, rot={...(s.rot||{})}; rot[c]={};
     arm(t,"Tap again to reset",()=>save("sessions",id,{...body, rot},"Rotation back to automatic")); return }
-  if(ds.delsess){ arm(t,"Tap again to delete",()=>Store.del("sessions",ds.delsess).then(()=>toast("Session deleted")).catch(()=>toast("Couldn't delete"))); return }
+  if(ds.delsess){ await deleteSessions([ds.delsess]); return }
+  if(ds.mailrem){ const s=S.sessions.find(x=>x.id===ds.mailrem); if(s) await emailReminder(s); return }
+  if(ds.selon){ S.selOn=true; S.sel=new Set(); render(); return }
+  if(ds.selx){ S.selOn=false; S.sel=new Set(); render(); return }
+  if(ds.selall){ const all=upcoming().map(x=>x.id); S.sel=new Set(S.sel?.size===all.length?[]:all); render(); return }
+  if(ds.seldel){ if(S.sel?.size) await deleteSessions([...S.sel]); return }
 });
 document.addEventListener("change", async e=>{
   const t=e.target;
@@ -1506,7 +1602,7 @@ document.addEventListener("submit", async e=>{
     const date=$("#s-date").value, start=$("#s-start").value, end=$("#s-end").value, c=Number($("#s-cap").value)||PER_COURT, weeks=Number($("#s-weeks").value)||1;
     if(!date||!start||!end){ toast("Add a date, start and end time"); return }
     const base={start,end,gameMins:Number($("#s-mins").value)||GAME_MINS,title:$("#s-title").value.trim(),note:$("#s-note").value.trim(),venue:$("#s-venue").value.trim(),address:$("#s-address").value.trim(),capacity:Object.fromEntries([1,2,3,4].map(n=>[n, n<=(Number($("#s-courts").value)||4)?c:0])),open:true,
-      ...($("#s-price").value.trim()?{price:$("#s-price").value.trim()}:{}), ...($("#s-alllv").checked?{courts:Object.fromEntries([1,2,3,4].map(n=>[n,{label:`Court ${n}`, levels:LEVELS.map(l=>l.code)}]))}:{})};
+      ...($("#s-price").value.trim()?{price:$("#s-price").value.trim()}:{}), ...($("#s-rules").value.trim()?{rules:$("#s-rules").value.trim().slice(0,2000)}:{}), ...($("#s-alllv").checked?{courts:Object.fromEntries([1,2,3,4].map(n=>[n,{label:`Court ${n}`, levels:LEVELS.map(l=>l.code)}]))}:{})};
     for(let w=0; w<weeks; w++){
       const d=new Date(date+"T12:00:00"); d.setDate(d.getDate()+7*w);
       const day=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -1576,5 +1672,5 @@ render();
   if(Store.mode==="db" && S.isAdmin) Store.listen("secrets", d=>{ S.secrets=Object.fromEntries(d.map(x=>[x.id,x.code])); render() });
   Store.listen("partners", d=>{S.partners=Object.fromEntries(d.map(x=>[x.id,x.ids])); render()});
   Store.listen("photos", d=>{S.photos=Object.fromEntries(d.map(x=>[x.id,x.img])); once("photos")});
-  Store.listen("config", d=>{const m=d.find(x=>x.id==="main"); S.cfg={...DEFAULT_CFG,...(m||{})}; delete S.cfg.id; once("config")});
+  Store.listen("config", d=>{const m=d.find(x=>x.id==="main"); S.cfg={...DEFAULT_CFG,...(m||{})}; delete S.cfg.id; S.mail=d.find(x=>x.id==="mail")||null; once("config")});
 })();

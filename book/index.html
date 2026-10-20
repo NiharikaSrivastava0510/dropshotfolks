@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com http://127.0.0.1:9099 http://127.0.0.1:8080; frame-src https://dropshotfolks.firebaseapp.com https://dropshotfolks.co.uk https://accounts.google.com https://apis.google.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com http://127.0.0.1:9099 http://127.0.0.1:8080; frame-src https://dropshotfolks.firebaseapp.com https://dropshotfolks.co.uk https://accounts.google.com https://apis.google.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="referrer" content="strict-origin-when-cross-origin"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>Dropshot Folks Court Booking</title>
 <meta name="description" content="Book a Dropshot Folks badminton session, get your court and see the live rotation.">
@@ -384,6 +384,8 @@ nav.tabs button[data-tab="court"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='htt
   .bookbar.on{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
   .toast{bottom:calc(100px + env(safe-area-inset-bottom,0px))}
 }
+.selbar{gap:8px;align-items:center;margin:6px 0}.selrow{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start}.selrow>input{width:22px;height:22px;margin-top:22px;accent-color:var(--accent,#7A2331)}
+.rulesbox{border:1px solid var(--line,#e5dccb);border-radius:12px;padding:10px 14px;background:var(--surface,#fff)}.rulesbox summary{cursor:pointer;font-weight:700}.rules-t{margin-top:8px;line-height:1.55;font-size:.95rem}.rules-t p{margin:10px 0 0}
 </style>
 
 <div class="wrap">
@@ -410,6 +412,6 @@ nav.tabs button[data-tab="court"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='htt
 <div class="toast" id="toast" hidden></div>
 <div class="court-alert" id="alert" hidden role="alertdialog" aria-live="assertive" aria-label="Court update"><div class="al-card"><div class="al-body"></div><button class="btn primary" data-alertok="1">OK</button></div></div>
 
-<script src="app.js?v=202610201820"></script>
+<script src="app.js?v=202610201900"></script>
 
 </body></html>

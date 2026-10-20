@@ -588,9 +588,14 @@ function levelVerdict(lv, who="you"){
 }
 function signInPanel(){
   return `<section class="panel">
-    <div><h2>Sign in to book</h2><p class="muted">Sign in once to book sessions, see your court and follow the live rotation. New players answer five quick level questions after signing in.</p></div>
+    <div><h2>Sign in to book</h2><p class="muted">Sign in once to book sessions, see your court and follow the live rotation. After signing in, new players add their name (Train &amp; Play), or take a quick level check for Thursday games.</p></div>
     <div class="signin">
       <button class="btn primary" id="googleIn" type="button">Continue with Google</button>
+      <div class="pwbox"><span class="lbl">Or use your email and a password</span>
+        <label class="f">Email<input id="pw-email" type="email" placeholder="you@example.com" autocomplete="email"></label>
+        <label class="f">Password<span class="pwrow"><input id="pw-pass" type="password" minlength="6" placeholder="At least 6 characters" autocomplete="current-password"><button class="btn small ghost" id="pwShow" type="button">Show</button></span></label>
+        <div class="row"><button class="btn" id="pwIn" type="button">Sign in</button><button class="btn" id="pwNew" type="button">Create account</button><button class="btn small ghost" id="pwReset" type="button">Forgot password?</button></div>
+        <p class="muted" style="font-size:.82rem;margin:0">New here? Type your email, choose a password and press <b>Create account</b>.</p></div>
       <form id="emailIn" class="signin">
         <label class="f">Or get a sign-in link by email<input id="in-email" type="email" required placeholder="you@example.com" autocomplete="email"></label>
         <button class="btn" type="submit">Email me a sign-in link</button>
@@ -1479,6 +1484,18 @@ document.addEventListener("click", async e=>{
     if(b && ACTIVE.includes(was)) wlPing("freed", b.sessionId) }); return }
   if(ds.ics){ downloadIcs(S.bookings.find(b=>b.id===ds.ics)); return }
   if(t.id==="signOut"){ if(Store.mode==="db"){ await firebase.auth().signOut(); location.reload() } else { S.me=null; ls.set("dsf:me",null); render() } return }
+  if(t.id==="pwShow"){ const i=$("#pw-pass"); if(i){ i.type=i.type==="password"?"text":"password"; t.textContent=i.type==="password"?"Show":"Hide" } return }
+  if(t.id==="pwIn"||t.id==="pwNew"||t.id==="pwReset"){
+    const email=($("#pw-email")?.value||"").trim(), pass=$("#pw-pass")?.value||"", A=firebase.auth();
+    if(!validEmail(email)){ toast("Enter your email address"); $("#pw-email")?.focus(); return }
+    const why=c=>({"auth/email-already-in-use":"This email already has an account. Press Sign in, or Forgot password?","auth/invalid-credential":"Wrong email or password. New here? Press Create account.","auth/wrong-password":"Wrong password. Try again, or press Forgot password?","auth/user-not-found":"No account with that email yet. Press Create account.","auth/weak-password":"Choose a password with at least 6 characters","auth/too-many-requests":"Too many tries. Wait a minute, or press Forgot password?","auth/operation-not-allowed":"Password sign-in isn't switched on yet. Use Google or the email link for now."})[c]||"Couldn't sign in. Check your connection and try again.";
+    try{
+      if(t.id==="pwReset"){ await A.sendPasswordResetEmail(email); toast(`Password reset email sent to ${email}`); return }
+      if(pass.length<6){ toast("Choose a password with at least 6 characters"); $("#pw-pass")?.focus(); return }
+      if(t.id==="pwNew"){ const c=await A.createUserWithEmailAndPassword(email,pass); c.user?.sendEmailVerification?.().catch(()=>{}); toast("Account created ✓ Now add your details") }
+      else await A.signInWithEmailAndPassword(email,pass);
+    }catch(err){ toast(t.id==="pwReset"&&err?.code==="auth/user-not-found"?"No account with that email. Press Create account.":why(err?.code)) }
+    return }
   if(t.id==="googleIn"){ try{ await firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()) }catch(err){ if(err?.code!=="auth/popup-closed-by-user") toast("Couldn't sign in with Google. Try the email link instead.") } return }
   if(t.id==="partnerAdd"){ const id=$("#partnerPick").value; if(!id){ toast("Choose a player first"); return }
     await setPartners([...partnerIds(S.me), id]); return }

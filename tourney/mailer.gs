@@ -26,7 +26,7 @@ function doPost(e) {
     }
     if (d.test) {
       MailApp.sendEmail({ to: ORGANISER, subject: 'Dropshot Folks emails are working ✓', name: 'Dropshot Folks',
-        htmlBody: '<p>Automatic tournament emails are set up. Confirmed teams will now get their code and QR pass by email.</p>' });
+        htmlBody: '<p>Dropshot Folks emails are set up. Club session reminders, rules and cancellations, and tournament confirmations, will now send from this account.</p>' });
       return reply({ ok: true, left: MailApp.getRemainingDailyQuota() });
     }
     const email = s => /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(String(s || '').trim());

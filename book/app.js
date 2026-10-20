@@ -901,7 +901,7 @@ function orgParts(){
   </tbody></table></div></section>`:"";
   const sessions = `<section class="panel"><h2>Sessions &amp; bookings</h2>
     ${ups.length?`<p class="muted">Tap a session to open it. Everything for that session (bookings, adding players, check-in, emails and editing) is inside.</p>
-      ${S.mail?.url?"":`<p class="muted" style="font-size:.85rem">📧 Emails to players open in your mail app. To send them automatically, set up 📧 Automatic emails once on the Tournaments page (Organiser).</p>`}
+      ${S.mail?.url?"":`<p class="muted" style="font-size:.85rem">📧 Emails to players open in your mail app. To send them straight to players' inboxes, set up 📧 Emails to players in Club details.</p>`}
       <div class="row selbar">${S.selOn?`<b>${S.sel?.size||0} selected</b><button class="btn small" data-selall="1">Select all</button><button class="btn small ghost danger" data-seldel="1" ${S.sel?.size?"":"disabled"}>🗑 Delete selected</button><button class="btn small ghost" data-selx="1">Done</button>`:`<button class="btn small" data-selon="1">☑ Select sessions to delete</button>`}</div>
       <div>${ups.map(x=>S.selOn?`<div class="selrow"><input type="checkbox" data-sesssel="${esc(x.id)}" ${S.sel?.has(x.id)?"checked":""} aria-label="Select ${esc(fmtLong(x.date))}">${adminSession(x)}</div>`:adminSession(x)).join("")}</div>`:`<div class="empty">No upcoming sessions. Add one below.</div>`}
     <details id="addSess"><summary><b>Add sessions</b></summary>
@@ -947,7 +947,20 @@ function orgParts(){
       <div class="row" style="grid-column:1/-1"><button class="btn primary">Save club details</button></div>
     </form>
   </section>`;
-  return {requests, sessions, players, club};
+  const mailOn=!!S.mail?.url;
+  const mail = `<section class="panel"><h2>📧 Emails to players</h2>
+    <p>${mailOn?`<b>On ✓</b> Session reminders with the rules, and cancellation notices, go straight to players' inboxes from your Gmail.`:`<b>Off.</b> Reminder and cancellation emails open in your mail app with everyone in BCC, and you press Send.`}</p>
+    ${mailOn?`<div class="row"><button class="btn small" data-bmtest="1">Send me a test email</button></div>`:""}
+    <details id="bmSetup" ${mailOn?"":"open"}><summary><b>${mailOn?"Update the Google script":"Set it up (once, free)"}</b></summary><ol class="mailsteps" style="line-height:1.7">
+      ${mailOn?`<li><button class="btn small" data-bmcopy="1">📋 Copy the script</button> In <a href="https://script.google.com/home" target="_blank" rel="noopener">script.google.com</a> open your Dropshot Folks project, click in the code, press ⌘A then ⌘V, and 💾 Save.</li>
+      <li>Click <b>Deploy → Manage deployments</b>, click ✏️, set <b>Version</b> to <b>New version</b> and click <b>Deploy</b>. The web address stays the same.</li>`:`
+      <li>Sign in to Google as the club's account, then open <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com → New project</a>.</li>
+      <li><button class="btn small" data-bmcopy="1">📋 Copy the script</button> Delete what's in the editor, paste, then press 💾 Save.</li>
+      <li>Click <b>Deploy → New deployment</b>, choose <b>Web app</b>, set <b>Execute as: Me</b> and <b>Who has access: Anyone</b>, then <b>Deploy</b> and <b>Authorise access</b>.</li>
+      <li>Copy the <b>Web app URL</b> and paste it here:
+        <div class="row"><input id="bm-url" placeholder="https://script.google.com/macros/s/…/exec" style="flex:1;min-width:220px"><button class="btn small primary" data-bmsave="1">Save &amp; send test email</button></div></li>`}
+    </ol></details></section>`;
+  return {requests, sessions, players, club:club+mail};
 }
 const notOrg = `<section class="panel"><div class="empty">Only the organiser can see this.</div></section>`;
 // Sessions running all four courts whose setup doesn't match the standard one-level-per-court layout
@@ -1542,6 +1555,11 @@ document.addEventListener("click", async e=>{
   if(ds.reall){ const s=S.sessions.find(x=>x.id===ds.reall), c=ds.c; const {id,...body}=s, rot={...(s.rot||{})}; rot[c]={};
     arm(t,"Tap again to reset",()=>save("sessions",id,{...body, rot},"Rotation back to automatic")); return }
   if(ds.delsess){ await deleteSessions([ds.delsess]); return }
+  if(ds.bmtest){ const r=await mailPost({test:true}); toast(r.ok?"Test email sent ✓ Check your inbox":`Didn't send: ${r.error}`); return }
+  if(ds.bmcopy){ try{ const txt=await (await fetch("/tourney/mailer.gs?v="+Date.now())).text(); await navigator.clipboard.writeText(txt); toast("Script copied ✓ Paste it into script.google.com") }catch{ window.open("/tourney/mailer.gs","_blank") } return }
+  if(ds.bmsave){ const url=($("#bm-url")?.value||"").trim(); if(!/^https:\/\/script\.google\.com\/(a\/macros\/[\w.-]+|macros)\/s\/[\w-]+\/exec$/.test(url)){ toast("Paste the Web app URL: it starts https://script.google.com/macros/s/ and ends /exec"); return }
+    const {id:_m,...prev}=S.mail||{}; if(!await save("config","mail",{...prev, url, updatedAt:nowIso()})) return;
+    S.mail={...prev, url}; render(); toast("Saved ✓ Sending a test email…"); const r=await mailPost({test:true}); toast(r.ok?"Test email sent ✓ Check your inbox":`Test email didn't send: ${r.error}`); return }
   if(ds.mailrem){ const s=S.sessions.find(x=>x.id===ds.mailrem); if(s) await emailReminder(s); return }
   if(ds.selon){ S.selOn=true; S.sel=new Set(); render(); return }
   if(ds.selx){ S.selOn=false; S.sel=new Set(); render(); return }

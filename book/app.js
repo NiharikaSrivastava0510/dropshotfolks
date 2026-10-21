@@ -181,7 +181,7 @@ const S = {
   reg: {ans:{}, photo:null, quick:new URLSearchParams(location.search).has("tp")},   // registration questions and photo; quick = Train & Play only, no level check
   gq: {}, guests: [],               // guest questions and guests waiting to be booked
   liveSess: null, result: null, liveKey: "",
-  picks: new Set(),                 // sessions ticked but not booked yet
+  picks: new Set(ls.get("dsf:picks",[])),   // sessions ticked but not booked yet (kept through sign-in)
   qpos: {}, qfb: {}, fx: ls.get("dsf:fx", true),                // level quiz: card on screen and last answer feedback, per quiz
   rotEdit: {}, pedit: null,         // organiser: game being edited per court, player being edited
   kiosk: ls.get("dsf:kiosk", null), // session this device has open in host view
@@ -609,11 +609,11 @@ function setupPanel(){
     <p class="muted">${configured?"Check your internet connection and refresh the page. If you use an ad blocker, try turning it off for this site. You can also message us on WhatsApp to book.":"Until then, message us on WhatsApp to book your place."}</p>
     <div><a class="btn primary" href="https://chat.whatsapp.com/KLVWEt809gZ3aqLaBhuNL2?mode=gi_t" target="_blank" rel="noopener">Message us on WhatsApp</a></div></section>`;
 }
-function registerPanel(){
+function registerPanel(fixed){
   if(Store.mode==="db" && !S.uid) return signInPanel();
   const lv = levelFrom(S.reg.ans);
   return `<section class="panel">
-    <div><h2>Join Dropshot Folks</h2><p class="muted">Register once. New players play a quick level-check match against the coach so we can put you on the right court. Beginners are welcome on sessions with a beginners' court.${Store.mode==="db"?"":" Already registered? Enter your email and press Continue."}</p></div>
+    <div><h2>Join Dropshot Folks</h2><p class="muted">${S.reg.quick?"Just your name and you're in. Your email is already filled in.":"Register once. New players answer a few quick questions so we can put you on the right court, and the coach checks levels on the night."}</p></div>
     <form id="regForm" class="quiz">
       <div class="grid2">
         <label class="f">Full name<input id="r-name" placeholder="First and last name" autocomplete="name"></label>
@@ -622,9 +622,9 @@ function registerPanel(){
         <label class="f">Your photo (shown on the live courts)<input id="r-photo" type="file" accept="image/*"></label>
       </div>
       ${S.reg.photo?`<div class="row"><img class="av lg" src="${esc(S.reg.photo)}" alt="Your photo"><span class="muted">Looking good.</span></div>`:""}
-      <div class="row regmode"><button type="button" class="btn small ${S.reg.quick?"primary":""}" data-regquick="1">🏸 Train &amp; Play with Coach only</button><button type="button" class="btn small ${S.reg.quick?"":"primary"}" data-regquick="0">Thursday games too (level check)</button></div>
+      ${fixed?"":`<div class="row regmode"><button type="button" class="btn small ${S.reg.quick?"primary":""}" data-regquick="1">🏸 Train &amp; Play with Coach only</button><button type="button" class="btn small ${S.reg.quick?"":"primary"}" data-regquick="0">Thursday games too (level check)</button></div>`}
       ${S.reg.quick?`<p class="muted" style="margin:0">No level check needed for Train &amp; Play: the coach sees you on the day. Want Thursday games later? Take the level check from the Level guide tab.</p>
-      <label class="f" style="max-width:360px">How do you play? (optional)<select id="r-qlv">${[["E","Not sure / beginner"],["E-","Brand new to badminton"],["D-","Social player"],["D+","Intermediate"],["C-","Advanced"]].map(([c,l])=>`<option value="${c}">${l}</option>`).join("")}</select></label>`:`
+      `:`
       <h3>Your level</h3>
       ${quizFields("rq", S.reg.ans)}
       ${levelVerdict(lv)}`}
@@ -634,10 +634,39 @@ function registerPanel(){
 }
 
 /* ----- book: pick sessions, we assign the court ----- */
+// sessions that welcome beginners (Train & Play, coaching) need no level check; level-wise sessions (Thursdays) do
+const needsCheck = s => !courtsOf(s).some(c=>courtLevels(s,c).some(l=>BEGINNER.includes(l)));
+const savePicks = () => ls.set("dsf:picks",[...S.picks]);
+const pickedSessions = () => [...S.picks].map(id=>S.sessions.find(x=>x.id===id)).filter(Boolean);
+// before signing in: everyone sees the sessions first, ticks what they want, then makes an account
+function guestBook(){
+  const ups=upcoming().filter(x=>x.open!==false && !x.cancelled);
+  [...S.picks].forEach(id=>{ if(!ups.some(x=>x.id===id)) S.picks.delete(id) });
+  const picked=pickedSessions(), n=picked.length;
+  if(S.step==="account" || (S.step!=="list" && Store.mode==="db" && S.uid && n)) return accountStep(picked);
+  if(!ups.length) return `<section class="panel"><h2>Book a session</h2><div class="empty">No sessions are open yet. They'll appear here as soon as the organiser adds them.</div></section>`;
+  return `<section class="panel"><div><h2>Book a session</h2><p class="muted">Tick the sessions you'd like, then press Continue.</p></div>
+    <div class="picks">${ups.map(x=>{ const v=venueOf(x), places=courtsOf(x).reduce((t,c)=>t+cap(x,c),0), left=places-S.bookings.filter(b=>b.sessionId===x.id && ACTIVE.includes(b.status)).length, fee=feeOf(x);
+      return `<label class="pick"><input type="checkbox" id="pick-${x.id}" data-pick="${x.id}" ${S.picks.has(x.id)?"checked":""}>
+        <span class="t"><b>${fmtLong(x.date)} · ${esc(x.start)}–${esc(x.end)}</b>
+        <span class="muted">${esc(x.title||"Session")}${v.venue?` · ${esc(v.venue)}`:""}${fee?` · <b>${esc(fee)}</b>`:""}</span>
+        <span>${left>0?`${left} place${left>1?"s":""} left`:"Full: you'll go on the waiting list"} · ${needsCheck(x)?`<span class="chip st-waitlist">Level check needed</span>`:`<span class="chip st-confirmed">All welcome · no level check</span>`}</span></span></label>` }).join("")}</div></section>
+  <section class="panel bookbar ${n?"on":""}"><div class="row" style="justify-content:space-between"><div><h3>${n?`${n} session${n>1?"s":""} selected`:"Pick your sessions"}</h3>
+    <p class="muted">${n?"Next: sign in or create an account. Your sessions stay ticked.":"Tick at least one session above."}</p></div>
+    <div class="row"><button class="btn primary" data-gostep="account" ${n?"":"disabled"}>Continue →</button><button class="btn small ghost" data-gostep="account">I already have an account</button></div></div></section>`;
+}
+function accountStep(picked){
+  const quick=picked.length ? !picked.some(needsCheck) : null;
+  if(quick!=null) S.reg.quick=quick;
+  const sum=picked.length?`<section class="panel"><div class="row" style="justify-content:space-between"><div><span class="lbl">Your sessions</span><p style="margin:4px 0 0">${picked.map(x=>`<b>${esc(fmtDate(x.date))}</b> ${esc(x.title||"")}`).join(" · ")}</p>
+    <p class="muted" style="margin:4px 0 0">${quick?"These sessions welcome everyone: no level check needed.":"You picked a level-wise session, so new players take a quick level check."}</p></div><button class="btn small ghost" data-gostep="">← Change sessions</button></div></section>`
+    :`<section class="panel"><button class="btn small ghost" data-gostep="">← See the sessions</button></section>`;
+  return sum + (Store.mode==="db" && !S.uid ? signInPanel() : registerPanel(quick!=null));
+}
 function viewBook(){
   const p = meP();
   if(!S.loaded) return `<section class="panel"><div class="empty">Loading sessions…</div></section>`;
-  if(!p) return registerPanel();
+  if(!p) return guestBook();
   const ups = upcoming(), lv = lvByCode(p.level);
   const bookable = sid => { const x=ups.find(y=>y.id===sid); return x && x.open!==false && courtFor(x,lv.code) && !S.bookings.some(b=>b.sessionId===sid && b.playerId===p.id && b.status!=="cancelled") };
   [...S.picks].forEach(id=>{ if(!bookable(id)) S.picks.delete(id) });
@@ -1410,7 +1439,7 @@ async function bookSelected(){
       await place(gid, {playerId:`guest-${p.id}-${k}`, hostId:p.id, name:`${g.name} (guest of ${p.name.split(" ")[0]})`, level:g.level, quiz:packQuiz(g.ans)}, gCourt, g.name);
     }
   }
-  S.guests=[]; S.gq={}; S.picks.clear();
+  S.guests=[]; S.gq={}; S.picks.clear(); savePicks();
   S.result={ok, title: ok?"You're booked in. Pay to confirm your places.":"Booking done, with some notes:", lines};
   if(ok){ burst(); sfx("match") }
   render(); window.scrollTo({top:0,behavior:"smooth"});
@@ -1616,6 +1645,7 @@ document.addEventListener("click", async e=>{
   if(ds.reall){ const s=S.sessions.find(x=>x.id===ds.reall), c=ds.c; const {id,...body}=s, rot={...(s.rot||{})}; rot[c]={};
     arm(t,"Tap again to reset",()=>save("sessions",id,{...body, rot},"Rotation back to automatic")); return }
   if(ds.delsess){ await deleteSessions([ds.delsess]); return }
+  if(ds.gostep!=null){ S.step=ds.gostep||null; if(!S.step && Store.mode==="db" && S.uid) S.step="list"; render(); scrollTo({top:0,behavior:"smooth"}); return }
   if(ds.regquick!=null){ S.reg.quick=ds.regquick==="1"; render(); return }
   if(ds.bmtest){ const r=await mailPost({test:true}); toast(r.ok?"Test email sent ✓ Check your inbox":`Didn't send: ${r.error}`); return }
   if(ds.bmcopy){ const ta=$("[data-bmscript]"); if(!S.mailerTxt||!ta){ toast("The script is still loading. Try again in a second."); return }
@@ -1655,7 +1685,7 @@ document.addEventListener("change", async e=>{
   if(t.dataset.setlv){ const p=S.players.find(x=>x.id===t.dataset.setlv), lv=t.value;
     if(await savePlayer({...p, level:lv, verified:true})){ const n=await moveToLevelCourt(p.id, lv); toast(n?`Level updated. ${n} upcoming booking${n>1?"s":""} moved to their new court.`:"Level updated") } return }
   if(t.dataset.verify){ const p=S.players.find(x=>x.id===t.dataset.verify); savePlayer({...p, verified:t.checked}); return }
-  if(t.dataset.pick){ if(t.checked) S.picks.add(t.dataset.pick); else S.picks.delete(t.dataset.pick); render(); return }
+  if(t.dataset.pick){ if(t.checked) S.picks.add(t.dataset.pick); else S.picks.delete(t.dataset.pick); savePicks(); render(); return }
   if(t.dataset.remind){ const p=meP(); if(!p) return; const k=t.dataset.remind, cur=p.remind||[];
     const next=t.checked?[...new Set([...cur,k])]:cur.filter(x=>x!==k);
     if(await savePlayer({...p, remind:next})) toast(t.checked?"Reminder on. Add it to your calendar below.":"Reminder off"); return }
@@ -1673,7 +1703,7 @@ document.addEventListener("submit", async e=>{
     catch{ toast("Couldn't send the link. Check the address and try again.") }
     return }
   if(e.target.id==="regForm"){
-    const quick=S.reg.quick, email=$("#r-email").value.trim(), name=$("#r-name").value.trim(), phone=$("#r-phone").value.trim(), level=quick?($("#r-qlv")?.value||"E"):levelFrom(S.reg.ans);
+    const quick=S.reg.quick, email=$("#r-email").value.trim(), name=$("#r-name").value.trim(), phone=$("#r-phone").value.trim(), level=quick?(["E","E-","D-"].find(l=>pickedSessions().every(x=>courtsOf(x).some(c=>courtLevels(x,c).includes(l))))||"E"):levelFrom(S.reg.ans);
     if(!validEmail(email)){ toast("Enter a valid email address"); return }
     const id = Store.mode==="db" ? S.uid : emailKey(email);
     if(!id){ toast("Sign in to register"); return }
@@ -1683,7 +1713,7 @@ document.addEventListener("submit", async e=>{
     if(!level){ toast("Answer all five level questions"); return }
     if(await savePlayer({id,email,name,phone,level,...(quick?{}:{quiz:packQuiz(S.reg.ans)}),verified:false,levelRequest:null,createdAt:nowIso()})){
       if(S.reg.photo) await savePhoto(id,S.reg.photo);
-      S.me=id; if(Store.mode!=="db") ls.set("dsf:me",id); S.reg={ans:{},photo:null}; burst(); toast(quick?`Welcome, ${name.split(" ")[0]}! Tick the Train & Play sessions you want.`:`Welcome! You're ${level} ${lvByCode(level).name}.`); render() }
+      S.me=id; if(Store.mode!=="db") ls.set("dsf:me",id); S.reg={ans:{},photo:null}; S.step=null; burst(); setTimeout(()=>document.querySelector(".bookbar")?.scrollIntoView({behavior:"smooth",block:"center"}),300); toast(S.picks.size?`Welcome, ${name.split(" ")[0]}! Your sessions are ticked: press Book.`:quick?`Welcome, ${name.split(" ")[0]}! Tick the Train & Play sessions you want.`:`Welcome! You're ${level} ${lvByCode(level).name}.`); render() }
   }
   if(e.target.id==="sessForm"){
     const date=$("#s-date").value, start=$("#s-start").value, end=$("#s-end").value, c=Number($("#s-cap").value)||PER_COURT, weeks=Number($("#s-weeks").value)||1;

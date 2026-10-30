@@ -173,6 +173,12 @@ function priceHtml(t){ const e=esc(t.entry||""); if(!discOn(t)) return e; const 
   const m=String(t.entry).match(/£\s?(\d+(?:\.\d{1,2})?)/); if(!m) return e;
   return e.replace(esc(m[0]), `<s class="was">${esc(m[0])}</s> <b class="now">${money(Math.max(0,Number(m[1])-a))}</b>`) }
 const discBanner = t => discOn(t) ? `<p class="discban">🎉 <b>Early-bird: ${money(Number(t.discount.amount))} off</b> if you register by ${esc(new Date(t.discount.until+"T12:00:00").toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"long"}))}</p>` : "";
+/* ---------- protection against automated / test registrations ---------- */
+// Ofcom's ranges reserved for TV and films (07700 900xxx and friends): never a real player's number
+const fakePhone = x => { const d=String(x||"").replace(/\D/g,"").replace(/^44/,"0"); return /^(07700900|01632960|02079460|01134960|01214960|01314960|01514960|01614960|01174960)\d{3}$/.test(d) };
+const looksTest = x => { const c=S.contacts[x.id]; if(!c) return false;
+  return /automated (development )?test|simulated payment/i.test(c.notes||"") || [c.phone,c.phone2,c.phone3,c.phone4,c.emPhone].some(fakePhone) };
+const regTimes = () => ls.get("dsf:regtimes",[]).filter(x=>Date.now()-x<3600e3);
 /* ---------- parent / guardian consent for under-18 players ---------- */
 const DEFAULT_CONSENT = `I am the parent or legal guardian of the player named above and I give my consent for them to take part in this tournament.
 I understand that badminton is a physical sport with a risk of injury. They are fit to play, and I have told the organiser about any medical condition, allergy or injury.
@@ -925,6 +931,7 @@ function viewReg(){
     <section class="panel">${S.isAdmin?`<button class="btn small editbtn" data-editfmt="${S.editFmt?0:1}">${S.editFmt?"Close":"✏️ Edit format & scoring"}</button>`:""}<h2>📋 Game format</h2>${S.isAdmin&&S.editFmt?formatForm(t):formatVisual(t)}</section>
     <section class="panel">${S.isAdmin?`<button class="btn small editbtn ${t.regOpen?"ghost":"primary"}" data-regopen="${t.regOpen?0:1}">${t.regOpen?"🔒 Close registration":"🔓 Open registration"}</button>`:""}<h2>Register a team</h2>
     ${t.regOpen ? `<form id="regForm" class="regform" novalidate>
+        <input id="rg-website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" class="hp" placeholder="Leave this empty">
         <fieldset><legend>🏸 Team</legend><div class="grid2">
           <label class="f">Category *<select id="rg-cat">${cats(t).map(c=>`<option value="${esc(c.id)}" ${full(c.id)?"disabled":""}>${esc(c.name)}${full(c.id)?" (full)":""}</option>`).join("")}</select></label>
           <label class="f">Team name *<input id="rg-name" maxlength="40" required placeholder="e.g. Net Ninjas"></label></div></fieldset>
@@ -1148,7 +1155,9 @@ function viewOrg(only){
       ${S.addTeam?`<div class="ogrp"><h3>New team · ${esc(catName(t,S.cat))}</h3><div class="grid2"><label class="f">Team name<input id="oa-name" maxlength="40"></label>${Array.from({length:nPl(t)},(_,i)=>`<label class="f">Player ${i+1}<input id="oa-p${i+1}" maxlength="60"></label>`).join("")}</div>
         <div class="row"><button class="btn primary small" data-oadd="${esc(S.cat||"")}">Add team</button><button class="btn small ghost" data-oaddopen="0">Cancel</button></div></div>`:""}
       ${(()=>{ const ts=teamsOf(t,S.cat); if(!ts.length) return `<div class="empty">No teams in this category yet.</div>`;
-        return `<div class="row"><span class="muted">${ts.length} teams · ${ts.filter(x=>x.status==="confirmed").length} confirmed</span>${ts.some(x=>x.status!=="confirmed")?`<button class="btn small" data-confirmall="${esc(S.cat)}">Confirm all</button>`:""}</div>
+        const junk=teamsOf(t).filter(looksTest);
+        return `${junk.length?`<div class="rulesbar"><b>🧹 ${junk.length} team${junk.length>1?"s look":" looks"} like automated test entries</b> (fake 07700 900 phone numbers or an "automated test" note): ${junk.map(x=>esc(x.name)).join(", ")}.
+          <div class="row" style="margin-top:6px"><button class="btn small primary" data-rmjunk="1">Remove ${junk.length>1?`all ${junk.length}`:"it"}</button></div></div>`:""}<div class="row"><span class="muted">${ts.length} teams · ${ts.filter(x=>x.status==="confirmed").length} confirmed</span>${ts.some(x=>x.status!=="confirmed")?`<button class="btn small" data-confirmall="${esc(S.cat)}">Confirm all</button>`:""}</div>
         <div class="otl">${ts.map(x=>teamCard(t,x)).join("")}</div>` })()}
       ${finalPanel(t)}${mailPanel(t)}${recordsPanel()}
       <p class="muted" style="font-size:.82rem">📥 Import takes Google Form responses (.xlsx or .csv): teams already here get their contact details filled in, new teams are added.</p></section>`;
@@ -1502,6 +1511,11 @@ document.addEventListener("click", async e=>{
   if(ds.tcode){ const code=newCode(); await db.collection("tsecrets").doc(t.id).set({code},{merge:true}).then(()=>{ S.secret=code; render(); toast(`Referee code ${code}`) },()=>toast("Couldn't save the code")); return }
   if(ds.tconfirm){ await db.collection("tteams").doc(ds.tconfirm).update({status:ds.v}).catch(()=>toast("Couldn't update"));
     if(ds.v==="confirmed"){ const x=teamById(ds.tconfirm); if(x) x.status="confirmed"; const made=await ensureCodes(t,[ds.tconfirm]); if(S.mail?.url && x && S.contacts[x.id]?.email && !S.codes[x.id]?.mailedAt) await mailTeam(t,x); else if(made) toast("Confirmed ✓ Team code made. Send it with 📧 Email or 💬 WhatsApp.") } return }
+  if(ds.rmjunk && S.isAdmin){ const junk=teamsOf(t).filter(looksTest); if(!junk.length) return;
+    if(!confirm(`Delete these ${junk.length} test teams?\n\n${junk.map(x=>"• "+x.name).join("\n")}`)) return;
+    let n=0; for(const x of junk){ try{ await db.collection("tcontacts").doc(x.id).delete().catch(()=>{}); if(S.consent?.[x.id]) await db.collection("tconsent").doc(x.id).delete().catch(()=>{});
+      if(S.codes[x.id]) await db.collection("tcodes").doc(x.id).delete().catch(()=>{}); await db.collection("tteams").doc(x.id).delete(); n++ }catch{} }
+    toast(`${n} test team${n===1?"":"s"} removed ✓`); return }
   if(ds.confirmall){ const b=db.batch(), ids=teamsOf(t,ds.confirmall).filter(x=>x.status!=="confirmed").map(x=>x.id); ids.forEach(id=>b.update(db.collection("tteams").doc(id),{status:"confirmed"})); await b.commit();
     ids.forEach(id=>{ const x=teamById(id); if(x) x.status="confirmed" }); await ensureCodes(t); toast("All confirmed, team codes made"); if(S.mail?.url) await mailAll(t); return }
   if(ds.tdel){ const x=teamById(ds.tdel); if(!x||!confirm(`Delete ${x.name}?`)) return; await db.collection("tcontacts").doc(x.id).delete().catch(()=>{}); if(S.consent?.[x.id]) await db.collection("tconsent").doc(x.id).delete().catch(()=>{}); await db.collection("tteams").doc(x.id).delete(); return }
@@ -1621,6 +1635,12 @@ document.addEventListener("submit", async e=>{
     if(!$(`#rg-gok${n}`)?.checked) return bad("gok"+n, `The parent or guardian needs to tick to give consent for player ${n}`);
     if(!S.sig?.[n]){ toast(`The parent or guardian needs to sign for player ${n}`); document.querySelector(`canvas[data-sig="${n}"]`)?.scrollIntoView({block:"center",behavior:"smooth"}); return }
     if(!v("gsn"+n)) return bad("gsn"+n, `Type the parent or guardian's name to sign for player ${n}`); }
+  if(v("website")){ $("#regForm")?.reset(); toast(`${v("name")||"Team"} registered! 🎉`); return }   // only robots fill the hidden field
+  for(const k of [...ns.map(n=>"ph"+n),"emphone"]) if(fakePhone(v(k))) return bad(k,"Please use a real mobile number");
+  const who=ns.map(n=>v("p"+n).toLowerCase().replace(/\s+/g," ")).sort().join("|");
+  if(teamsOf(t,cat).some(x=>playersOf(x).map(y=>String(y).toLowerCase().replace(/\s+/g," ")).sort().join("|")===who)) return bad("p1","These players are already registered in this category");
+  if(S.uid && teamsOf(t).filter(x=>x.createdBy===S.uid).length>=3) { toast("You've already registered 3 teams from this phone. Message the organiser to add more."); return }
+  if(regTimes().length>=5){ toast("Too many registrations from this device. Please try again later."); return }
   const btn=e.target.querySelector("button[type=submit]"); btn.disabled=true;
   try{
     const u=await ensureSignedIn();
@@ -1632,6 +1652,7 @@ document.addEventListener("submit", async e=>{
     }catch(err){ await ref.delete().catch(()=>{}); throw {code:"consent"} }
     await db.collection("tcontacts").doc(ref.id).set({email:v("em1"), phone:v("ph1"), ...Object.fromEntries(ns.slice(1).flatMap(n=>[["email"+n,v("em"+n)],["phone"+n,v("ph"+n)]])), ...Object.fromEntries(ns.flatMap(n=>[["lv"+n,v("lv"+n)],["g"+n,v("g"+n)]])),
       emName:v("emname"), emPhone:v("emphone"), notes:v("notes"), wa:true, agreed:true, ...(bankOf(t)?{paid:true, payName:v("payname")}:{}), createdBy:u.uid});
+    ls.set("dsf:regtimes",[...regTimes(), Date.now()]);
     const nm=v("name"); $("#regForm")?.reset(); S.waOpened=false; S.read={}; S.sig={}; render();   // the form may have been redrawn while saving
     toast(`${nm||"Team"} registered! 🎉`); burst();
   }catch(err){ toast(err?.code==="consent"?"Couldn't save the parent consent form. Please try again, or message the organiser.":err?.code==="permission-denied"?"Registration is closed or that category is full":err?.code==="auth/operation-not-allowed"?"Registration isn't switched on yet":"Couldn't register. Check your connection.") }

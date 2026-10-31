@@ -615,6 +615,7 @@ function registerPanel(fixed){
   return `<section class="panel">
     <div><h2>Join Dropshot Folks</h2><p class="muted">${S.reg.quick?"Just your name and you're in. Your email is already filled in.":"Register once. New players answer a few quick questions so we can put you on the right court, and the coach checks levels on the night."}</p></div>
     <form id="regForm" class="quiz">
+      <input id="r-website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" placeholder="Leave this empty">
       <div class="grid2">
         <label class="f">Full name<input id="r-name" placeholder="First and last name" autocomplete="name"></label>
         <label class="f">Email<input id="r-email" type="email" required placeholder="you@example.com" autocomplete="email" ${S.email?`value="${esc(S.email)}" readonly`:""}></label>
@@ -1016,7 +1017,41 @@ function setupBanner(){
     ${off.map(c=>`Court ${c} takes ${courtLevels(s,c).join(" + ")||"no levels"}`).join(" · ")}.${wrong.length?` ${wrong.length} player${wrong.length>1?"s are":" is"} on the wrong court (${wrong.map(b=>`${esc(b.name)} ${esc(b.level)} on Court ${esc(b.court)}`).join(", ")}).`:""}</div>
     <button class="btn small primary" data-stdcourts="${esc(s.id)}">Fix now</button></div>`).join("");
 }
-const orgSessions = () => S.isAdmin ? setupBanner() + orgParts().sessions : notOrg;
+/* ----- organiser: find bursts of fake sign-ups (e.g. an automated test run) and remove them with their bookings ----- */
+// a "burst" is a day when 15+ brand-new players appeared; the organiser reviews the list before anything is removed
+function spamBursts(){
+  const first={}, see=(id,at)=>{ if(id && at && (!first[id] || at<first[id])) first[id]=at };
+  S.players.forEach(p=>see(p.id,p.createdAt)); S.bookings.forEach(b=>see(b.hostId||b.playerId, b.createdAt));
+  const byDay={}; Object.entries(first).forEach(([id,at])=>{ (byDay[String(at).slice(0,10)] ||= []).push(id) });
+  return Object.entries(byDay).filter(([,ids])=>ids.length>=15).map(([day,ids])=>{
+    const set=new Set(ids), bk=S.bookings.filter(b=>set.has(b.hostId||b.playerId));
+    const people=ids.map(id=>({id, name:S.players.find(p=>p.id===id)?.name || S.bookings.find(b=>(b.hostId||b.playerId)===id)?.name || id, email:S.players.find(p=>p.id===id)?.email||"", n:bk.filter(b=>(b.hostId||b.playerId)===id).length}));
+    return {day, people:people.sort((a,b)=>b.n-a.n), bookings:bk.length} }).sort((a,b)=>a.day.localeCompare(b.day));
+}
+function spamPanel(){
+  const bs=spamBursts(); if(!bs.length) return "";
+  return bs.map(g=>{ const off=S.spamKeep?.[g.day]||new Set();
+    return `<section class="panel" style="border:2px solid var(--bad,#b3261e)"><h2>🧹 ${g.people.length} new players appeared on ${esc(fmtDate(g.day))}, making ${g.bookings} bookings</h2>
+    <p>That many sign-ups in one day usually means an automated test or a robot, not real people. Check the list: untick anyone you know is real, then remove the rest with all their bookings.</p>
+    <details id="spam-${esc(g.day)}"><summary><b>See the ${g.people.length} players</b></summary><div class="tbl" style="max-height:340px;overflow:auto"><table><tbody>
+      ${g.people.map(x=>`<tr><td><input type="checkbox" style="width:auto" data-spamkeep="${esc(g.day)}|${esc(x.id)}" ${off.has(x.id)?"":"checked"}></td><td>${esc(x.name)}</td><td class="muted">${esc(x.email)}</td><td>${x.n} booking${x.n===1?"":"s"}</td></tr>`).join("")}</tbody></table></div></details>
+    <div class="row"><button class="btn danger primary" data-spamrm="${esc(g.day)}">Remove ${g.people.length-off.size} players and their bookings</button></div></section>` }).join("");
+}
+async function spamRemove(day){
+  const g=spamBursts().find(x=>x.day===day); if(!g) return; const keep=S.spamKeep?.[day]||new Set();
+  const ids=new Set(g.people.map(x=>x.id).filter(id=>!keep.has(id))), bks=S.bookings.filter(b=>ids.has(b.hostId||b.playerId));
+  if(!ids.size || !confirm(`Remove ${ids.size} players and ${bks.length} bookings? This can't be undone.`)) return;
+  const refs=[...bks.map(b=>["bookings",b.id]), ...[...ids].flatMap(id=>[["players",id],["photos",id],["partners",id]])];
+  let done=0;
+  try{
+    if(Store.mode==="db"){ for(let i=0;i<refs.length;i+=400){ const batch=Store.db.batch(); refs.slice(i,i+400).forEach(([c,id])=>batch.delete(Store.db.collection(c).doc(id))); await batch.commit(); done=Math.min(refs.length,i+400); toast(`Removing… ${done} of ${refs.length}`) } }
+    else { const by={}; refs.forEach(([c,id])=>(by[c] ||= []).push(id));
+      Object.entries(by).forEach(([c,ids])=>{ const o=ls.get("dsf:"+c,{}); ids.forEach(id=>delete o[id]); ls.set("dsf:"+c,o); (Store.listeners[c]||[]).forEach(f=>f(Store._local(c))) }); done=refs.length }
+    toast(`Removed ${ids.size} players and ${bks.length} bookings ✓`);
+  }catch(e){ console.error(e); toast(`Stopped after ${done} of ${refs.length}. Press Remove again to finish.`) }
+  render();
+}
+const orgSessions = () => S.isAdmin ? spamPanel() + setupBanner() + orgParts().sessions : notOrg;
 const orgPlayers = () => S.isAdmin ? orgParts().requests + orgParts().players : notOrg;
 // after a level change, move the player's upcoming bookings to their new court
 async function moveToLevelCourt(pid, level){
@@ -1414,6 +1449,9 @@ async function bookSelected(){
   const p=meP(); if(!p) return;
   const ids=[...S.picks];
   if(!ids.length){ toast("Tick at least one session"); return }
+  if(ids.length>8){ toast("You can book up to 8 sessions at a time"); return }
+  const recent=ls.get("dsf:booktimes",[]).filter(x=>Date.now()-x<3600e3); if(recent.length>=6){ toast("That's a lot of booking from one device. Please try again later or message the organiser."); return }
+  ls.set("dsf:booktimes",[...recent, Date.now()]);
   const lv=lvByCode(p.level), lines=[]; let ok=true;
   for(const sid of ids){
     const s=S.sessions.find(x=>x.id===sid); if(!s) continue;
@@ -1483,7 +1521,8 @@ function gcalUrl(b,s){
     `&dates=${d(s.date)}T${d(s.start)}00/${d(s.date)}T${d(s.end)}00&ctz=Europe/London&location=`+encodeURIComponent([venueOf(s).venue,venueOf(s).address].filter(Boolean).join(", "));
 }
 // organiser: tick sessions to delete several at once
-document.addEventListener("change", e=>{ const id=e.target.dataset?.sesssel; if(!id) return; S.sel ||= new Set(); e.target.checked?S.sel.add(id):S.sel.delete(id); render() });
+document.addEventListener("change", e=>{ const k=e.target.dataset?.spamkeep; if(k){ const [day,id]=k.split("|"); S.spamKeep ||= {}; const set=(S.spamKeep[day] ||= new Set()); e.target.checked?set.delete(id):set.add(id); render(); return }
+  const id=e.target.dataset?.sesssel; if(!id) return; S.sel ||= new Set(); e.target.checked?S.sel.add(id):S.sel.delete(id); render() });
 function arm(t,label,fn){ if(t.dataset.armed){ fn(); return } t.dataset.armed="1"; const old=t.textContent; t.textContent=label; setTimeout(()=>{ if(t.isConnected){ delete t.dataset.armed; t.textContent=old } },4000) }
 
 document.addEventListener("click", async e=>{
@@ -1659,6 +1698,7 @@ document.addEventListener("click", async e=>{
   if(ds.selon){ S.selOn=true; S.sel=new Set(); render(); return }
   if(ds.selx){ S.selOn=false; S.sel=new Set(); render(); return }
   if(ds.selall){ const all=upcoming().map(x=>x.id); S.sel=new Set(S.sel?.size===all.length?[]:all); render(); return }
+  if(ds.spamrm && S.isAdmin){ await spamRemove(ds.spamrm); return }
   if(ds.cancsess){ await cancelSessions([ds.cancsess]); return }
   if(ds.selcanc){ if(S.sel?.size) await cancelSessions([...S.sel]); return }
   if(ds.mailwait){ const s=S.sessions.find(x=>x.id===ds.mailwait); if(s) await emailWaiters(s); return }
@@ -1705,12 +1745,15 @@ document.addEventListener("submit", async e=>{
   if(e.target.id==="regForm"){
     const quick=S.reg.quick, email=$("#r-email").value.trim(), name=$("#r-name").value.trim(), phone=$("#r-phone").value.trim(), level=quick?(["E","E-","D-"].find(l=>pickedSessions().every(x=>courtsOf(x).some(c=>courtLevels(x,c).includes(l))))||"E"):levelFrom(S.reg.ans);
     if(!validEmail(email)){ toast("Enter a valid email address"); return }
+    if($("#r-website")?.value){ toast("Welcome!"); return }   // only robots fill the hidden field
+    const regs=ls.get("dsf:regs",[]).filter(x=>Date.now()-x<86400e3); if(regs.length>=3){ toast("Too many new sign-ups from this device today. Message the organiser if you need help."); return }
     const id = Store.mode==="db" ? S.uid : emailKey(email);
     if(!id){ toast("Sign in to register"); return }
     const ex=S.players.find(p=>p.id===id);
     if(ex && Store.mode!=="db"){ S.me=id; ls.set("dsf:me",id); toast(`Welcome back, ${ex.name}`); render(); return }
     if(!name){ toast("Add your full name"); return }
     if(!level){ toast("Answer all five level questions"); return }
+    ls.set("dsf:regs",[...regs, Date.now()]);
     if(await savePlayer({id,email,name,phone,level,...(quick?{}:{quiz:packQuiz(S.reg.ans)}),verified:false,levelRequest:null,createdAt:nowIso()})){
       if(S.reg.photo) await savePhoto(id,S.reg.photo);
       S.me=id; if(Store.mode!=="db") ls.set("dsf:me",id); S.reg={ans:{},photo:null}; S.step=null; burst(); setTimeout(()=>document.querySelector(".bookbar")?.scrollIntoView({behavior:"smooth",block:"center"}),300); toast(S.picks.size?`Welcome, ${name.split(" ")[0]}! Your sessions are ticked: press Book.`:quick?`Welcome, ${name.split(" ")[0]}! Tick the Train & Play sessions you want.`:`Welcome! You're ${level} ${lvByCode(level).name}.`); render() }

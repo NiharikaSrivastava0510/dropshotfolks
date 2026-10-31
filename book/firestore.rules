@@ -28,6 +28,14 @@ service cloud.firestore {
     }
 
     function shortText(v, n) { return v is string && v.size() <= n; }
+    // Players must have proved they own their email (Google, an email link, or the confirmation email for
+    // password accounts). Stops robots signing up with made-up addresses, as happened on 23 Oct 2026.
+    function emailOk() { return request.auth.token.email_verified == true; }
+    // Only real, open, not-cancelled sessions can be booked.
+    function sessionOpen(sid) {
+      let p = /databases/$(database)/documents/sessions/$(sid);
+      return exists(p) && get(p).data.get('open', true) != false && get(p).data.get('cancelled', false) != true;
+    }
     function levelCode(v) { return v in ['E-', 'E', 'D-', 'D+', 'C-', 'C+']; }
     // What a player may store on their own record.
     function validPlayer(d) {
@@ -91,7 +99,7 @@ service cloud.firestore {
     // Player records hold contact details: only the player and the organiser see them.
     match /players/{uid} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
-      allow create: if isAdmin() || (signedIn() && request.auth.uid == uid
+      allow create: if isAdmin() || (signedIn() && emailOk() && request.auth.uid == uid
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.verified == false
         && request.resource.data.get('levelRequest', null) == null
@@ -105,9 +113,10 @@ service cloud.firestore {
     // Bookings drive the live courts, so everyone can read them (names and courts only, no contact details).
     match /bookings/{id} {
       allow read: if true;
-      allow create: if isAdmin() || (signedIn()
+      allow create: if isAdmin() || (signedIn() && emailOk()
         && (request.resource.data.playerId == request.auth.uid || request.resource.data.hostId == request.auth.uid)
         && request.resource.data.status in ['awaiting', 'waitlist']
+        && sessionOpen(request.resource.data.sessionId)
         && validBooking(id, request.resource.data)
         && levelFitsCourt(request.resource.data));
       // Players can only mark their own (or their guests') booking as paid or cancelled.
@@ -117,7 +126,8 @@ service cloud.firestore {
              && request.resource.data.status in ['paid', 'cancelled']
              && request.resource.data.log is list && request.resource.data.log.size() <= 30)
           // rebooking a session they cancelled earlier
-          || (resource.data.status == 'cancelled'
+          || (resource.data.status == 'cancelled' && emailOk()
+             && sessionOpen(resource.data.sessionId)
              && request.resource.data.status in ['awaiting', 'waitlist']
              && request.resource.data.playerId == resource.data.playerId
              && request.resource.data.get('hostId', null) == resource.data.get('hostId', null)

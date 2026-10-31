@@ -644,8 +644,8 @@ function guestBook(){
   const ups=upcoming().filter(x=>x.open!==false && !x.cancelled);
   [...S.picks].forEach(id=>{ if(!ups.some(x=>x.id===id)) S.picks.delete(id) });
   const picked=pickedSessions(), n=picked.length;
-  if(S.step==="account" || (S.step!=="list" && Store.mode==="db" && S.uid && n)) return accountStep(picked);
-  if(!ups.length) return `<section class="panel"><h2>Book a session</h2><div class="empty">No sessions are open yet. They'll appear here as soon as the organiser adds them.</div></section>`;
+  if(S.step==="account" || (S.step!=="list" && Store.mode==="db" && S.uid)) return accountStep(picked);   // signed in: carry on joining
+  if(!ups.length) return `<section class="panel"><h2>Book a session</h2><div class="empty">No sessions are open yet. They'll appear here as soon as the organiser adds them.</div><div><button class="btn small ghost" data-gostep="account">Sign in or create an account</button></div></section>`;
   return `<section class="panel"><div><h2>Book a session</h2><p class="muted">Tick the sessions you'd like, then press Continue.</p></div>
     <div class="picks">${ups.map(x=>{ const v=venueOf(x), places=courtsOf(x).reduce((t,c)=>t+cap(x,c),0), left=places-S.bookings.filter(b=>b.sessionId===x.id && ACTIVE.includes(b.status)).length, fee=feeOf(x);
       return `<label class="pick"><input type="checkbox" id="pick-${x.id}" data-pick="${x.id}" ${S.picks.has(x.id)?"checked":""}>
@@ -656,18 +656,26 @@ function guestBook(){
     <p class="muted">${n?"Next: sign in or create an account. Your sessions stay ticked.":"Tick at least one session above."}</p></div>
     <div class="row"><button class="btn primary" data-gostep="account" ${n?"":"disabled"}>Continue →</button><button class="btn small ghost" data-gostep="account">I already have an account</button></div></div></section>`;
 }
+// password accounts confirm their email once (Google and email-link sign-ins already have)
+function verifyPanel(){
+  return `<section class="panel"><h2>📧 Confirm your email</h2>
+    <p>We've sent a link to <b>${esc(S.email)}</b>. Open it to confirm it's really you, then come back here and press <b>I've confirmed</b>. Can't see it? Check your spam folder.</p>
+    <div class="row"><button class="btn primary" data-vdone="1">I've confirmed</button><button class="btn" data-vsend="1">Send the link again</button><button class="btn ghost" id="signOut" type="button">Use a different account</button></div>
+    <p class="muted" style="font-size:.85rem">This stops robots booking with made-up email addresses.</p></section>`;
+}
 function accountStep(picked){
   const quick=picked.length ? !picked.some(needsCheck) : null;
   if(quick!=null) S.reg.quick=quick;
   const sum=picked.length?`<section class="panel"><div class="row" style="justify-content:space-between"><div><span class="lbl">Your sessions</span><p style="margin:4px 0 0">${picked.map(x=>`<b>${esc(fmtDate(x.date))}</b> ${esc(x.title||"")}`).join(" · ")}</p>
     <p class="muted" style="margin:4px 0 0">${quick?"These sessions welcome everyone: no level check needed.":"You picked a level-wise session, so new players take a quick level check."}</p></div><button class="btn small ghost" data-gostep="">← Change sessions</button></div></section>`
     :`<section class="panel"><button class="btn small ghost" data-gostep="">← See the sessions</button></section>`;
-  return sum + (Store.mode==="db" && !S.uid ? signInPanel() : registerPanel(quick!=null));
+  return sum + (Store.mode==="db" && !S.uid ? signInPanel() : Store.mode==="db" && !S.verified ? verifyPanel() : registerPanel(quick!=null));
 }
 function viewBook(){
   const p = meP();
   if(!S.loaded) return `<section class="panel"><div class="empty">Loading sessions…</div></section>`;
   if(!p) return guestBook();
+  if(Store.mode==="db" && !S.verified && !S.isAdmin) return verifyPanel();
   const ups = upcoming(), lv = lvByCode(p.level);
   const bookable = sid => { const x=ups.find(y=>y.id===sid); return x && x.open!==false && courtFor(x,lv.code) && !S.bookings.some(b=>b.sessionId===sid && b.playerId===p.id && b.status!=="cancelled") };
   [...S.picks].forEach(id=>{ if(!bookable(id)) S.picks.delete(id) });
@@ -1552,6 +1560,9 @@ document.addEventListener("click", async e=>{
     if(b && ACTIVE.includes(was)) wlPing("freed", b.sessionId) }); return }
   if(ds.ics){ downloadIcs(S.bookings.find(b=>b.id===ds.ics)); return }
   if(t.id==="signOut"){ if(Store.mode==="db"){ await firebase.auth().signOut(); location.reload() } else { S.me=null; ls.set("dsf:me",null); render() } return }
+  if(ds.vdone){ const u=firebase.auth().currentUser; if(!u) return; try{ await u.reload(); await u.getIdToken(true) }catch{}
+    if(firebase.auth().currentUser?.emailVerified){ S.verified=true; toast("Email confirmed ✓"); render() } else toast("Not confirmed yet. Open the link in the email first."); return }
+  if(ds.vsend){ try{ await firebase.auth().currentUser?.sendEmailVerification({url:location.origin+location.pathname}); toast(`Link sent to ${S.email}`) }catch(e){ toast(e?.code==="auth/too-many-requests"?"Please wait a few minutes before asking again.":"Couldn't send the link. Try again.") } return }
   if(t.id==="pwShow"){ const i=$("#pw-pass"); if(i){ i.type=i.type==="password"?"text":"password"; t.textContent=i.type==="password"?"Show":"Hide" } return }
   if(t.id==="pwIn"||t.id==="pwNew"||t.id==="pwReset"){
     const email=($("#pw-email")?.value||"").trim(), pass=$("#pw-pass")?.value||"", A=firebase.auth();
@@ -1560,7 +1571,7 @@ document.addEventListener("click", async e=>{
     try{
       if(t.id==="pwReset"){ await A.sendPasswordResetEmail(email); toast(`Password reset email sent to ${email}`); return }
       if(pass.length<6){ toast("Choose a password with at least 6 characters"); $("#pw-pass")?.focus(); return }
-      if(t.id==="pwNew"){ const c=await A.createUserWithEmailAndPassword(email,pass); c.user?.sendEmailVerification?.().catch(()=>{}); toast("Account created ✓ Now add your details") }
+      if(t.id==="pwNew"){ const c=await A.createUserWithEmailAndPassword(email,pass); await c.user?.sendEmailVerification({url:location.origin+location.pathname}).catch(()=>c.user?.sendEmailVerification().catch(()=>{})); toast("Account created ✓ Check your email to confirm it") }
       else await A.signInWithEmailAndPassword(email,pass);
     }catch(err){ toast(t.id==="pwReset"&&err?.code==="auth/user-not-found"?"No account with that email. Press Create account.":why(err?.code)) }
     return }
@@ -1811,7 +1822,7 @@ render();
     }
     await new Promise(res=>{ let first=true; A.onAuthStateChanged(u=>{
       if(!first){ if((u?.uid||null)!==S.uid) location.reload(); return }
-      first=false; S.uid=u?.uid||null; S.me=S.uid; S.email=u?.email||"";
+      first=false; S.uid=u?.uid||null; S.me=S.uid; S.email=u?.email||""; S.verified=!!u?.emailVerified;
       S.isAdmin = !!u && u.emailVerified && ADMINS.includes(S.email.toLowerCase()); res() }) });
   } else {
     S.isAdmin = LOCAL; // preview: let the organiser try everything

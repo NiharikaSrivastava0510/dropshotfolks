@@ -182,6 +182,7 @@ const S = {
   reg: {ans:{}, photo:null, quick:new URLSearchParams(location.search).has("tp")},   // registration questions and photo; quick = Train & Play only, no level check
   gq: {}, guests: [],               // guest questions and guests waiting to be booked
   liveSess: null, result: null, liveKey: "",
+  ftype: ls.get("dsf:ftype","all"),   // session filter chips on the Book page
   picks: new Set(ls.get("dsf:picks",[])),   // sessions ticked but not booked yet (kept through sign-in)
   qpos: {}, qfb: {}, fx: ls.get("dsf:fx", true),                // level quiz: card on screen and last answer feedback, per quiz
   rotEdit: {}, pedit: null,         // organiser: game being edited per court, player being edited
@@ -634,6 +635,32 @@ function registerPanel(fixed){
   </section>`;
 }
 
+
+/* ----- session "tickets": the cards players tick to book, grouped by month with filter chips ----- */
+const kindOf = s => needsCheck(s) ? "games" : "coach";
+const kindLabel = (k, list) => { const ts=list.filter(x=>kindOf(x)===k).map(x=>x.title||"").filter(Boolean), top=ts.sort((a,b)=>ts.filter(t=>t===b).length-ts.filter(t=>t===a).length)[0];
+  return k==="games" ? (list.filter(x=>kindOf(x)==="games").every(x=>new Date(x.date+"T12:00:00").getDay()===4) ? "🏸 Thursday games" : "🏸 Level-wise games") : `🎯 ${top && top.length<=28 ? top : "Coaching"}` };
+function ticket(x, o){
+  const v=venueOf(x), d=new Date(x.date+"T12:00:00"), fee=feeOf(x), k=kindOf(x), pct=o.places>0 ? Math.min(100, Math.round((o.places-Math.max(0,o.left))*100/o.places)) : 100;
+  return `<label class="tix k-${k} ${o.checked?"on":""} ${o.disabled?"off":""}"><input type="checkbox" id="pick-${x.id}" data-pick="${x.id}" ${o.disabled?"disabled":""} ${o.checked?"checked":""} aria-label="${esc(fmtLong(x.date))} ${esc(x.title||"session")}">
+    <span class="tix-stub"><b>${esc(d.toLocaleDateString("en-GB",{weekday:"short"}))}</b><span class="d">${d.getDate()}</span><span>${esc(d.toLocaleDateString("en-GB",{month:"short"}))}</span></span>
+    <span class="tix-body">
+      <span class="tix-top"><span class="tix-kind">${k==="games"?"🏸 Games":"🎯 Coaching"}</span>${fee?`<span class="tix-fee">${esc(fee)}</span>`:""}</span>
+      <b class="tix-title">${esc(x.title||"Session")}</b>
+      <span class="tix-meta"><span>🕒 ${esc(x.start)}–${esc(x.end)}</span>${v.venue?`<span>📍 ${esc(v.venue)}</span>`:""}</span>
+      <span class="tix-cap" title="${pct}% full"><i style="width:${pct}%"></i></span>
+      <span class="tix-foot">${o.status}</span></span>
+    <span class="tix-tick" aria-hidden="true"></span></label>`;
+}
+function ticketList(list, card){
+  const kinds=[...new Set(list.map(kindOf))], f=kinds.includes(S.ftype)?S.ftype:"all", shown=list.filter(x=>f==="all"||kindOf(x)===f);
+  const chips = kinds.length>1 ? `<div class="fchips" role="group" aria-label="Show">${[["all","All sessions"],...kinds.map(k=>[k,kindLabel(k,list)])].map(([k,l])=>`<button type="button" data-ftype="${k}" aria-pressed="${f===k}">${esc(l)} <span>${k==="all"?list.length:list.filter(x=>kindOf(x)===k).length}</span></button>`).join("")}</div>` : "";
+  const months={}; shown.forEach(x=>(months[x.date.slice(0,7)] ||= []).push(x));
+  return chips + Object.entries(months).map(([m,xs])=>`<h3 class="tix-month">${esc(new Date(m+"-15T12:00:00").toLocaleDateString("en-GB",{month:"long",year:"numeric"}))}</h3><div class="tixgrid">${xs.map(card).join("")}</div>`).join("");
+}
+const placesNote = left => left>0 ? (left<=3 ? `<b class="hot">🔥 Only ${left} left!</b>` : `${left} places left`) : `<b class="hot">Full · waiting list</b>`;
+const pickChips = list => list.length ? `<div class="pchips">${list.map(x=>`<span>${esc(new Date(x.date+"T12:00:00").toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"}))}</span>`).join("")}</div>` : "";
+const picksTotal = list => list.reduce((a,x)=>a+(feeNum(x)||0),0);
 /* ----- book: pick sessions, we assign the court ----- */
 // sessions that welcome beginners (Train & Play, coaching) need no level check; level-wise sessions (Thursdays) do
 const needsCheck = s => !courtsOf(s).some(c=>courtLevels(s,c).some(l=>BEGINNER.includes(l)));
@@ -646,16 +673,12 @@ function guestBook(){
   const picked=pickedSessions(), n=picked.length;
   if(S.step==="account" || (ls.get("dsf:step",null)==="account" && n)) return accountStep(picked);   // after Continue (kept through the sign-in reload)
   if(!ups.length) return `<section class="panel"><h2>Book a session</h2><div class="empty">No sessions are open yet. They'll appear here as soon as the organiser adds them.</div><div><button class="btn small ghost" data-gostep="account">Sign in or create an account</button></div></section>`;
-  return `<section class="panel"><div><h2>Book a session</h2><p class="muted">Tick the sessions you'd like, then press Continue.</p></div>
-    <div class="sessboxes">${ups.map(x=>{ const v=venueOf(x), places=courtsOf(x).reduce((t,c)=>t+cap(x,c),0), left=places-S.bookings.filter(b=>b.sessionId===x.id && ACTIVE.includes(b.status)).length, fee=feeOf(x), d=new Date(x.date+"T12:00:00");
-      return `<label class="sbox ${S.picks.has(x.id)?"on":""}"><input type="checkbox" id="pick-${x.id}" data-pick="${x.id}" ${S.picks.has(x.id)?"checked":""}>
-        <span class="sb-date"><b>${esc(d.toLocaleDateString("en-GB",{weekday:"short"}))}</b><span class="d">${d.getDate()}</span><span>${esc(d.toLocaleDateString("en-GB",{month:"short"}))}</span></span>
-        <span class="sb-t"><b>${esc(x.title||"Session")}</b><span>🕒 ${esc(x.start)}–${esc(x.end)}</span>${v.venue?`<span>📍 ${esc(v.venue)}</span>`:""}${fee?`<span class="sb-fee">${esc(fee)}</span>`:""}
-          <span class="muted">${left>0?`${left} place${left>1?"s":""} left`:"Full: waiting list"}</span>
-          ${needsCheck(x)?`<span class="chip st-waitlist">Level check needed</span>`:`<span class="chip st-confirmed">All welcome · no level check</span>`}</span>
-        <span class="sb-tick" aria-hidden="true">${S.picks.has(x.id)?"✓":""}</span></label>` }).join("")}</div></section>
-  <section class="panel bookbar ${n?"on":""}"><div class="row" style="justify-content:space-between"><div><h3>${n?`${n} session${n>1?"s":""} selected`:"Pick your sessions"}</h3>
-    <p class="muted">${n?"Next: sign in or create an account. Your sessions stay ticked.":"Tick at least one session above."}</p></div>
+  const tot=picksTotal(picked);
+  return `<section class="panel bookhero"><div><span class="lbl">Book a session</span><h2>Pick your games</h2><p class="muted">Tap the sessions you'd like, then press Continue. ${ups.length} coming up.</p></div>
+    ${ticketList(ups, x=>{ const places=courtsOf(x).reduce((t,c)=>t+cap(x,c),0), left=places-S.bookings.filter(b=>b.sessionId===x.id && ACTIVE.includes(b.status)).length;
+      return ticket(x,{checked:S.picks.has(x.id), places, left, status:`${placesNote(left)}${needsCheck(x)?`<span class="chip st-waitlist">Level check needed</span>`:`<span class="chip st-confirmed">All welcome · no level check</span>`}`}) })}</section>
+  <section class="panel bookbar ${n?"on":""}"><div class="bb-row"><div class="bb-info"><h3>${n?`${n} session${n>1?"s":""} picked${tot>0?` · <span class="bb-tot">£${tot.toFixed(2).replace(/\.00$/,"")}</span>`:""}`:"Pick your sessions"}</h3>
+    ${n?pickChips(picked):`<p class="muted">Tap a session above to pick it.</p>`}</div>
     <div class="row"><button class="btn primary" data-gostep="account" ${n?"":"disabled"}>Continue →</button><button class="btn small ghost" data-gostep="account">I already have an account</button></div></div></section>`;
 }
 // password accounts confirm their email once (Google and email-link sign-ins already have)
@@ -688,13 +711,13 @@ function viewBook(){
   html += `<section class="panel">
     <details class="rulesbox" id="rulesBox"><summary>📜 Session rules</summary><div class="rules-t">${htmlText(S.cfg.rules||DEFAULT_RULES)}${[...new Map(ups.filter(x=>x.rules).map(x=>[(x.title||"")+x.rules,x])).values()].map(x=>`<p><b>${esc(x.title||"This session")}</b><br>${htmlText(x.rules)}</p>`).join("")}</div></details>
     <div><h2>Book a session</h2><p class="muted">Tick as many sessions as you like. You're ${lvChip(lv.code)} ${esc(lv.name)}, and we'll put you on the court for your level at each session, with rotating doubles.</p></div>
-    <div class="picks">${ups.map(s=>{
+    ${ticketList(ups, s=>{
       const myB = S.bookings.find(b=>b.sessionId===s.id && b.playerId===p.id && b.status!=="cancelled");
-      const ct = courtFor(s,lv.code), left = ct ? cap(s,ct) - activeIn(s.id,ct).length : 0, v=venueOf(s), noCourt = !ct, closed = s.open===false || noCourt || s.cancelled;
-      return `<label class="pick ${myB||closed?"booked":""}"><input type="checkbox" id="pick-${s.id}" data-pick="${s.id}" ${myB||closed?"disabled":""} ${myB||(!closed&&S.picks.has(s.id))?"checked":""}>
-        <span class="t"><b>${fmtLong(s.date)} · ${esc(s.start)}–${esc(s.end)}</b>
-        <span class="muted">${esc(v.venue||"Venue to be confirmed")}${s.title?" · "+esc(s.title):""}${s.price?` · <b>${esc(s.price)}</b>`:""}</span>
-        <span>${myB?`<span class="chip st-confirmed">✓ Booked</span> Court ${myB.court} ${stChip(myB.status)}`:closed?`<span class="chip st-waitlist">${s.cancelled?"Cancelled":noCourt?`Not running for ${esc(lv.code)} players`:"Booking closed"}</span>`:left>0?`Court ${ct} · ${esc(courtName(s,ct))}: <b>${left} of ${cap(s,ct)}</b> places left`:`Court ${ct} · ${esc(courtName(s,ct))} is full. You'll go on the waiting list for your level (players can't join another level's court).`}</span></span></label>`}).join("")}</div>
+      const ct = courtFor(s,lv.code), left = ct ? cap(s,ct) - activeIn(s.id,ct).length : 0, noCourt = !ct, closed = s.open===false || noCourt || s.cancelled;
+      const status = myB ? `<span class="chip st-confirmed">✓ Booked</span> Court ${esc(myB.court)} ${stChip(myB.status)}`
+        : closed ? `<span class="chip st-waitlist">${s.cancelled?"Cancelled":noCourt?`Not running for ${esc(lv.code)} players`:"Booking closed"}</span>`
+        : `${placesNote(left)} <span class="muted">· Court ${ct} · ${esc(courtName(s,ct))}</span>`;
+      return ticket(s,{checked:!!myB||(!closed&&S.picks.has(s.id)), disabled:!!myB||closed, places:ct?cap(s,ct):1, left:ct?left:0, status}) })}
   </section>
   <section class="panel">
     <div><h2>Bring a guest</h2><p class="muted">Guests answer the same questions and are placed on the court for their level. They're added to every session you tick above.</p></div>
@@ -709,7 +732,7 @@ function viewBook(){
     </details>
   </section>
   <section class="panel bookbar ${nPick?"on":""}">
-    <div class="row" style="justify-content:space-between"><div><h3>${nPick?`${nPick} session${nPick>1?"s":""} selected`:"Ready to book?"}</h3><p class="muted">${nPick?"Your place isn't held until you press Book. ":"Tick the sessions you want above. "}${(()=>{ const ps=[...S.picks].map(id=>ups.find(x=>x.id===id)).filter(Boolean), tot=ps.reduce((a,x)=>a+(feeNum(x)||0),0);
+    <div class="row" style="justify-content:space-between"><div><h3>${nPick?`${nPick} session${nPick>1?"s":""} picked`:"Ready to book?"}</h3>${pickChips([...S.picks].map(id=>ups.find(x=>x.id===id)).filter(Boolean))}<p class="muted">${nPick?"Your place isn't held until you press Book. ":"Tick the sessions you want above. "}${(()=>{ const ps=[...S.picks].map(id=>ups.find(x=>x.id===id)).filter(Boolean), tot=ps.reduce((a,x)=>a+(feeNum(x)||0),0);
       return nPick && tot>0 ? `£${tot.toFixed(2).replace(/\.00$/,"")} per person in total. ` : S.cfg.price?`${esc(money(S.cfg.price))} per person per session${ups.some(x=>x.price)?", unless a session shows its own fee":""}. `:"" })()}You'll see how to pay in My bookings.</p></div>
     <button class="btn primary" id="bookSel" ${nPick?"":"disabled"}>${nPick?`Book ${nPick} session${nPick>1?"s":""}`:"Book selected sessions"}${S.guests.length?` + ${S.guests.length} guest${S.guests.length>1?"s":""}`:""}</button></div>
   </section>
@@ -1702,6 +1725,7 @@ document.addEventListener("click", async e=>{
   if(ds.reall){ const s=S.sessions.find(x=>x.id===ds.reall), c=ds.c; const {id,...body}=s, rot={...(s.rot||{})}; rot[c]={};
     arm(t,"Tap again to reset",()=>save("sessions",id,{...body, rot},"Rotation back to automatic")); return }
   if(ds.delsess){ await deleteSessions([ds.delsess]); return }
+  if(ds.ftype){ S.ftype=ds.ftype; ls.set("dsf:ftype",S.ftype); render(); return }
   if(ds.gostep!=null){ S.step=ds.gostep||null; ls.set("dsf:step",S.step); render(); scrollTo({top:0,behavior:"smooth"}); return }
   if(ds.regquick!=null){ S.reg.quick=ds.regquick==="1"; render(); return }
   if(ds.bmtest){ const r=await mailPost({test:true}); toast(r.ok?"Test email sent ✓ Check your inbox":`Didn't send: ${r.error}`); return }

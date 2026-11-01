@@ -14,10 +14,10 @@
 <style>
 /* Layout: Dropshot Folks clubhouse — maroon masthead band like the club site, beige page, cream cards; courts in a wrapping grid */
 :root{
-  --bg:#F3E9D9; --surface:#FCF7EE; --sunk:#E9DCC6; --ink:#24100F; --muted:#715250; --line:#DFCDAE;
-  --accent:#7A2331; --accent-ink:#FFFFFF; --ball:#D97757; --tint:#EFE3CE;
-  --band:#6E1F2C; --band-ink:#FFFFFF; --band-soft:#EBD9BA; --band-line:#8A2E3C;
-  --grad:linear-gradient(135deg,#8E3240 0%,#74222F 55%,#5E1824 100%);
+  --bg:#EADBC8; --surface:#F6EEE3; --sunk:#E0CDB4; --ink:#2B2B2B; --muted:#5C4B48; --line:#CDB394;
+  --accent:#7A1E2C; --accent-ink:#FFFFFF; --ball:#E3A82B; --tint:#EFE3D2; --gold:#E3A82B; --gold-soft:#F0CB72; --gold-deep:#B8831A;
+  --band:#7A1E2C; --band-ink:#FFFFFF; --band-soft:#F1E3CF; --band-line:#943243;
+  --grad:linear-gradient(135deg,#8F2A3A 0%,#7A1E2C 55%,#5A1520 100%);
   --shadow:0 1px 2px rgba(90,22,32,.06),0 14px 34px -20px rgba(90,22,32,.35);
   --d1:#4E7A68; --d2:#3F5E8A; --c1:#A86E14; --c2:#C25A3A;
   --ok:#2E6B3F; --ok-bg:#E2EBD3; --warn:#8A5300; --warn-bg:#F6E1B8; --bad:#8E1F2A; --bad-bg:#F3D6D0; --info-bg:#E4E1DA;
@@ -28,14 +28,14 @@
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#1E0A0E; --surface:#2A1015; --sunk:#3D0D14; --ink:#FAF3E3; --muted:#C9B48A; --line:#4E2028;
-  --accent:#E39AA5; --accent-ink:#2A0E13; --ball:#E08A6C; --tint:#3A1820; --grad:linear-gradient(135deg,#7A2836 0%,#5E1C28 100%); --shadow:0 14px 34px -20px rgba(0,0,0,.6);
+  --accent:#E39AA5; --accent-ink:#2A0E13; --ball:#E3A82B; --gold:#E3A82B; --gold-soft:#F0CB72; --gold-deep:#B8831A; --tint:#3A1820; --grad:linear-gradient(135deg,#7A2836 0%,#5E1C28 100%); --shadow:0 14px 34px -20px rgba(0,0,0,.6);
   --band:#3D0D14; --band-ink:#FAF3E3; --band-soft:#D8C4A0; --band-line:#5A1620;
   --d1:#7FB39D; --d2:#8AA7D6; --c1:#E0A84E; --c2:#EE8E6E;
   --ok:#9FD3A8; --ok-bg:#1F3324; --warn:#F0C27A; --warn-bg:#3A2A10; --bad:#F4A39A; --bad-bg:#4A161D; --info-bg:#33191E;
   color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#1E0A0E; --surface:#2A1015; --sunk:#3D0D14; --ink:#FAF3E3; --muted:#C9B48A; --line:#4E2028;
-  --accent:#E39AA5; --accent-ink:#2A0E13; --ball:#E08A6C; --tint:#3A1820; --grad:linear-gradient(135deg,#7A2836 0%,#5E1C28 100%); --shadow:0 14px 34px -20px rgba(0,0,0,.6);
+  --accent:#E39AA5; --accent-ink:#2A0E13; --ball:#E3A82B; --gold:#E3A82B; --gold-soft:#F0CB72; --gold-deep:#B8831A; --tint:#3A1820; --grad:linear-gradient(135deg,#7A2836 0%,#5E1C28 100%); --shadow:0 14px 34px -20px rgba(0,0,0,.6);
   --band:#3D0D14; --band-ink:#FAF3E3; --band-soft:#D8C4A0; --band-line:#5A1620;
   --d1:#7FB39D; --d2:#8AA7D6; --c1:#E0A84E; --c2:#EE8E6E;
   --ok:#9FD3A8; --ok-bg:#1F3324; --warn:#F0C27A; --warn-bg:#3A2A10; --bad:#F4A39A; --bad-bg:#4A161D; --info-bg:#33191E;
@@ -424,7 +424,7 @@ nav.tabs button[data-tab="court"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='htt
 .selbar{gap:8px;align-items:center;margin:6px 0}.selrow{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start}.selrow>input{width:22px;height:22px;margin-top:22px;accent-color:var(--accent,#7A2331)}
 .rulesbox{border:1px solid var(--line,#e5dccb);border-radius:12px;padding:10px 14px;background:var(--surface,#fff)}.rulesbox summary{cursor:pointer;font-weight:700}.rules-t{margin-top:8px;line-height:1.55;font-size:.95rem}.rules-t p{margin:10px 0 0}
 </style>
-<link rel="stylesheet" href="theme.css?v=2">
+<link rel="stylesheet" href="theme.css?v=3">
 
 <div class="wrap">
 <header class="top"><span class="hshuttle" aria-hidden="true">🏸</span>
@@ -450,6 +450,6 @@ nav.tabs button[data-tab="court"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='htt
 <div class="toast" id="toast" hidden></div>
 <div class="court-alert" id="alert" hidden role="alertdialog" aria-live="assertive" aria-label="Court update"><div class="al-card"><div class="al-body"></div><button class="btn primary" data-alertok="1">OK</button></div></div>
 
-<script src="app.js?v=202611011900"></script>
+<script src="app.js?v=202611012000"></script>
 
 </body></html>

@@ -12,7 +12,8 @@ const NO_BEGINNER_DAYS = [4];   // 0 = Sunday … 4 = Thursday
 const beginnersBarred = s => !!s?.date && NO_BEGINNER_DAYS.includes(new Date(s.date+"T12:00:00").getDay());
 const lvByCode = c => LEVELS.find(l=>l.code===c);
 // a session can have its own fee (e.g. coaching); otherwise the club's usual fee
-const feeOf = s => String(s?.price || S.cfg?.price || "");
+const money = x => { const t=String(x||"").trim(); return /^\d+(\.\d{1,2})?$/.test(t) ? "£"+t : t };   // "15" -> "£15"
+const feeOf = s => money(s?.price || S.cfg?.price || "");
 const feeNum = s => parseFloat(feeOf(s).replace(/[^0-9.]/g,""));
 // Saturday Train & Play with Coach at Mulberry: all levels on every court
 const TRAIN_PLAY = {start:"13:00", end:"16:00", title:"Train & Play with Coach", venue:"Mulberry Sports & Leisure Centre", address:"Richard St, London E1 2JR", price:"£30", note:"Coaching first, then games. All levels welcome."};
@@ -643,14 +644,16 @@ function guestBook(){
   const ups=upcoming().filter(x=>x.open!==false && !x.cancelled);
   [...S.picks].forEach(id=>{ if(!ups.some(x=>x.id===id)) S.picks.delete(id) });
   const picked=pickedSessions(), n=picked.length;
-  if(S.step==="account" || (S.step!=="list" && Store.mode==="db" && S.uid)) return accountStep(picked);   // signed in: carry on joining
+  if(S.step==="account" || (ls.get("dsf:step",null)==="account" && n)) return accountStep(picked);   // after Continue (kept through the sign-in reload)
   if(!ups.length) return `<section class="panel"><h2>Book a session</h2><div class="empty">No sessions are open yet. They'll appear here as soon as the organiser adds them.</div><div><button class="btn small ghost" data-gostep="account">Sign in or create an account</button></div></section>`;
   return `<section class="panel"><div><h2>Book a session</h2><p class="muted">Tick the sessions you'd like, then press Continue.</p></div>
-    <div class="picks">${ups.map(x=>{ const v=venueOf(x), places=courtsOf(x).reduce((t,c)=>t+cap(x,c),0), left=places-S.bookings.filter(b=>b.sessionId===x.id && ACTIVE.includes(b.status)).length, fee=feeOf(x);
-      return `<label class="pick"><input type="checkbox" id="pick-${x.id}" data-pick="${x.id}" ${S.picks.has(x.id)?"checked":""}>
-        <span class="t"><b>${fmtLong(x.date)} · ${esc(x.start)}–${esc(x.end)}</b>
-        <span class="muted">${esc(x.title||"Session")}${v.venue?` · ${esc(v.venue)}`:""}${fee?` · <b>${esc(fee)}</b>`:""}</span>
-        <span>${left>0?`${left} place${left>1?"s":""} left`:"Full: you'll go on the waiting list"} · ${needsCheck(x)?`<span class="chip st-waitlist">Level check needed</span>`:`<span class="chip st-confirmed">All welcome · no level check</span>`}</span></span></label>` }).join("")}</div></section>
+    <div class="sessboxes">${ups.map(x=>{ const v=venueOf(x), places=courtsOf(x).reduce((t,c)=>t+cap(x,c),0), left=places-S.bookings.filter(b=>b.sessionId===x.id && ACTIVE.includes(b.status)).length, fee=feeOf(x), d=new Date(x.date+"T12:00:00");
+      return `<label class="sbox ${S.picks.has(x.id)?"on":""}"><input type="checkbox" id="pick-${x.id}" data-pick="${x.id}" ${S.picks.has(x.id)?"checked":""}>
+        <span class="sb-date"><b>${esc(d.toLocaleDateString("en-GB",{weekday:"short"}))}</b><span class="d">${d.getDate()}</span><span>${esc(d.toLocaleDateString("en-GB",{month:"short"}))}</span></span>
+        <span class="sb-t"><b>${esc(x.title||"Session")}</b><span>🕒 ${esc(x.start)}–${esc(x.end)}</span>${v.venue?`<span>📍 ${esc(v.venue)}</span>`:""}${fee?`<span class="sb-fee">${esc(fee)}</span>`:""}
+          <span class="muted">${left>0?`${left} place${left>1?"s":""} left`:"Full: waiting list"}</span>
+          ${needsCheck(x)?`<span class="chip st-waitlist">Level check needed</span>`:`<span class="chip st-confirmed">All welcome · no level check</span>`}</span>
+        <span class="sb-tick" aria-hidden="true">${S.picks.has(x.id)?"✓":""}</span></label>` }).join("")}</div></section>
   <section class="panel bookbar ${n?"on":""}"><div class="row" style="justify-content:space-between"><div><h3>${n?`${n} session${n>1?"s":""} selected`:"Pick your sessions"}</h3>
     <p class="muted">${n?"Next: sign in or create an account. Your sessions stay ticked.":"Tick at least one session above."}</p></div>
     <div class="row"><button class="btn primary" data-gostep="account" ${n?"":"disabled"}>Continue →</button><button class="btn small ghost" data-gostep="account">I already have an account</button></div></div></section>`;
@@ -707,7 +710,7 @@ function viewBook(){
   </section>
   <section class="panel bookbar ${nPick?"on":""}">
     <div class="row" style="justify-content:space-between"><div><h3>${nPick?`${nPick} session${nPick>1?"s":""} selected`:"Ready to book?"}</h3><p class="muted">${nPick?"Your place isn't held until you press Book. ":"Tick the sessions you want above. "}${(()=>{ const ps=[...S.picks].map(id=>ups.find(x=>x.id===id)).filter(Boolean), tot=ps.reduce((a,x)=>a+(feeNum(x)||0),0);
-      return nPick && tot>0 ? `£${tot.toFixed(2).replace(/\.00$/,"")} per person in total. ` : S.cfg.price?`${esc(S.cfg.price)} per person per session${ups.some(x=>x.price)?", unless a session shows its own fee":""}. `:"" })()}You'll see how to pay in My bookings.</p></div>
+      return nPick && tot>0 ? `£${tot.toFixed(2).replace(/\.00$/,"")} per person in total. ` : S.cfg.price?`${esc(money(S.cfg.price))} per person per session${ups.some(x=>x.price)?", unless a session shows its own fee":""}. `:"" })()}You'll see how to pay in My bookings.</p></div>
     <button class="btn primary" id="bookSel" ${nPick?"":"disabled"}>${nPick?`Book ${nPick} session${nPick>1?"s":""}`:"Book selected sessions"}${S.guests.length?` + ${S.guests.length} guest${S.guests.length>1?"s":""}`:""}</button></div>
   </section>
   ${remindPanel(p)}`;
@@ -934,7 +937,8 @@ function viewVenue(){
     <p class="muted">Contact the organiser about level reviews, refunds, or if you can't book.</p>`
     :`<div class="empty">Contact details will appear here once the organiser adds them.</div>`}
   </section>
-  <section class="panel"><h2>Payment &amp; cancellations</h2><p>${esc(c.policy)}</p>${c.price?`<p>Session fee: <b>${esc(c.price)}</b></p>`:""}</section>`;
+  <section class="panel"><h2>Payment &amp; cancellations</h2><p>${esc(c.policy)}</p>${(()=>{ const fees=[...new Map(upcoming().filter(x=>!x.cancelled).map(x=>[(x.title||"Session")+"|"+feeOf(x), [x.title||"Session", feeOf(x)]])).values()].filter(([,f])=>f);
+      return fees.length ? `<p>${fees.map(([t,f])=>`${esc(t)}: <b>${esc(f)}</b>`).join(" · ")} per person per session</p>` : c.price?`<p>Session fee: <b>${esc(money(c.price))}</b></p>`:"" })()}</section>`;
 }
 
 /* ---------- organiser ---------- */
@@ -1697,7 +1701,7 @@ document.addEventListener("click", async e=>{
   if(ds.reall){ const s=S.sessions.find(x=>x.id===ds.reall), c=ds.c; const {id,...body}=s, rot={...(s.rot||{})}; rot[c]={};
     arm(t,"Tap again to reset",()=>save("sessions",id,{...body, rot},"Rotation back to automatic")); return }
   if(ds.delsess){ await deleteSessions([ds.delsess]); return }
-  if(ds.gostep!=null){ S.step=ds.gostep||null; if(!S.step && Store.mode==="db" && S.uid) S.step="list"; render(); scrollTo({top:0,behavior:"smooth"}); return }
+  if(ds.gostep!=null){ S.step=ds.gostep||null; ls.set("dsf:step",S.step); render(); scrollTo({top:0,behavior:"smooth"}); return }
   if(ds.regquick!=null){ S.reg.quick=ds.regquick==="1"; render(); return }
   if(ds.bmtest){ const r=await mailPost({test:true}); toast(r.ok?"Test email sent ✓ Check your inbox":`Didn't send: ${r.error}`); return }
   if(ds.bmcopy){ const ta=$("[data-bmscript]"); if(!S.mailerTxt||!ta){ toast("The script is still loading. Try again in a second."); return }
@@ -1785,7 +1789,7 @@ document.addEventListener("submit", async e=>{
     ls.set("dsf:regs",[...regs, Date.now()]);
     if(await savePlayer({id,email,name,phone,level,...(quick?{}:{quiz:packQuiz(S.reg.ans)}),verified:false,levelRequest:null,createdAt:nowIso()})){
       if(S.reg.photo) await savePhoto(id,S.reg.photo);
-      S.me=id; if(Store.mode!=="db") ls.set("dsf:me",id); S.reg={ans:{},photo:null}; S.step=null; burst(); setTimeout(()=>document.querySelector(".bookbar")?.scrollIntoView({behavior:"smooth",block:"center"}),300); toast(S.picks.size?`Welcome, ${name.split(" ")[0]}! Your sessions are ticked: press Book.`:quick?`Welcome, ${name.split(" ")[0]}! Tick the Train & Play sessions you want.`:`Welcome! You're ${level} ${lvByCode(level).name}.`); render() }
+      S.me=id; if(Store.mode!=="db") ls.set("dsf:me",id); S.reg={ans:{},photo:null}; S.step=null; ls.set("dsf:step",null); burst(); setTimeout(()=>document.querySelector(".bookbar")?.scrollIntoView({behavior:"smooth",block:"center"}),300); toast(S.picks.size?`Welcome, ${name.split(" ")[0]}! Your sessions are ticked: press Book.`:quick?`Welcome, ${name.split(" ")[0]}! Tick the Train & Play sessions you want.`:`Welcome! You're ${level} ${lvByCode(level).name}.`); render() }
   }
   if(e.target.id==="sessForm"){
     const date=$("#s-date").value, start=$("#s-start").value, end=$("#s-end").value, c=Number($("#s-cap").value)||PER_COURT, weeks=Number($("#s-weeks").value)||1;

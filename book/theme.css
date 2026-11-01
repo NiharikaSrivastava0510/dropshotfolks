@@ -1,0 +1,105 @@
+/* Dropshot Folks booking: "sticker" look — bold outlines, offset shadows, pop colours and a bit of motion.
+   Loaded after the base styles in index.html, so it only restyles; layout and features stay the same. */
+:root{
+  --stk:#24100F;                 /* sticker outline and shadow */
+  --pop-coral:#FF6B5B; --pop-lime:#C8F25C; --pop-violet:#8B6CFF; --pop-sun:#FFD23F; --pop-sky:#5BC8FF; --pop-pink:#FF8FC7;
+  --display:"Bricolage Grotesque", "Fraunces", system-ui, sans-serif;
+  --muted:#5A3E3C;
+  --shadow:4px 4px 0 var(--stk);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){ --stk:#000; --muted:#D9C6A4; --shadow:4px 4px 0 #000 }}
+:root[data-theme="dark"]{ --stk:#000; --muted:#D9C6A4; --shadow:4px 4px 0 #000 }
+
+body{font-size:16px;background-color:var(--bg);background-image:radial-gradient(color-mix(in srgb,var(--stk) 9%,transparent) 1.2px,transparent 1.3px);background-size:22px 22px}
+h1,h2,h3{font-family:var(--display);letter-spacing:-.02em}
+h2{font-size:1.6rem;font-weight:800}
+h3{font-weight:700}
+.lbl{font-weight:800;letter-spacing:.08em}
+
+/* masthead: the maroon band slowly shifts colour */
+header.top{background:linear-gradient(120deg,#8E3240,#5E1824,#A43A4C,#6E1F2C);background-size:300% 300%;animation:bandShift 14s ease-in-out infinite}
+@keyframes bandShift{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+.brand h1{font-family:var(--display);font-weight:800;letter-spacing:-.01em}
+.nextup{border:2px solid rgba(255,255,255,.35);animation:nudge 7s ease-in-out infinite}
+@keyframes nudge{0%,88%,100%{transform:none}91%{transform:translateY(-3px) rotate(-1.5deg)}94%{transform:translateY(0) rotate(1deg)}}
+
+/* tabs: chunky pills; the open tab is a lime sticker */
+nav.tabs{border:2.5px solid var(--stk);box-shadow:var(--shadow);border-radius:22px}
+nav.tabs button{font-weight:700;border-radius:14px}
+nav.tabs button[aria-selected="true"]{background:var(--pop-lime);color:#1B1B1B;border:2px solid var(--stk);box-shadow:2px 2px 0 var(--stk);transform:rotate(-1deg)}
+nav.tabs button:hover:not([aria-selected="true"]){background:color-mix(in srgb,var(--pop-sun) 35%,var(--surface));color:var(--ink)}
+
+/* cards and panels are stickers */
+.panel{border:2.5px solid var(--stk);border-radius:26px;box-shadow:6px 6px 0 var(--stk)}
+.bk,.court-live,.pcard,.empty,.banner,.rulesbox,details.sub,.sesscard{border:2px solid var(--stk);box-shadow:var(--shadow)}
+.bk,.court-live{border-radius:20px}
+.empty{border-style:dashed;box-shadow:none;font-weight:600}
+.tile{border:2px solid var(--stk);box-shadow:3px 3px 0 var(--stk);border-radius:18px}
+.tiles .tile:nth-child(4n+1){background:color-mix(in srgb,var(--pop-lime) 45%,var(--surface))}
+.tiles .tile:nth-child(4n+2){background:color-mix(in srgb,var(--pop-sky) 35%,var(--surface))}
+.tiles .tile:nth-child(4n+3){background:color-mix(in srgb,var(--pop-sun) 45%,var(--surface))}
+.tiles .tile:nth-child(4n+4){background:color-mix(in srgb,var(--pop-pink) 35%,var(--surface))}
+.tile b{color:var(--ink);font-family:var(--display);font-size:1.6rem}
+
+/* buttons: press-able stickers that wiggle */
+.btn{border:2px solid var(--stk);box-shadow:3px 3px 0 var(--stk);font-weight:700;transition:transform .12s,box-shadow .12s,background .15s}
+.btn:hover{transform:translate(-1px,-1px) rotate(-.6deg);box-shadow:4px 4px 0 var(--stk)}
+.btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--stk)}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--stk);box-shadow:3px 3px 0 var(--stk)}
+.btn.primary:hover{background:#8E3240}
+.btn.ghost{box-shadow:none}
+.btn[disabled]{box-shadow:none;transform:none;opacity:.5}
+input,select,textarea{border:2px solid var(--stk);border-radius:14px;font-size:1rem}
+input:focus,select:focus,textarea:focus{outline:3px solid var(--pop-violet);outline-offset:1px}
+
+/* chips */
+.chip{border:1.5px solid var(--stk);font-weight:700;border-radius:999px}
+.st-confirmed{background:var(--pop-lime);color:#1B1B1B}
+.st-awaiting{background:var(--pop-sun);color:#1B1B1B}
+.st-paid{background:var(--pop-sky);color:#1B1B1B}
+.st-waitlist{background:color-mix(in srgb,var(--pop-violet) 22%,var(--surface));color:var(--ink)}
+.st-cancelled{background:color-mix(in srgb,var(--pop-coral) 35%,var(--surface));color:var(--ink)}
+
+/* session tickets */
+.tix{border:2.5px solid var(--stk);box-shadow:5px 5px 0 var(--stk);border-radius:22px}
+.tix:hover{transform:translate(-2px,-3px) rotate(-.5deg);box-shadow:7px 8px 0 var(--stk)}
+.tix.on{border-color:var(--stk);box-shadow:5px 5px 0 var(--k1),0 0 0 4px color-mix(in srgb,var(--k1) 30%,transparent);transform:rotate(-1deg)}
+.tix-stub{border-right:2.5px dashed rgba(255,255,255,.5)}
+.tix-stub::after{display:none}
+.tix-title{font-family:var(--display);font-weight:800;font-size:1.12rem}
+.tix-fee{border:1.5px solid var(--stk);background:var(--pop-sun);color:#1B1B1B}
+.tix-tick{border-color:var(--stk)}
+.tix .hot{color:#D2263B;animation:hotPulse 1.6s ease-in-out infinite;display:inline-block}
+@keyframes hotPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+.fchips button{border:2px solid var(--stk);box-shadow:2px 2px 0 var(--stk)}
+.fchips button[aria-pressed="true"]{background:var(--pop-lime);color:#1B1B1B;border-color:var(--stk)}
+.fchips button[aria-pressed="true"] span{background:rgba(0,0,0,.1)}
+.tix-month{font-family:var(--display);font-weight:800;color:var(--ink);font-size:1.3rem}
+.tix-month::after{content:" ✨"}
+.bookhero h2{font-weight:800}
+.bookbar.on{border:2.5px solid var(--stk);box-shadow:6px 6px 0 var(--stk);background:color-mix(in srgb,var(--surface) 90%,transparent)}
+.pchips span{border:1.5px solid var(--stk);background:var(--pop-lime);color:#1B1B1B}
+
+/* the "coming up" ticker on Book a session */
+.ticker{overflow:hidden;border:2.5px solid var(--stk);border-radius:999px;background:#1B1B1B;color:#fff;box-shadow:4px 4px 0 var(--stk);mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);-webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
+.ticker-track{display:flex;gap:34px;width:max-content;padding:9px 0;animation:tickerMove 32s linear infinite;font-weight:600;white-space:nowrap}
+.ticker:hover .ticker-track{animation-play-state:paused}
+.ticker-track b{color:var(--pop-lime)}
+.ticker-track .hotk{color:var(--pop-sun)}
+@keyframes tickerMove{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* cards pop in when a tab opens (once, not on every live update) */
+.pop{animation:popIn .55s cubic-bezier(.2,1.5,.45,1) backwards}
+@keyframes popIn{from{opacity:0;transform:translateY(18px) scale(.94) rotate(-1deg)}to{opacity:1;transform:none}}
+
+/* live courts */
+.court-live{border-top-width:8px}
+.dot.pulse{box-shadow:0 0 0 0 rgba(200,242,92,.8);animation:livePulse 1.6s infinite}
+@keyframes livePulse{0%{box-shadow:0 0 0 0 rgba(255,107,91,.7)}70%{box-shadow:0 0 0 10px rgba(255,107,91,0)}100%{box-shadow:0 0 0 0 rgba(255,107,91,0)}}
+
+.toast{border:2.5px solid var(--stk);box-shadow:4px 4px 0 var(--stk);border-radius:16px;font-weight:700}
+
+@media (prefers-reduced-motion: reduce){
+  header.top,.nextup,.ticker-track,.tix .hot,.dot.pulse,.pop{animation:none!important}
+  .btn:hover,.tix:hover,.tix.on,nav.tabs button[aria-selected="true"]{transform:none}
+}

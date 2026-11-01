@@ -488,6 +488,7 @@ function render(){
   if(S.lastTab!==tab){ const m=$("#main"); m.classList.remove("swap"); void m.offsetWidth; m.classList.add("swap"); S.lastTab=tab }
   const nc=$("#nextup"); if(nc){ const h=S.loaded?nextChip():""; nc.innerHTML=h; nc.hidden=!h }
   tickCountdowns();
+  popIn(view+"|"+tab);
   Object.entries(keep).forEach(([id,k])=>{ const el=document.getElementById(id); if(!el) return; if("c" in k){ if(!el.disabled) el.checked=k.c } else el.value=k.v });
   document.querySelectorAll("#main details[id]").forEach(d=>{ if(openD.has(d.id)) d.open=true; else if(shut.has(d.id)) d.open=false });
   if(focusId) document.getElementById(focusId)?.focus({preventScroll:true});
@@ -658,6 +659,24 @@ function ticketList(list, card){
   const months={}; shown.forEach(x=>(months[x.date.slice(0,7)] ||= []).push(x));
   return chips + Object.entries(months).map(([m,xs])=>`<h3 class="tix-month">${esc(new Date(m+"-15T12:00:00").toLocaleDateString("en-GB",{month:"long",year:"numeric"}))}</h3><div class="tixgrid">${xs.map(card).join("")}</div>`).join("");
 }
+// "coming up" ticker that scrolls across the top of Book a session
+function ticker(list){
+  const xs=list.filter(x=>x.open!==false && !x.cancelled).slice(0,8); if(xs.length<2) return "";
+  const item=x=>{ const places=courtsOf(x).reduce((t,c)=>t+cap(x,c),0), left=places-S.bookings.filter(b=>b.sessionId===x.id && ACTIVE.includes(b.status)).length;
+    return `<span>${kindOf(x)==="games"?"🏸":"🎯"} <b>${esc(new Date(x.date+"T12:00:00").toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"}))}</b> ${esc(x.title||"Session")} · ${left>0?(left<=3?`<span class="hotk">🔥 ${left} left</span>`:`${left} spots`):`<span class="hotk">full · waiting list</span>`}</span>` };
+  const row=xs.map(item).join("");
+  return `<div class="ticker" aria-label="Coming up"><div class="ticker-track">${row}${row}</div></div>`;
+}
+// motion: cards pop in one after another when a tab opens (once per visit, not on every live update)
+function popIn(tab){
+  if(S.popTab!==tab){ S.popTab=tab; S.popped=new Set() }
+  let i=0;
+  document.querySelectorAll("#main .panel, #main .tix, #main .bk, #main .court-live, #main .tile, #main .pcard").forEach((el,idx)=>{
+    const key=el.querySelector?.("[data-pick]")?.dataset.pick || el.id || el.className.split(" ")[0]+"#"+idx;
+    if(S.popped.has(key)) return; S.popped.add(key);
+    el.classList.add("pop"); el.style.animationDelay=Math.min(i++*55,800)+"ms";
+  });
+}
 const placesNote = left => left>0 ? (left<=3 ? `<b class="hot">🔥 Only ${left} left!</b>` : `${left} places left`) : `<b class="hot">Full · waiting list</b>`;
 const pickChips = list => list.length ? `<div class="pchips">${list.map(x=>`<span>${esc(new Date(x.date+"T12:00:00").toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"}))}</span>`).join("")}</div>` : "";
 const picksTotal = list => list.reduce((a,x)=>a+(feeNum(x)||0),0);
@@ -674,7 +693,7 @@ function guestBook(){
   if(S.step==="account" || (ls.get("dsf:step",null)==="account" && n)) return accountStep(picked);   // after Continue (kept through the sign-in reload)
   if(!ups.length) return `<section class="panel"><h2>Book a session</h2><div class="empty">No sessions are open yet. They'll appear here as soon as the organiser adds them.</div><div><button class="btn small ghost" data-gostep="account">Sign in or create an account</button></div></section>`;
   const tot=picksTotal(picked);
-  return `<section class="panel bookhero"><div><span class="lbl">Book a session</span><h2>Pick your games</h2><p class="muted">Tap the sessions you'd like, then press Continue. ${ups.length} coming up.</p></div>
+  return `${ticker(ups)}<section class="panel bookhero"><div><span class="lbl">Book a session</span><h2>Pick your games 🏸</h2><p class="muted">Tap the sessions you'd like, then press Continue. ${ups.length} coming up.</p></div>
     ${ticketList(ups, x=>{ const places=courtsOf(x).reduce((t,c)=>t+cap(x,c),0), left=places-S.bookings.filter(b=>b.sessionId===x.id && ACTIVE.includes(b.status)).length;
       return ticket(x,{checked:S.picks.has(x.id), places, left, status:`${placesNote(left)}${needsCheck(x)?`<span class="chip st-waitlist">Level check needed</span>`:`<span class="chip st-confirmed">All welcome · no level check</span>`}`}) })}</section>
   <section class="panel bookbar ${n?"on":""}"><div class="bb-row"><div class="bb-info"><h3>${n?`${n} session${n>1?"s":""} picked${tot>0?` · <span class="bb-tot">£${tot.toFixed(2).replace(/\.00$/,"")}</span>`:""}`:"Pick your sessions"}</h3>
@@ -708,7 +727,7 @@ function viewBook(){
   let html = "";
   if(S.result) html += `<div class="banner ${S.result.ok?"ok":"warn"}"><div class="grow"><b>${esc(S.result.title)}</b><ul>${S.result.lines.map(l=>`<li>${l}</li>`).join("")}</ul></div><button class="btn small" data-go="mine">Go to payment</button></div>`;
   if(!ups.length) return html + `<section class="panel"><h2>Book a session</h2><div class="empty">No sessions are open yet. They'll appear here as soon as the organiser adds them.</div></section>`;
-  html += `<section class="panel">
+  html += ticker(ups) + `<section class="panel">
     <details class="rulesbox" id="rulesBox"><summary>📜 Session rules</summary><div class="rules-t">${htmlText(S.cfg.rules||DEFAULT_RULES)}${[...new Map(ups.filter(x=>x.rules).map(x=>[(x.title||"")+x.rules,x])).values()].map(x=>`<p><b>${esc(x.title||"This session")}</b><br>${htmlText(x.rules)}</p>`).join("")}</div></details>
     <div><h2>Book a session</h2><p class="muted">Tick as many sessions as you like. You're ${lvChip(lv.code)} ${esc(lv.name)}, and we'll put you on the court for your level at each session, with rotating doubles.</p></div>
     ${ticketList(ups, s=>{

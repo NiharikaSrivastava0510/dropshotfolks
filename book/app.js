@@ -191,7 +191,12 @@ const S = {
 };
 const meP = () => S.players.find(p=>p.id===S.me) || null;
 const upcoming = () => S.sessions.filter(s=>sessEnd(s) >= new Date()).sort((a,b)=>sessStart(a)-sessStart(b));
-const activeIn = (sid, court) => S.bookings.filter(b=>b.sessionId===sid && b.court===court && ACTIVE.includes(b.status));
+// an unpaid place is held for 24 hours (the payment policy); after that it stops blocking the court for others
+// counted from when the place was given (booking made, or taken / offered from the waiting list: the latest log entry)
+const heldSince = b => Math.max(Date.parse(b.createdAt)||0, ...(b.log||[]).map(e=>Date.parse(e.at)||0));
+const lapsed = b => b.status==="awaiting" && heldSince(b)>0 && Date.now()-heldSince(b) > 24*3600e3;
+const holds = b => ACTIVE.includes(b.status) && !lapsed(b);
+const activeIn = (sid, court) => S.bookings.filter(b=>b.sessionId===sid && b.court===court && holds(b));
 const cap = (s,court) => { const v = Number(s.capacity?.[court] ?? s.capacity ?? PER_COURT); return Number.isFinite(v) ? v : PER_COURT };
 const courtsOf = s => [1,2,3,4].filter(c => cap(s,c) > 0);
 // each session can name its courts and choose which levels play on each (default: court n = level n)
@@ -1110,7 +1115,20 @@ async function spamRemove(day){
   render();
 }
 const orgSessions = () => S.isAdmin ? spamPanel() + setupBanner() + orgParts().sessions : notOrg;
-const orgPlayers = () => S.isAdmin ? orgParts().requests + orgParts().players : notOrg;
+function junkPlayersPanel(){
+  const junk=S.players.filter(p=>window.DSFThrowaway?.(p.email)); if(!junk.length) return "";
+  return `<section class="panel" style="border-color:var(--bad)"><h2>🚩 ${junk.length} player${junk.length>1?"s":""} signed up with a throwaway email</h2>
+    <p>Temporary inbox addresses are now blocked, but these got in before: ${junk.map(p=>`<b>${esc(p.name)}</b> <span class="muted">${esc(p.email)}</span>`).join(", ")}.</p>
+    <div class="row"><button class="btn primary" data-junkrm="1">Remove them and their bookings</button></div></section>`;
+}
+async function junkRemove(){
+  const ids=new Set(S.players.filter(p=>window.DSFThrowaway?.(p.email)).map(p=>p.id)), bks=S.bookings.filter(b=>ids.has(b.hostId||b.playerId));
+  if(!ids.size || !confirm(`Remove ${ids.size} player${ids.size>1?"s":""} and ${bks.length} booking${bks.length===1?"":"s"}?`)) return;
+  for(const b of bks){ await setBooking(b.id,{status:"cancelled"},"Removed by the organiser (throwaway email).",null); wlPing("freed", b.sessionId) }
+  for(const id of ids){ try{ await Store.del("players",id) }catch{} }
+  toast(`Removed ${ids.size} ✓`); render();
+}
+const orgPlayers = () => S.isAdmin ? junkPlayersPanel() + orgParts().requests + orgParts().players : notOrg;
 // after a level change, move the player's upcoming bookings to their new court
 async function moveToLevelCourt(pid, level){
   let n=0;
@@ -1202,6 +1220,7 @@ function adminSession(s){
   </summary>
   <div class="sess-body">
     <div class="row">${v.address?`<span class="muted" style="flex:1;min-width:200px">${esc(v.address)}</span>`:""}<button class="btn small" data-msg="${s.id}">Copy reminder message</button><button class="btn small" data-emails="${s.id}">Copy player emails</button><button class="btn small" data-mailrem="${s.id}">📧 Email reminder + rules</button>${s.remindedAt?`<span class="chip st-confirmed">Reminder sent ${esc(new Date(s.remindedAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))}</span>`:""}<button class="btn small" data-toggle="${s.id}">${s.open===false?"Open booking":"Close booking"}</button>${s.cancelled?`<span class="chip st-cancelled">Cancelled</span>`:`<button class="btn small ghost danger" data-cancsess="${s.id}">Cancel session</button>`}<button class="btn small ghost danger" data-delsess="${s.id}">Delete session</button></div>
+    ${(()=>{ const lp=S.bookings.filter(b=>b.sessionId===s.id && lapsed(b)); return lp.length?`<div class="banner warn"><div class="grow"><b>${lp.length} unpaid for over 24 hours:</b> ${lp.map(b=>esc(b.name)).join(", ")}. Their places no longer count, so others can book.</div><button class="btn small" data-lapsedrm="${s.id}">Release them</button></div>`:"" })()}
     ${(()=>{ const cs=courtsOf(s).filter(c=>freeOn(s,c)>0 && waitersOn(s,c).length); if(!cs.length) return "";
       return `<div class="banner info"><div class="grow"><b>A place is free and people are waiting:</b> ${cs.map(c=>`Court ${c}: ${freeOn(s,c)} free, ${waitersOn(s,c).length} waiting`).join(" · ")}. Waiting players can tap <b>Take the place</b> in My bookings.</div><button class="btn small primary" data-mailwait="${s.id}">📧 Email the waiting list</button></div>` })()}
     ${sub("bkl", `<b>Bookings</b> <span class="muted">(${booked} booked${cnt("waitlist")?`, ${cnt("waitlist")} waiting`:""})</span>`, `<div class="tbl"><table><thead><tr><th>Player</th><th>Ref</th><th>Status</th><th>Court</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`, true)}
@@ -1528,9 +1547,10 @@ async function bookSelected(){
     const myCourt=pickCourt(p.level);
     if(!myCourt){ ok=false; lines.push(BEGINNER.includes(p.level) && beginnersBarred(s) ? `${fmtDate(s.date)}: Thursday sessions aren't for beginners (E- and E). Coaching is a great way to start.` : `${fmtDate(s.date)}: this session isn't running a court for ${esc(p.level)} players`); continue }
     if(!S.bookings.find(b=>b.id===myId && b.status!=="cancelled")) await place(myId, {playerId:p.id, name:p.name, level:p.level}, myCourt, "You");
-    let k = S.bookings.filter(b=>b.sessionId===s.id && b.hostId===p.id).length;
+    const freeSlots=[1,2,3].filter(i=>!S.bookings.some(b=>b.id===`${s.id}_${p.id}_g${i}` && b.status!=="cancelled"));
     for(const g of S.guests){
-      k++; const gid=`${s.id}_${p.id}_g${k}`, gCourt=pickCourt(g.level);
+      const k=freeSlots.shift(); if(!k){ ok=false; lines.push(`${fmtDate(s.date)} · ${esc(g.name)}: at most 3 guests per session`); continue }
+      const gid=`${s.id}_${p.id}_g${k}`, gCourt=pickCourt(g.level);
       if(!gCourt){ ok=false; lines.push(`${fmtDate(s.date)} · ${esc(g.name)}: no court for ${esc(g.level)} players this session`); continue }
       await place(gid, {playerId:`guest-${p.id}-${k}`, hostId:p.id, name:`${g.name} (guest of ${p.name.split(" ")[0]})`, level:g.level, quiz:packQuiz(g.ans)}, gCourt, g.name);
     }
@@ -1597,6 +1617,7 @@ document.addEventListener("click", async e=>{
     const name=$("#g-name").value.trim(), level=levelFrom(S.gq);
     if(!name){ toast("Add your guest's name"); return }
     if(!level){ toast("Answer all the questions for your guest"); return }
+    if(S.guests.length>=3){ toast("You can bring up to 3 guests"); return }
     S.guests.push({name, level, ans:{...S.gq}}); S.gq={}; $("#g-name").value=""; render(); toast(`${name} added`); return }
   if(ds.rmguest!=null){ S.guests.splice(Number(ds.rmguest),1); render(); return }
   if(ds.copy!=null){ copyText(ds.copy); return }
@@ -1771,6 +1792,11 @@ document.addEventListener("click", async e=>{
   if(ds.selon){ S.selOn=true; S.sel=new Set(); render(); return }
   if(ds.selx){ S.selOn=false; S.sel=new Set(); render(); return }
   if(ds.selall){ const all=upcoming().map(x=>x.id); S.sel=new Set(S.sel?.size===all.length?[]:all); render(); return }
+  if(ds.junkrm && S.isAdmin){ await junkRemove(); return }
+  if(ds.lapsedrm && S.isAdmin){ const s=S.sessions.find(x=>x.id===ds.lapsedrm), ls2=S.bookings.filter(b=>b.sessionId===ds.lapsedrm && lapsed(b));
+    if(!ls2.length || !confirm(`Release ${ls2.length} unpaid place${ls2.length>1?"s":""}? They'll be cancelled and the waiting list told.`)) return;
+    for(const b of ls2) await setBooking(b.id,{status:"cancelled"},"Not paid within 24 hours, so the place was released.",null);
+    if(s) wlPing("freed", s.id); toast(`Released ${ls2.length} place${ls2.length>1?"s":""} ✓`); return }
   if(ds.spamrm && S.isAdmin){ await spamRemove(ds.spamrm); return }
   if(ds.cancsess){ await cancelSessions([ds.cancsess]); return }
   if(ds.selcanc){ if(S.sel?.size) await cancelSessions([...S.sel]); return }
@@ -1825,6 +1851,7 @@ document.addEventListener("submit", async e=>{
   if(e.target.id==="regForm"){
     const quick=S.reg.quick, email=$("#r-email").value.trim(), name=$("#r-name").value.trim(), phone=$("#r-phone").value.trim(), level=quick?(["E","E-","D-"].find(l=>pickedSessions().every(x=>courtsOf(x).some(c=>courtLevels(x,c).includes(l))))||"E"):levelFrom(S.reg.ans);
     if(!validEmail(email)){ toast("Enter a valid email address"); return }
+    if(window.DSFThrowaway?.(email)){ toast("Please use your normal email address. Temporary inboxes can't be used."); return }
     if($("#r-website")?.value){ toast("Welcome!"); return }   // only robots fill the hidden field
     const regs=ls.get("dsf:regs",[]).filter(x=>Date.now()-x<86400e3); if(regs.length>=3){ toast("Too many new sign-ups from this device today. Message the organiser if you need help."); return }
     const id = Store.mode==="db" ? S.uid : emailKey(email);

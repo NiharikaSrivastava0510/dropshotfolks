@@ -30,7 +30,8 @@ service cloud.firestore {
     function shortText(v, n) { return v is string && v.size() <= n; }
     // Players must have proved they own their email (Google, an email link, or the confirmation email for
     // password accounts). Stops robots signing up with made-up addresses, as happened on 23 Oct 2026.
-    function emailOk() { return request.auth.token.email_verified == true; }
+    function emailOk() { return request.auth.token.email_verified == true
+      && !request.auth.token.email.lower().matches('.*@(onldm[.]net|mailinator[.]com|mailinator[.]net|yopmail[.]com|yopmail[.]net|yopmail[.]fr|guerrillamail[.]com|guerrillamail[.]info|guerrillamail[.]net|guerrillamail[.]org|guerrillamailblock[.]com|sharklasers[.]com|grr[.]la|pokemail[.]net|spam4[.]me|10minutemail[.]com|10minutemail[.]net|10minutemail[.]co[.]uk|temp-mail[.]org|temp-mail[.]io|tempmail[.]com|tempmail[.]net|tempmailo[.]com|tempmail[.]plus|tmpmail[.]org|tmpmail[.]net|tmpeml[.]com|getnada[.]com|nada[.]email|dispostable[.]com|maildrop[.]cc|mailnesia[.]com|trashmail[.]com|trashmail[.]de|trashmail[.]net|mohmal[.]com|emailondeck[.]com|fakeinbox[.]com|throwawaymail[.]com|mintemail[.]com|mytemp[.]email|tempinbox[.]com|burnermail[.]io|inboxkitten[.]com|mail[.]tm|mail[.]gw|dropmail[.]me|10mail[.]org|emltmp[.]com|spamgourmet[.]com|mailpoof[.]com|moakt[.]com|tempr[.]email|discard[.]email|fexpost[.]com|fextemp[.]com|kzccv[.]com|qiott[.]com|wuuvo[.]com|cmail[.]club|linshiyouxiang[.]net|1secmail[.]com|1secmail[.]org|1secmail[.]net|txcct[.]com|zslsz[.]com|rteet[.]com|dpptd[.]com|bheps[.]com|mailcatch[.]com|spambox[.]us|tempail[.]com|luxusmail[.]org|mailtemp[.]uk|owlymail[.]com|laafd[.]com|vjuum[.]com|ezztt[.]com|icznn[.]com|knmcadibav[.]com)$'); }   // no throwaway "temporary inbox" addresses
     // Only real, open, not-cancelled sessions can be booked.
     function sessionOpen(sid) {
       let p = /databases/$(database)/documents/sessions/$(sid);
@@ -59,8 +60,8 @@ service cloud.firestore {
         && (!('quiz' in d) || (d.quiz is map && d.quiz.size() <= 10))
         && (d.get('hostId', null) == null
             ? (id == d.sessionId + '_' + request.auth.uid && d.playerId == request.auth.uid)
-            : (id.matches(d.sessionId + '_' + request.auth.uid + '_g[0-9]{1,2}')
-               && d.playerId.matches('guest-' + request.auth.uid + '-[0-9]{1,2}')));
+            : (id.matches(d.sessionId + '_' + request.auth.uid + '_g[1-3]')
+               && d.playerId.matches('guest-' + request.auth.uid + '-[1-3]')));
     }
 
     // Session view: a device that entered the session's code (stored in unlocks/{uid}) may

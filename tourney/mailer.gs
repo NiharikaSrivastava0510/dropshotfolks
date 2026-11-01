@@ -102,10 +102,13 @@ function checkOrganiser(token) {
 // Needs the Identity Toolkit admin API: the cloud-platform scope in appsscript.json, and this Google account
 // must own the Firebase project.
 const PROJECT = 'dropshotfolks';
+const DISPOSABLE = ['onldm.net','mailinator.com','mailinator.net','yopmail.com','yopmail.net','yopmail.fr','guerrillamail.com','guerrillamail.info','guerrillamail.net','guerrillamail.org','guerrillamailblock.com','sharklasers.com','grr.la','pokemail.net','spam4.me','10minutemail.com','10minutemail.net','10minutemail.co.uk','temp-mail.org','temp-mail.io','tempmail.com','tempmail.net','tempmailo.com','tempmail.plus','tmpmail.org','tmpmail.net','tmpeml.com','getnada.com','nada.email','dispostable.com','maildrop.cc','mailnesia.com','trashmail.com','trashmail.de','trashmail.net','mohmal.com','emailondeck.com','fakeinbox.com','throwawaymail.com','mintemail.com','mytemp.email','tempinbox.com','burnermail.io','inboxkitten.com','mail.tm','mail.gw','dropmail.me','10mail.org','emltmp.com','spamgourmet.com','mailpoof.com','moakt.com','tempr.email','discard.email','fexpost.com','fextemp.com','kzccv.com','qiott.com','wuuvo.com','cmail.club','linshiyouxiang.net','1secmail.com','1secmail.org','1secmail.net','txcct.com','zslsz.com','rteet.com','dpptd.com','bheps.com','mailcatch.com','spambox.us','tempail.com','luxusmail.org','mailtemp.uk','owlymail.com','laafd.com','vjuum.com','ezztt.com','icznn.com','knmcadibav.com'];   // throwaway inbox services
+
 function loginCode(d) {
   const email = String(d.email || '').trim().toLowerCase();
   if (!/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(email) || email.length > 120) return { ok: false, error: 'Enter a valid email address' };
   const cache = CacheService.getScriptCache(), key = 'lc_' + Utilities.base64EncodeWebSafe(email).slice(0, 200), now = Date.now();
+  if (DISPOSABLE.indexOf(email.split('@').pop()) >= 0) return { ok: false, error: "Please use your normal email address. Temporary inboxes can't be used." };
   if (d.login === 'start') {
     const mine = JSON.parse(cache.get(key + '_n') || '[]').filter(t => now - t < 3600e3);
     if (mine.length >= 5) return { ok: false, error: 'Too many codes for this email. Wait an hour, or sign in with Google.' };

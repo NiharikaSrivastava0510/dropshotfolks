@@ -1164,7 +1164,7 @@ function adminSession(s){
       const emails=want.map(p=>p.email).join(","), subj=`Book your Dropshot Folks session: ${fmtLong(s.date)}`;
       const body=`Hi! Places are open for ${fmtLong(s.date)}, ${s.start}–${s.end}${venueOf(s).venue?" at "+venueOf(s).venue:""}.\n\nBook here: ${BOOK_URL}\n\nSee you on court!`;
       return `<div class="banner info"><div class="grow"><b>${want.length} player${want.length>1?"s want":" wants"} a reminder</b> for this session and ${want.length>1?"haven't":"hasn't"} booked yet: ${want.map(p=>esc(p.name)).join(", ")}</div>
-        <span class="row"><a class="btn small primary" href="mailto:?bcc=${encodeURIComponent(emails)}&subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}">Email them</a><button class="btn small" data-copy="${esc(emails)}">Copy emails</button></span></div>` })()}
+        <span class="row"><button class="btn small primary" data-remindmail="${esc(s.id)}">📧 Email them</button><button class="btn small" data-copy="${esc(emails)}">Copy emails</button></span></div>` })()}
     <details class="sub" id="addp-${s.id}"><summary><b>Add a player</b> <span class="muted">(registered player or walk-in)</span></summary>
       <div class="grid2 sub-body">
         <label class="f">Player<input id="ap-name-${s.id}" list="ap-list-${s.id}" data-apsearch="${esc(s.id)}" placeholder="Search registered players, or type a new name" autocomplete="off"></label>
@@ -1707,6 +1707,15 @@ document.addEventListener("click", async e=>{
   if(ds.bmsave){ const url=($("#bm-url")?.value||"").trim(); if(!/^https:\/\/script\.google\.com\/(a\/macros\/[\w.-]+|macros)\/s\/[\w-]+\/exec$/.test(url)){ toast("Paste the Web app URL: it starts https://script.google.com/macros/s/ and ends /exec"); return }
     const {id:_m,...prev}=S.mail||{}; if(!await save("config","mail",{...prev, url, updatedAt:nowIso()})) return;
     S.mail={...prev, url}; render(); toast("Saved ✓ Sending a test email…"); const r=await mailPost({test:true}); toast(r.ok?"Test email sent ✓ Check your inbox":`Test email didn't send: ${r.error}`); return }
+  if(ds.remindmail){ const s=S.sessions.find(x=>x.id===ds.remindmail); if(!s) return;
+    const want=S.players.filter(p=>(p.remind||[]).includes(slotKey(s)) && p.email && !S.bookings.some(b=>b.sessionId===s.id && b.playerId===p.id && b.status!=="cancelled"));
+    if(!want.length || !confirm(`Email ${want.length} player${want.length>1?"s":""} that places are open?`)) return;
+    const v=venueOf(s), when=`${fmtLong(s.date)}, ${s.start}–${s.end}`;
+    const mails=want.map(p=>({to:p.email, subject:`Book your Dropshot Folks session: ${fmtLong(s.date)}`,
+      text:`Hi ${String(p.name||"").split(" ")[0]}!\n\nPlaces are open for ${s.title?s.title+", ":""}${when}${v.venue?" at "+v.venue:""}.\n\nBook here: ${BOOK_URL}\n\nSee you on court!\nDropshot Folks`,
+      html:mailBox(`Places are open · ${fmtLong(s.date)}`, `<p style="margin:0 0 12px">Hi ${esc(String(p.name||"").split(" ")[0])}! Places are open for <b>${esc(s.title||"the session")}</b>, ${esc(when)}${v.venue?` at ${esc(v.venue)}`:""}.</p>
+        <p style="text-align:center;margin:18px 0 0"><a href="${esc(BOOK_URL)}" style="display:inline-block;background:#7A2331;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px">Book your place →</a></p>`)}));
+    const n=await sendAll(mails, mails[0].subject, mails[0].text.replace(/^Hi [^!]+!/,"Hi!")); if(n>0) toast(`Emailed ${n} of ${mails.length} ✓`); return }
   if(ds.mailrem){ const s=S.sessions.find(x=>x.id===ds.mailrem); if(s) await emailReminder(s); return }
   if(ds.selon){ S.selOn=true; S.sel=new Set(); render(); return }
   if(ds.selx){ S.selOn=false; S.sel=new Set(); render(); return }

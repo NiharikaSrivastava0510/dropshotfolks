@@ -975,8 +975,9 @@ function viewVenue(){
     :`<div class="empty">The organiser hasn't added a venue yet.</div>`}
   </section>
   <section class="panel"><h2>Contact the organiser</h2>
-    ${c.orgName||c.orgPhone||c.orgEmail?`<dl class="kv">${c.orgName?`<dt>Organiser</dt><dd>${esc(c.orgName)}</dd>`:""}${c.orgPhone?`<dt>Phone</dt><dd class="sel">${esc(c.orgPhone)}</dd>`:""}${c.orgEmail?`<dt>Email</dt><dd class="sel">${esc(c.orgEmail)}</dd>`:""}</dl>
-    <div class="row">${wa?`<a class="btn primary" href="${wa}" target="_blank" rel="noopener">Message on WhatsApp</a>`:""}${c.orgPhone?`<button class="btn" data-copy="${esc(c.orgPhone)}">Copy number</button>`:""}${c.orgEmail?`<button class="btn" data-copy="${esc(c.orgEmail)}">Copy email</button>`:""}</div>
+    ${c.orgName||c.orgPhone||c.orgEmail?`<dl class="kv">${c.orgName?`<dt>Organiser</dt><dd>${esc(c.orgName)}</dd>`:""}${c.orgPhone?`<dt>Phone</dt><dd class="sel"><a href="tel:${esc(String(c.orgPhone).replace(/[^\d+]/g,""))}">${esc(c.orgPhone)}</a></dd>`:""}${c.orgEmail?`<dt>Email</dt><dd class="sel"><a href="mailto:${esc(c.orgEmail)}">${esc(c.orgEmail)}</a></dd>`:""}</dl>
+    <div class="row">${wa?`<a class="btn primary" href="${wa}" target="_blank" rel="noopener">💬 WhatsApp</a>`:""}${c.orgPhone?`<a class="btn primary" href="tel:${esc(String(c.orgPhone).replace(/[^\d+]/g,""))}">📞 Call</a>`:""}${c.orgEmail?`<a class="btn primary" href="mailto:${esc(c.orgEmail)}?subject=${encodeURIComponent("Dropshot Folks question")}">✉️ Email</a>`:""}</div>
+    <div class="row">${c.orgPhone?`<button class="btn small ghost" data-copy="${esc(c.orgPhone)}">Copy number</button>`:""}${c.orgEmail?`<button class="btn small ghost" data-copy="${esc(c.orgEmail)}">Copy email</button>`:""}</div>
     <p class="muted">Contact the organiser about level reviews, refunds, or if you can't book.</p>`
     :`<div class="empty">Contact details will appear here once the organiser adds them.</div>`}
   </section>

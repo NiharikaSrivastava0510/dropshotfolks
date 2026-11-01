@@ -169,7 +169,7 @@ async function save(coll,id,data,okMsg){
 
 /* ---------- state ---------- */
 const TABS = {
-  player:[["book","Book a session"],["live","Live courts"],["mine","My bookings"],["court","Host view"],["partners","Partners"],["level","Level guide"],["venue","Venue & contact"]],
+  player:[["book","Book a session"],["live","Live courts"],["mine","My bookings"],["court","Host view"],["level","Level guide"],["venue","Venue & contact"]],
   organiser:[["o-overview","Overview"],["o-sessions","Sessions & bookings"],["live","Live courts"],["o-players","Players"],["o-club","Club details"]]
 };
 const S = {
@@ -834,6 +834,7 @@ function viewMine(){
   html += pointsPanel(p);
   const upc = mine.filter(x=>sessEnd(x.s)>=new Date()), past = mine.filter(x=>sessEnd(x.s)<new Date()).reverse();
   html += `<section class="panel"><h2>My bookings</h2>${upc.length?upc.map(({b,s})=>bookingCard(b,s)).join(""):`<div class="empty">No bookings. <a href="#" data-go="book">Book a session</a></div>`}</section>`;
+  html += viewPartners();   // choose friends to play with (no separate tab)
   if(past.length) html += `<section class="panel"><details id="pastBox"><summary><b>Past sessions (${past.length})</b></summary><div style="display:grid;gap:10px;margin-top:10px">${past.map(({b,s})=>bookingCard(b,s)).join("")}</div></details></section>`;
   return html;
 }
@@ -893,10 +894,10 @@ function viewPartners(){
     : `<div class="empty">No partners yet. Pick someone below.</div>`;
   const asks = askingMe.length ? `<section class="panel"><h2>Want to partner you</h2><div style="display:grid;gap:10px">${askingMe.map(id=>`<div class="pcard">${avatar(id,nm(id))}<div class="grow"><b>${esc(nm(id))}</b> picked you as a partner.</div><button class="btn small primary" data-partner="${esc(id)}" ${full?"disabled":""}>Partner up</button></div>`).join("")}</div>${full?`<p class="muted" style="font-size:.85rem">You have ${MAX_PARTNERS} partners already. Remove one to add another.</p>`:""}</section>` : "";
   const others = Object.entries(known).filter(([id])=>!mine.includes(id)).sort((a,b)=>String(a[1]).localeCompare(String(b[1])));
-  return `<section class="panel"><div><h2>My partners</h2><p class="muted">Pick up to ${MAX_PARTNERS} people you want to practise and play with. When you both pick each other, the court rotation puts you on the same side whenever you're on the same court. You can change this at any time, even during a session.</p></div>
+  return `<section class="panel"><div><h2>🤝 Play with friends</h2><p class="muted">Want to play with a friend? Pick up to ${MAX_PARTNERS} people you want to practise and play with. When you both pick each other, the court rotation puts you on the same side whenever you're on the same court. You can change this at any time, even during a session.</p></div>
     <div style="display:grid;gap:10px">${chosen}</div></section>
     ${asks}
-    <section class="panel"><h2>Choose a partner</h2>
+    <section class="panel"><h2>Choose a friend to play with</h2>
       ${others.length ? `<div class="row"><select id="partnerPick" style="max-width:320px"><option value="">Choose a player…</option>${others.map(([id,n])=>`<option value="${esc(id)}">${esc(n)}</option>`).join("")}</select><button class="btn small primary" id="partnerAdd" ${full?"disabled":""}>Add partner</button></div>
         ${full?`<p class="muted" style="font-size:.85rem">You have ${MAX_PARTNERS} partners. Remove one to choose someone else.</p>`:""}
         <p class="muted" style="font-size:.85rem">Partners only play together on a court that suits both your levels, so book the same session and you'll be paired when you land on the same court.</p>`

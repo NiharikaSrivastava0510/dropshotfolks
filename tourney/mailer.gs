@@ -19,6 +19,7 @@ function doGet() {
 function doPost(e) {
   try {
     const d = JSON.parse(e.postData.contents);
+    if (d.login) return reply(loginCode(d));   // anyone: sign in with a 6-digit code sent to their email
     if (d.wl) return reply(waitingList(d));   // club sessions: any signed-in player can join a waiting list or report a freed place
     const who = checkOrganiser(d.token);
     if (!who) return reply({ ok: false, error: 'Only the organiser can send emails.' });
@@ -91,6 +92,67 @@ function checkOrganiser(token) {
   });
   const u = ((JSON.parse(r.getContentText() || '{}').users) || [])[0];
   return u && u.emailVerified && String(u.email).toLowerCase() === ORGANISER ? u.email : null;
+}
+
+// ---------- login codes ----------
+// "start": email a 6-digit code (valid 10 minutes; at most 5 codes an hour per address, 80 an hour in total).
+// "verify": if the code is right, the player's Firebase account (found by email, or made) is marked as
+// email-confirmed and given a long random password that only this script and their browser ever see;
+// the browser signs in with it straight away. The same password is reused, so other devices stay signed in.
+// Needs the Identity Toolkit admin API: the cloud-platform scope in appsscript.json, and this Google account
+// must own the Firebase project.
+const PROJECT = 'dropshotfolks';
+function loginCode(d) {
+  const email = String(d.email || '').trim().toLowerCase();
+  if (!/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(email) || email.length > 120) return { ok: false, error: 'Enter a valid email address' };
+  const cache = CacheService.getScriptCache(), key = 'lc_' + Utilities.base64EncodeWebSafe(email).slice(0, 200), now = Date.now();
+  if (d.login === 'start') {
+    const mine = JSON.parse(cache.get(key + '_n') || '[]').filter(t => now - t < 3600e3);
+    if (mine.length >= 5) return { ok: false, error: 'Too many codes for this email. Wait an hour, or sign in with Google.' };
+    const all = JSON.parse(cache.get('lc_all') || '[]').filter(t => now - t < 3600e3);
+    if (all.length >= 80) return { ok: false, error: 'Too many sign-ins right now. Please try again in a little while.' };
+    const code = String(100000 + Math.floor(Math.random() * 900000));
+    cache.put(key, JSON.stringify({ code: code, tries: 0 }), 600);
+    mine.push(now); cache.put(key + '_n', JSON.stringify(mine), 3600);
+    all.push(now); cache.put('lc_all', JSON.stringify(all), 3600);
+    MailApp.sendEmail({ to: email, name: 'Dropshot Folks', subject: code + ' is your Dropshot Folks login code',
+      body: 'Your Dropshot Folks login code is ' + code + '\n\nType it on the page where you asked for it. It works for 10 minutes.\nIf you didn\'t ask for it, you can ignore this email.',
+      htmlBody: '<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:16px;line-height:1.55;color:#24100F;max-width:480px">' +
+        '<p>Your Dropshot Folks login code is</p><p style="font-size:34px;font-weight:800;letter-spacing:.25em;color:#7A2331;margin:8px 0 16px">' + code + '</p>' +
+        '<p>Type it on the page where you asked for it. It works for 10 minutes.</p><p style="color:#715250;font-size:14px">If you didn\'t ask for it, you can ignore this email.</p></div>' });
+    return { ok: true };
+  }
+  if (d.login === 'verify') {
+    const rec = JSON.parse(cache.get(key) || 'null');
+    if (!rec) return { ok: false, error: 'That code has expired. Ask for a new one.' };
+    if (String(d.code || '').replace(/\D/g, '') !== rec.code) {
+      rec.tries++;
+      if (rec.tries >= 5) cache.remove(key); else cache.put(key, JSON.stringify(rec), 600);
+      return { ok: false, error: rec.tries >= 5 ? 'Too many wrong tries. Ask for a new code.' : "That code isn't right. Check the email and try again." };
+    }
+    cache.remove(key);
+    const props = PropertiesService.getScriptProperties(), pk = 'pw_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, email)).slice(0, 40);
+    let pw = props.getProperty(pk);
+    const look = idt('/accounts:lookup', { email: [email] });
+    if (look.code !== 200) return { ok: false, setup: true, error: 'Login codes aren\'t switched on yet. Use Google or the email link for now.' };
+    const u = (look.body.users || [])[0];
+    const fresh = !pw || !u || !u.emailVerified || !(u.providerUserInfo || []).some(p => p.providerId === 'password');
+    if (fresh) {
+      pw = pw || (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
+      const res = u ? idt('/accounts:update', { localId: u.localId, password: pw, emailVerified: true })
+                    : idt('/accounts', { email: email, password: pw, emailVerified: true });
+      if (res.code !== 200) return { ok: false, setup: true, error: "Couldn't sign you in. Use Google or the email link for now." };
+      props.setProperty(pk, pw);
+    }
+    return { ok: true, pw: pw };
+  }
+  return { ok: false, error: 'Unknown request' };
+}
+function idt(path, body) {
+  const r = UrlFetchApp.fetch('https://identitytoolkit.googleapis.com/v1/projects/' + PROJECT + path, {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true, payload: JSON.stringify(body),
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'X-Goog-User-Project': PROJECT } });
+  return { code: r.getResponseCode(), body: JSON.parse(r.getContentText() || '{}') };
 }
 
 // ---------- club session waiting lists ----------
@@ -175,6 +237,8 @@ function reply(o) {
 // Run this once from the editor (select "authorise" → Run) to grant the permissions before deploying.
 function authorise() {
   MailApp.getRemainingDailyQuota();
+  CacheService.getScriptCache();
+  Logger.log(idt('/accounts:lookup', { email: [ORGANISER] }).code + ' (200 means login codes will work)');
   SpreadsheetApp.getActiveSpreadsheet();
   UrlFetchApp.fetch('https://www.google.com', { muteHttpExceptions: true });
 }

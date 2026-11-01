@@ -912,6 +912,18 @@ function catBar(t){
   const cs=cats(t); if(!S.cat || !cs.some(c=>c.id===S.cat)) S.cat=cs[0]?.id||null;
   return cs.length>1?`<div class="cats">${cs.map(c=>`<button data-cat="${esc(c.id)}" aria-pressed="${c.id===S.cat}">${esc(c.name)}</button>`).join("")}</div>`:"";
 }
+// teams register with a confirmed email: a 6-digit login code (or Google). Stops robots with made-up addresses.
+function regSignIn(t){
+  const c=S.code;
+  return `<div class="signbox"><h3 style="margin:0">✉️ First, sign in with your email</h3><p class="muted" style="margin:4px 0 10px">We'll email you a 6-digit login code. It proves the email is really yours, and lets you see and manage your team later.</p>
+    ${c?.email ? (c.link ? `<p>📧 We've emailed a sign-in link to <b>${esc(c.email)}</b>. Open it on this device, and you'll come straight back here to register.</p><button class="btn small ghost" data-tcodeback="1" type="button">Use a different email</button>`
+      : `<form id="tCodeIn" class="row" style="align-items:flex-end"><p style="margin:0;flex-basis:100%">📧 Code sent to <b>${esc(c.email)}</b> (works for 10 minutes; check spam).</p>
+        <label class="f" style="max-width:220px">Login code<input id="tc-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" style="font-size:1.3rem;letter-spacing:.3em;text-align:center"></label>
+        <button class="btn primary" type="submit">Sign in</button><button class="btn small ghost" data-tcoderesend="1" type="button">Send a new code</button><button class="btn small ghost" data-tcodeback="1" type="button">Different email</button></form>`)
+      : `<form id="tEmailIn" class="row" style="align-items:flex-end"><label class="f" style="flex:1;min-width:220px">Your email<input id="tc-email" type="email" autocomplete="email" placeholder="you@example.com"></label>
+        <button class="btn primary" type="submit">Email me a login code</button><button class="btn" data-psignin="google" type="button">Continue with Google</button></form>`}</div>`;
+}
+const tLinkUrl = () => location.origin+location.pathname+"?t="+encodeURIComponent(T()?.id||"")+"&tab=reg";
 function viewReg(){
   const t=T(); if(!t) return noTourney();
   if(S.isAdmin && S.newT) return orgBar(t)+viewOrg("new");
@@ -930,7 +942,7 @@ function viewReg(){
     </div></section>
     <section class="panel">${S.isAdmin?`<button class="btn small editbtn" data-editfmt="${S.editFmt?0:1}">${S.editFmt?"Close":"✏️ Edit format & scoring"}</button>`:""}<h2>📋 Game format</h2>${S.isAdmin&&S.editFmt?formatForm(t):formatVisual(t)}</section>
     <section class="panel">${S.isAdmin?`<button class="btn small editbtn ${t.regOpen?"ghost":"primary"}" data-regopen="${t.regOpen?0:1}">${t.regOpen?"🔒 Close registration":"🔓 Open registration"}</button>`:""}<h2>Register a team</h2>
-    ${t.regOpen ? `<form id="regForm" class="regform" novalidate>
+    ${t.regOpen && !S.isAdmin && !S.verified ? regSignIn(t) : t.regOpen ? `${S.verified&&!S.isAdmin?`<p class="muted" style="margin:0">Signed in as <b>${esc(S.authEmail)}</b> · <button class="btn small ghost" data-tsignout="1" type="button">Sign out</button></p>`:""}<form id="regForm" class="regform" novalidate>
         <input id="rg-website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" class="hp" placeholder="Leave this empty">
         <fieldset><legend>🏸 Team</legend><div class="grid2">
           <label class="f">Category *<select id="rg-cat">${cats(t).map(c=>`<option value="${esc(c.id)}" ${full(c.id)?"disabled":""}>${esc(c.name)}${full(c.id)?" (full)":""}</option>`).join("")}</select></label>
@@ -938,7 +950,7 @@ function viewReg(){
         ${Array.from({length:nPl(t)},(_,i)=>i+1).map(n=>`<fieldset><legend>${n===1?"👤 Player 1 · team captain":`👤 Player ${n}`}</legend><div class="grid2">
           <label class="f">Full name *<input id="rg-p${n}" maxlength="60" required autocomplete="${n===1?"name":"off"}" placeholder="First and last name"></label>
           <label class="f">Mobile (WhatsApp) *<input id="rg-ph${n}" type="tel" maxlength="30" required autocomplete="${n===1?"tel":"off"}" placeholder="07…"></label>
-          <label class="f">Email${n===1?" *":""}<input id="rg-em${n}" type="email" maxlength="120" ${n===1?'required autocomplete="email"':'autocomplete="off"'} placeholder="name@example.com"></label>
+          <label class="f">Email${n===1?" *":""}<input id="rg-em${n}" type="email" maxlength="120" ${n===1?`required autocomplete="email" value="${esc(S.authEmail||"")}"`:'autocomplete="off"'} placeholder="name@example.com"></label>
           <label class="f">Playing level *<select id="rg-lv${n}" required><option value="">Choose…</option>${LEVELS.map(l=>`<option>${esc(l)}</option>`).join("")}</select></label>
           <label class="f">Gender *<select id="rg-g${n}" required><option value="">Choose…</option><option>Male</option><option>Female</option><option>Prefer not to say</option></select></label></div>${juniorsOn(t)?consentBlock(t,n):""}</fieldset>`).join("")}
         <fieldset><legend>🚑 Emergency contact</legend><div class="grid2">
@@ -1440,6 +1452,9 @@ document.addEventListener("click", async e=>{
   if(ds.copyscript){ try{ const txt=await (await fetch("/tourney/mailer.gs?v="+Date.now())).text(); await navigator.clipboard.writeText(txt); toast("Script copied ✓ Paste it into script.google.com") }catch{ window.open("mailer.gs","_blank") } return }
   if(ds.sendqr){ const x=teamById(ds.sendqr), t=S.tourneys.find(y=>y.id===x?.tid); if(x&&t) await sendQr(t,x); return }
   if(ds.copy){ try{ await navigator.clipboard.writeText(ds.copy); toast("Copied") }catch{ toast(ds.copy) } return }
+  if(ds.tcodeback){ S.code=null; render(); return }
+  if(ds.tcoderesend){ const r=await DSFLogin.start(S.code.email, tLinkUrl()); toast(r.ok?"New code sent":r.error||"Couldn't send"); if(r.link){ S.code.link=true; render() } return }
+  if(ds.tsignout){ await auth.signOut(); S.code=null; render(); return }
   if(ds.psignin==="google"){ try{ const c=await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
       if(ADMINS.includes(String(c.user.email||"").toLowerCase())) return location.reload();
       S.uid=c.user.uid; render(); toast(`Signed in as ${c.user.email}`) }catch(e){ toast(e?.code==="auth/popup-blocked"?"Allow pop-ups, then try again":"Sign-in didn't finish") } return }
@@ -1603,6 +1618,14 @@ document.addEventListener("focusout", async e=>{
 });
 document.addEventListener("keydown", e=>{ if(e.key==="Enter" && e.target.dataset?.prize){ e.preventDefault(); e.target.blur() } });
 document.addEventListener("submit", async e=>{
+  if(e.target.id==="tEmailIn"){ e.preventDefault(); const em=($("#tc-email")?.value||"").trim().toLowerCase();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)){ toast("Enter your email address"); return }
+    const b=e.target.querySelector("button[type=submit]"); b.disabled=true; const r=await DSFLogin.start(em, tLinkUrl()); b.disabled=false;
+    if(r.ok){ S.code={email:em, link:!!r.link}; render(); setTimeout(()=>$("#tc-code")?.focus(),50) } else toast(r.error||"Couldn't send the code"); return }
+  if(e.target.id==="tCodeIn"){ e.preventDefault(); const code=($("#tc-code")?.value||"").replace(/\D/g,"");
+    if(code.length!==6){ toast("Type the 6-digit code from the email"); return }
+    const b=e.target.querySelector("button[type=submit]"); b.disabled=true; const r=await DSFLogin.verify(S.code.email, code); b.disabled=false;
+    if(r.ok){ S.code=null; toast("Signed in ✓ Now fill in your team") } else toast(r.error||"That didn't work. Try again."); return }
   if(e.target.id!=="regForm") return; e.preventDefault();
   const t=T(), v=id=>($(`#rg-${id}`)?.value||"").trim(), cat=v("cat"), emailOk=x=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x), phoneOk=x=>(x.match(/\d/g)||[]).length>=10;
   const N=nPl(t), ns=Array.from({length:N},(_,i)=>i+1);
@@ -1643,7 +1666,7 @@ document.addEventListener("submit", async e=>{
   if(regTimes().length>=5){ toast("Too many registrations from this device. Please try again later."); return }
   const btn=e.target.querySelector("button[type=submit]"); btn.disabled=true;
   try{
-    const u=await ensureSignedIn();
+    const u=auth.currentUser; if(!u || (!S.verified && !S.isAdmin)){ toast("Sign in with your email first"); btn.disabled=false; render(); return }
     const ref=db.collection("tteams").doc();
     await ref.set({tid:t.id, cat, name:v("name"), ...Object.fromEntries(ns.map(n=>["p"+n,v("p"+n)])), createdBy:u.uid, createdAt:nowIso(), status:"pending"});
     if(kids.length) try{ const at=nowIso();   // the signed parent consent, private like the contact details
@@ -2108,12 +2131,13 @@ setTimeout(checkVersion, 4000); setInterval(checkVersion, 120000);
   if(!window.FIREBASE_CONFIG?.apiKey){ $("#main").innerHTML=`<section class="panel"><div class="empty">Firebase isn't configured.</div></section>`; return }
   firebase.initializeApp(window.FIREBASE_CONFIG); db=firebase.firestore(); auth=firebase.auth();
   if(auth.isSignInWithEmailLink(location.href)){ const em=ls.get("dsf:linkemail",null) || prompt("Confirm your email to finish signing in");
-    if(em) try{ await auth.signInWithEmailLink(em, location.href); ls.set("dsf:linkemail",null); S.tab="teams"; setTimeout(()=>toast(`Signed in as ${em}`),800) }catch{ setTimeout(()=>toast("That sign-in link has expired. Ask for a new one."),800) }
+    if(em) try{ await auth.signInWithEmailLink(em, location.href); ls.set("dsf:linkemail",null); if(ADMINS.includes(String(em).toLowerCase())) S.tab="teams"; setTimeout(()=>toast(`Signed in as ${em}`),800) }catch{ setTimeout(()=>toast("That sign-in link has expired. Ask for a new one."),800) }
     history.replaceState(null,"",location.pathname+(new URLSearchParams(location.search).get("t")?`?t=${new URLSearchParams(location.search).get("t")}`:"")) }
   if(window.FIREBASE_EMULATOR){ auth.useEmulator("http://127.0.0.1:9099"); db.useEmulator("127.0.0.1",8080) }
   await new Promise(res=>{ let first=true; auth.onAuthStateChanged(u=>{
-    S.uid=u?.uid||null; S.isAdmin=!!u && u.emailVerified && ADMINS.includes(String(u.email||"").toLowerCase());
-    if(first){ first=false; res() } else render() }) });
+    const wasAdmin=S.isAdmin; S.uid=u?.uid||null; S.isAdmin=!!u && u.emailVerified && ADMINS.includes(String(u.email||"").toLowerCase());
+    S.authEmail=u && !u.isAnonymous ? String(u.email||"") : ""; S.verified=!!u && !u.isAnonymous && !!u.emailVerified;
+    if(first){ first=false; res() } else if(S.isAdmin && !wasAdmin) location.reload(); else render() }) });
   const first={tourneys:1,tteams:1,tmatches:1}, once=k=>{ if(first[k]){ delete first[k]; if(!Object.keys(first).length) S.loaded=true } render() };
   const listen=(coll,cb)=>db.collection(coll).onSnapshot(s=>cb(s.docs.map(d=>({id:d.id,...d.data()}))), ()=>toast("Live updates stopped. Reload the page."));
   listen("tourneys", d=>{ S.tourneys=d; once("tourneys") });

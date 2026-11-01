@@ -587,19 +587,18 @@ function levelVerdict(lv, who="you"){
   return `<div class="banner ok"><div class="grow">${who==="you"?"You're":"They're"} ${lvChip(l.code)} <b>${esc(l.name)}</b>. ${who==="you"?"You'll":"They'll"} play on the court for this level at each session.</div></div>`;
 }
 function signInPanel(){
+  const c=S.code;   // {email, link} once a code (or link) has been emailed
   return `<section class="panel">
-    <div><h2>Sign in to book</h2><p class="muted">Sign in once to book sessions, see your court and follow the live rotation. After signing in, new players add their name (Train &amp; Play), or take a quick level check for Thursday games.</p></div>
-    <div class="signin">
-      <button class="btn primary" id="googleIn" type="button">Continue with Google</button>
-      <div class="pwbox"><span class="lbl">Or use your email and a password</span>
-        <label class="f">Email<input id="pw-email" type="email" placeholder="you@example.com" autocomplete="email"></label>
-        <label class="f">Password<span class="pwrow"><input id="pw-pass" type="password" minlength="6" placeholder="At least 6 characters" autocomplete="current-password"><button class="btn small ghost" id="pwShow" type="button">Show</button></span></label>
-        <div class="row"><button class="btn" id="pwIn" type="button">Sign in</button><button class="btn" id="pwNew" type="button">Create account</button><button class="btn small ghost" id="pwReset" type="button">Forgot password?</button></div>
-        <p class="muted" style="font-size:.82rem;margin:0">New here? Type your email, choose a password and press <b>Create account</b>.</p></div>
-      <form id="emailIn" class="signin">
-        <label class="f">Or get a sign-in link by email<input id="in-email" type="email" required placeholder="you@example.com" autocomplete="email"></label>
-        <button class="btn" type="submit">Email me a sign-in link</button>
-      </form>
+    <div><h2>Sign in to book</h2><p class="muted">We'll email you a 6-digit login code. No password to remember, and it proves the email is really yours.</p></div>
+    <div class="signin">${c?.email ? (c.link ? `<p>📧 We've emailed a sign-in link to <b>${esc(c.email)}</b>. Open it on this device to sign in.</p><div class="row"><button class="btn small ghost" data-codeback="1" type="button">Use a different email</button></div>`
+      : `<form id="codeIn" class="signin"><p style="margin:0">📧 We've emailed a code to <b>${esc(c.email)}</b>. It works for 10 minutes; check spam if you can't see it.</p>
+        <label class="f">Login code<input id="in-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" style="font-size:1.4rem;letter-spacing:.3em;text-align:center"></label>
+        <button class="btn primary" type="submit">Sign in</button>
+        <div class="row"><button class="btn small ghost" data-coderesend="1" type="button">Send a new code</button><button class="btn small ghost" data-codeback="1" type="button">Use a different email</button></div></form>`)
+      : `<form id="emailIn" class="signin">
+        <label class="f">Your email<input id="in-email" type="email" required placeholder="you@example.com" autocomplete="email"></label>
+        <button class="btn primary" type="submit">Email me a login code</button></form>
+      <div class="row" style="align-items:center;gap:10px"><span class="muted">or</span><button class="btn" id="googleIn" type="button">Continue with Google</button></div>`}
     </div>
   </section>`;
 }
@@ -1560,6 +1559,8 @@ document.addEventListener("click", async e=>{
     if(b && ACTIVE.includes(was)) wlPing("freed", b.sessionId) }); return }
   if(ds.ics){ downloadIcs(S.bookings.find(b=>b.id===ds.ics)); return }
   if(t.id==="signOut"){ if(Store.mode==="db"){ await firebase.auth().signOut(); location.reload() } else { S.me=null; ls.set("dsf:me",null); render() } return }
+  if(ds.codeback){ S.code=null; render(); return }
+  if(ds.coderesend){ const r=await DSFLogin.start(S.code.email, location.origin+location.pathname); toast(r.ok?"New code sent":r.error||"Couldn't send"); if(r.link){ S.code.link=true; render() } return }
   if(ds.vdone){ const u=firebase.auth().currentUser; if(!u) return; try{ await u.reload(); await u.getIdToken(true) }catch{}
     if(firebase.auth().currentUser?.emailVerified){ S.verified=true; toast("Email confirmed ✓"); render() } else toast("Not confirmed yet. Open the link in the email first."); return }
   if(ds.vsend){ try{ await firebase.auth().currentUser?.sendEmailVerification({url:location.origin+location.pathname}); toast(`Link sent to ${S.email}`) }catch(e){ toast(e?.code==="auth/too-many-requests"?"Please wait a few minutes before asking again.":"Couldn't send the link. Try again.") } return }
@@ -1748,10 +1749,17 @@ document.addEventListener("change", async e=>{
 document.addEventListener("submit", async e=>{
   e.preventDefault();
   if(e.target.id==="emailIn"){
-    const email=$("#in-email").value.trim();
+    const email=$("#in-email").value.trim().toLowerCase();
     if(!validEmail(email)){ toast("Enter a valid email address"); return }
-    try{ await firebase.auth().sendSignInLinkToEmail(email,{url:location.origin+location.pathname, handleCodeInApp:true}); ls.set("dsf:signin",email); toast("Check your email for the sign-in link") }
-    catch{ toast("Couldn't send the link. Check the address and try again.") }
+    const btn=e.target.querySelector("button[type=submit]"); if(btn) btn.disabled=true;
+    const r=await DSFLogin.start(email, location.origin+location.pathname); if(btn) btn.disabled=false;
+    if(r.ok){ S.code={email, link:!!r.link}; render(); setTimeout(()=>$("#in-code")?.focus(),50) } else toast(r.error||"Couldn't send the code");
+    return }
+  if(e.target.id==="codeIn"){
+    const code=($("#in-code")?.value||"").replace(/\D/g,""); if(code.length!==6){ toast("Type the 6-digit code from the email"); return }
+    const btn=e.target.querySelector("button[type=submit]"); if(btn) btn.disabled=true;
+    const r=await DSFLogin.verify(S.code.email, code); if(btn) btn.disabled=false;
+    if(r.ok){ toast("Signed in ✓") } else toast(r.error||"That didn't work. Try again.");   // signing in reloads the page
     return }
   if(e.target.id==="regForm"){
     const quick=S.reg.quick, email=$("#r-email").value.trim(), name=$("#r-name").value.trim(), phone=$("#r-phone").value.trim(), level=quick?(["E","E-","D-"].find(l=>pickedSessions().every(x=>courtsOf(x).some(c=>courtLevels(x,c).includes(l))))||"E"):levelFrom(S.reg.ans);

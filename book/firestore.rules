@@ -171,7 +171,7 @@ service cloud.firestore {
     // Registered teams are public (names only); contact details live in tcontacts.
     match /tteams/{id} {
       allow read: if true;
-      allow create: if isAdmin() || (signedIn() && validTeam(request.resource.data)
+      allow create: if isAdmin() || (signedIn() && emailOk() && validTeam(request.resource.data)
         && request.resource.data.createdBy == request.auth.uid && request.resource.data.status == 'pending'
         && tourney(request.resource.data.tid).regOpen == true
         && request.resource.data.cat in tourney(request.resource.data.tid).catIds);
@@ -183,7 +183,7 @@ service cloud.firestore {
     }
     match /tcontacts/{teamId} {
       allow read: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.keys().hasOnly(['email', 'phone', 'email2', 'phone2', 'email3', 'phone3', 'email4', 'phone4', 'lv1', 'lv2', 'lv3', 'lv4', 'g1', 'g2', 'g3', 'g4', 'emName', 'emPhone', 'notes', 'wa', 'agreed', 'paid', 'payName', 'createdBy'])
+      allow create: if signedIn() && emailOk() && request.resource.data.keys().hasOnly(['email', 'phone', 'email2', 'phone2', 'email3', 'phone3', 'email4', 'phone4', 'lv1', 'lv2', 'lv3', 'lv4', 'g1', 'g2', 'g3', 'g4', 'emName', 'emPhone', 'notes', 'wa', 'agreed', 'paid', 'payName', 'createdBy'])
         && request.resource.data.createdBy == request.auth.uid
         && shortText(request.resource.data.email, 120) && shortText(request.resource.data.phone, 30)
         && shortText(request.resource.data.get('email2', ''), 120) && shortText(request.resource.data.get('phone2', ''), 30)
@@ -204,7 +204,7 @@ service cloud.firestore {
     // Parent / guardian consent for under-18 players (with the signature): private, organiser and the family who sent it only.
     match /tconsent/{teamId} {
       allow read: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.keys().hasOnly(['tid', 'createdBy', 'createdAt', 'text', 'kids'])
+      allow create: if signedIn() && emailOk() && request.resource.data.keys().hasOnly(['tid', 'createdBy', 'createdAt', 'text', 'kids'])
         && request.resource.data.createdBy == request.auth.uid && request.resource.data.tid is string
         && shortText(request.resource.data.text, 5000) && shortText(request.resource.data.createdAt, 40)
         && request.resource.data.kids is list && request.resource.data.kids.size() > 0 && request.resource.data.kids.size() <= 4

@@ -1025,12 +1025,13 @@ function setupBanner(){
     <button class="btn small primary" data-stdcourts="${esc(s.id)}">Fix now</button></div>`).join("");
 }
 /* ----- organiser: find bursts of fake sign-ups (e.g. an automated test run) and remove them with their bookings ----- */
-// a "burst" is a day when 15+ brand-new players appeared; the organiser reviews the list before anything is removed
+// a "burst" is a day when 15+ brand-new players appeared and made 4+ bookings each on average; the organiser reviews the list before anything is removed
 function spamBursts(){
   const first={}, see=(id,at)=>{ if(id && at && (!first[id] || at<first[id])) first[id]=at };
   S.players.forEach(p=>see(p.id,p.createdAt)); S.bookings.forEach(b=>see(b.hostId||b.playerId, b.createdAt));
   const byDay={}; Object.entries(first).forEach(([id,at])=>{ (byDay[String(at).slice(0,10)] ||= []).push(id) });
-  return Object.entries(byDay).filter(([,ids])=>ids.length>=15).map(([day,ids])=>{
+  // real sign-up days (lots of new players, a booking or two each) are left alone: robots book everything
+  return Object.entries(byDay).filter(([,ids])=>ids.length>=15 && S.bookings.filter(b=>ids.includes(b.hostId||b.playerId)).length >= ids.length*4).map(([day,ids])=>{
     const set=new Set(ids), bk=S.bookings.filter(b=>set.has(b.hostId||b.playerId));
     const people=ids.map(id=>({id, name:S.players.find(p=>p.id===id)?.name || S.bookings.find(b=>(b.hostId||b.playerId)===id)?.name || id, email:S.players.find(p=>p.id===id)?.email||"", n:bk.filter(b=>(b.hostId||b.playerId)===id).length}));
     return {day, people:people.sort((a,b)=>b.n-a.n), bookings:bk.length} }).sort((a,b)=>a.day.localeCompare(b.day));

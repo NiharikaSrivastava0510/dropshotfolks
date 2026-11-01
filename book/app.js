@@ -643,7 +643,8 @@ const kindLabel = (k, list) => { const ts=list.filter(x=>kindOf(x)===k).map(x=>x
   return k==="games" ? (list.filter(x=>kindOf(x)==="games").every(x=>new Date(x.date+"T12:00:00").getDay()===4) ? "🏸 Thursday games" : "🏸 Level-wise games") : `🎯 ${top && top.length<=28 ? top : "Coaching"}` };
 function ticket(x, o){
   const v=venueOf(x), d=new Date(x.date+"T12:00:00"), fee=feeOf(x), k=kindOf(x), pct=o.places>0 ? Math.min(100, Math.round((o.places-Math.max(0,o.left))*100/o.places)) : 100;
-  return `<label class="tix k-${k} ${o.checked?"on":""} ${o.disabled?"off":""}"><input type="checkbox" id="pick-${x.id}" data-pick="${x.id}" ${o.disabled?"disabled":""} ${o.checked?"checked":""} aria-label="${esc(fmtLong(x.date))} ${esc(x.title||"session")}">
+  const beg = x.id===S.begId && !o.checked && !o.disabled;   // the next session nobody's picked yet asks to be tapped
+  return `<label class="tix k-${k} ${o.checked?"on":""} ${o.disabled?"off":""} ${beg?"beg":""}">${beg?`<span class="beg-tag" aria-hidden="true">👆 Next up · tap me!</span>`:""}<input type="checkbox" id="pick-${x.id}" data-pick="${x.id}" ${o.disabled?"disabled":""} ${o.checked?"checked":""} aria-label="${esc(fmtLong(x.date))} ${esc(x.title||"session")}">
     <span class="tix-stub"><b>${esc(d.toLocaleDateString("en-GB",{weekday:"short"}))}</b><span class="d">${d.getDate()}</span><span>${esc(d.toLocaleDateString("en-GB",{month:"short"}))}</span></span>
     <span class="tix-body">
       <span class="tix-top"><span class="tix-kind">${k==="games"?"🏸 Games":"🎯 Coaching"}</span>${fee?`<span class="tix-fee">${esc(fee)}</span>`:""}</span>
@@ -657,6 +658,7 @@ function ticketList(list, card){
   const kinds=[...new Set(list.map(kindOf))], f=kinds.includes(S.ftype)?S.ftype:"all", shown=list.filter(x=>f==="all"||kindOf(x)===f);
   const chips = kinds.length>1 ? `<div class="fchips" role="group" aria-label="Show">${[["all","All sessions"],...kinds.map(k=>[k,kindLabel(k,list)])].map(([k,l])=>`<button type="button" data-ftype="${k}" aria-pressed="${f===k}">${esc(l)} <span>${k==="all"?list.length:list.filter(x=>kindOf(x)===k).length}</span></button>`).join("")}</div>` : "";
   const months={}; shown.forEach(x=>(months[x.date.slice(0,7)] ||= []).push(x));
+  S.begId = shown.find(x=>!S.picks.has(x.id) && x.open!==false && !x.cancelled && !S.bookings.some(b=>b.sessionId===x.id && b.playerId===S.me && b.status!=="cancelled"))?.id;
   return chips + Object.entries(months).map(([m,xs])=>`<h3 class="tix-month">${esc(new Date(m+"-15T12:00:00").toLocaleDateString("en-GB",{month:"long",year:"numeric"}))}</h3><div class="tixgrid">${xs.map(card).join("")}</div>`).join("");
 }
 // "coming up" ticker that scrolls across the top of Book a session

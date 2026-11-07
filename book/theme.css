@@ -126,3 +126,19 @@ nav.tabs button[aria-selected="true"]{background:#7A1E2C;color:#fff}
 .fchips button[aria-pressed="true"] span{background:rgba(255,255,255,.2)}
 .st-confirmed{background:#DCE8D2;color:#1F4D2E}
 .st-paid{background:#E0CDB4}
+
+/* organiser session card: tool boxes — tap one and only its tools show underneath */
+.acts{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:4px 0}
+.act{all:unset;box-sizing:border-box;cursor:pointer;display:grid;gap:2px;align-content:start;padding:12px 12px 11px;border:2px solid var(--stk);border-radius:16px;background:var(--surface);box-shadow:3px 3px 0 var(--stk);transition:transform .12s,box-shadow .12s,background .15s}
+.act:hover{transform:translate(-1px,-2px);box-shadow:4px 5px 0 var(--stk)}
+.act:focus-visible{outline:3px solid var(--pop-lime);outline-offset:2px}
+.act-ic{font-size:1.5rem;line-height:1}
+.act b{font-family:var(--display);font-size:1.02rem;font-weight:800}
+.act span:last-child{font-size:.8rem;color:var(--muted)}
+.act.on{background:#7A1E2C;color:#fff;transform:rotate(-1deg);box-shadow:3px 3px 0 var(--stk)}
+.act.on span:last-child{color:#F1E3CF}
+.act.ping .act-ic{display:inline-block;animation:actPing 2.4s ease-in-out infinite}
+@keyframes actPing{0%,70%,100%{transform:none}78%{transform:rotate(-14deg) scale(1.15)}86%{transform:rotate(10deg)}}
+.act-panel{border:2px solid var(--stk);border-radius:18px;padding:14px;background:var(--surface);box-shadow:3px 3px 0 var(--stk);display:grid;gap:10px;animation:popIn .3s ease-out backwards}
+.act-panel > .grid2.sub-body{padding:0}
+@media (prefers-reduced-motion: reduce){.act.ping .act-ic,.act-panel{animation:none}}

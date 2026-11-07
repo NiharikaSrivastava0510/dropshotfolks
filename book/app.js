@@ -1192,6 +1192,8 @@ function orgOverview(){
   </tbody></table></div></section>`;
   return html;
 }
+// which tool box is open on a session card (bookings by default; partners while pairing someone)
+const sactOf = s => S.pairPick?.sid===s.id ? "pr" : (S.sact?.[s.id] || "bkl");
 function adminSession(s){
   const r = rotInfo(s), v = venueOf(s);
   const rows = [1,2,3,4].map(c=>{
@@ -1219,23 +1221,18 @@ function adminSession(s){
     <span class="chev" aria-hidden="true">›</span>
   </summary>
   <div class="sess-body">
-    <div class="row">${v.address?`<span class="muted" style="flex:1;min-width:200px">${esc(v.address)}</span>`:""}<button class="btn small" data-msg="${s.id}">Copy reminder message</button><button class="btn small" data-emails="${s.id}">Copy player emails</button><button class="btn small" data-mailrem="${s.id}">📧 Email reminder + rules</button>${s.remindedAt?`<span class="chip st-confirmed">Reminder sent ${esc(new Date(s.remindedAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))}</span>`:""}<button class="btn small" data-toggle="${s.id}">${s.open===false?"Open booking":"Close booking"}</button>${s.cancelled?`<span class="chip st-cancelled">Cancelled</span>`:`<button class="btn small ghost danger" data-cancsess="${s.id}">Cancel session</button>`}<button class="btn small ghost danger" data-delsess="${s.id}">Delete session</button></div>
     ${(()=>{ const lp=S.bookings.filter(b=>b.sessionId===s.id && lapsed(b)); return lp.length?`<div class="banner warn"><div class="grow"><b>${lp.length} unpaid for over 24 hours:</b> ${lp.map(b=>esc(b.name)).join(", ")}. Their places no longer count, so others can book.</div><button class="btn small" data-lapsedrm="${s.id}">Release them</button></div>`:"" })()}
     ${(()=>{ const cs=courtsOf(s).filter(c=>freeOn(s,c)>0 && waitersOn(s,c).length); if(!cs.length) return "";
       return `<div class="banner info"><div class="grow"><b>A place is free and people are waiting:</b> ${cs.map(c=>`Court ${c}: ${freeOn(s,c)} free, ${waitersOn(s,c).length} waiting`).join(" · ")}. Waiting players can tap <b>Take the place</b> in My bookings.</div><button class="btn small primary" data-mailwait="${s.id}">📧 Email the waiting list</button></div>` })()}
-    ${sub("bkl", `<b>Bookings</b> <span class="muted">(${booked} booked${cnt("waitlist")?`, ${cnt("waitlist")} waiting`:""})</span>`, `<div class="tbl"><table><thead><tr><th>Player</th><th>Ref</th><th>Status</th><th>Court</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`, true)}
-    ${sub("pr", `<b>Partners &amp; game style</b> <span class="muted">(${(s.pairs||[]).length} pair${(s.pairs||[]).length===1?"":"s"}${courtsOf(s).some(c=>(s.style?.[c]||"any")!=="any")?" · styles set":""})</span>`, partnersPanel(s), S.pairPick?.sid===s.id)}
-    ${sub("ci", `<b>Check-in list</b> <span class="muted">(${here} of ${booked} here)</span>`, `<div style="display:grid;gap:10px">${checkinList(s)}</div>`)}
-    ${sub("hc", `<b>Host view code</b> <span class="muted">${S.secrets[s.id]?"(set)":"(not set)"}</span>`, `<div class="row code-row">${S.secrets[s.id]?`<b class="code">${esc(S.secrets[s.id])}</b><button class="btn small" data-copy="${esc(S.secrets[s.id])}">Copy</button><button class="btn small ghost" data-newcode="${esc(s.id)}">New code</button>`:`<button class="btn small primary" data-newcode="${esc(s.id)}">Create code</button>`}</div><p class="muted" style="font-size:.82rem">Give it to whoever runs the court-side device. A new code locks out devices using the old one.</p>`)}
-    ${cancelled?sub("canc", `<b>Cancelled</b> <span class="muted">(${cancelled})</span>`, `<div style="display:grid;gap:6px">${inS.filter(b=>b.status==="cancelled").map(b=>`<div class="row" style="justify-content:space-between"><span>${esc(b.name)} · Court ${esc(b.court)}</span><span class="row"><button class="btn small" data-restore="${esc(b.id)}">Restore</button><button class="btn small ghost danger" data-bdel="${esc(b.id)}">Delete</button></span></div>`).join("")}</div>`):""}
-    ${(()=>{ const k=slotKey(s), want=S.players.filter(p=>(p.remind||[]).includes(k) && p.email && !S.bookings.some(b=>b.sessionId===s.id && b.playerId===p.id && b.status!=="cancelled"));
-      if(!want.length) return "";
-      const emails=want.map(p=>p.email).join(","), subj=`Book your Dropshot Folks session: ${fmtLong(s.date)}`;
-      const body=`Hi! Places are open for ${fmtLong(s.date)}, ${s.start}–${s.end}${venueOf(s).venue?" at "+venueOf(s).venue:""}.\n\nBook here: ${BOOK_URL}\n\nSee you on court!`;
-      return `<div class="banner info"><div class="grow"><b>${want.length} player${want.length>1?"s want":" wants"} a reminder</b> for this session and ${want.length>1?"haven't":"hasn't"} booked yet: ${want.map(p=>esc(p.name)).join(", ")}</div>
-        <span class="row"><button class="btn small primary" data-remindmail="${esc(s.id)}">📧 Email them</button><button class="btn small" data-copy="${esc(emails)}">Copy emails</button></span></div>` })()}
-    <details class="sub" id="addp-${s.id}"><summary><b>Add a player</b> <span class="muted">(registered player or walk-in)</span></summary>
-      <div class="grid2 sub-body">
+    ${(()=>{ const want=S.players.filter(p=>(p.remind||[]).includes(slotKey(s)) && p.email && !S.bookings.some(b=>b.sessionId===s.id && b.playerId===p.id && b.status!=="cancelled")).length;
+      const tiles=[["bkl","👥","Bookings",`${booked}/${places}${cnt("waitlist")?` · ${cnt("waitlist")} waiting`:""}`],["addp","➕","Add a player","registered or walk-in"],["ci","✅","Check-in",`${here} of ${booked} here`],
+        ["mail","📧","Emails",want?`${want} want a reminder`:s.remindedAt?"reminder sent ✓":"reminder, rules"],["pr","🤝","Partners",`${(s.pairs||[]).length} pair${(s.pairs||[]).length===1?"":"s"}`],
+        ["es","✏️","Edit session","time, venue, courts, fee"],["hc","🔑","Host code",S.secrets[s.id]?"set":"not set"],["set","⚙️","Close or cancel",s.open===false?"booking closed":"booking open"]];
+      const cur=sactOf(s);
+      return `<div class="acts">${tiles.map(([k,ic,t,sub])=>`<button type="button" class="act ${k===cur?"on":""} ${k==="mail"&&want?"ping":""}" data-sact="${esc(s.id)}|${k}" aria-pressed="${k===cur}"><span class="act-ic">${ic}</span><b>${t}</b><span>${esc(sub)}</span></button>`).join("")}</div>
+      <div class="act-panel">${{
+        bkl:`<div class="tbl"><table><thead><tr><th>Player</th><th>Ref</th><th>Status</th><th>Court</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${cancelled?`<details class="sub" id="canc-${s.id}"><summary><b>Cancelled</b> <span class="muted">(${cancelled})</span></summary><div class="sub-body" style="display:grid;gap:6px">${inS.filter(b=>b.status==="cancelled").map(b=>`<div class="row" style="justify-content:space-between"><span>${esc(b.name)} · Court ${esc(b.court)}</span><span class="row"><button class="btn small" data-restore="${esc(b.id)}">Restore</button><button class="btn small ghost danger" data-bdel="${esc(b.id)}">Delete</button></span></div>`).join("")}</div></details>`:""}`,
+        addp:`      <div class="grid2 sub-body">
         <label class="f">Player<input id="ap-name-${s.id}" list="ap-list-${s.id}" data-apsearch="${esc(s.id)}" placeholder="Search registered players, or type a new name" autocomplete="off"></label>
         <datalist id="ap-list-${s.id}">${S.players.filter(p=>!S.bookings.some(b=>b.sessionId===s.id && b.playerId===p.id && b.status!=="cancelled")).slice().sort((a,b)=>String(a.name).localeCompare(b.name)).map(p=>`<option value="${esc(apLabel(p))}"></option>`).join("")}</datalist>
         <label class="f">Court<select id="ap-court-${s.id}">${courtsOf(s).map(n=>`<option value="${n}">Court ${n} · ${esc(courtName(s,n))}</option>`).join("")}</select></label>
@@ -1243,9 +1240,16 @@ function adminSession(s){
         <label class="f">Status<select id="ap-status-${s.id}">${Object.entries(STATUS).filter(([k])=>k!=="cancelled").map(([k,v])=>`<option value="${k}" ${k==="confirmed"?"selected":""}>${v.label}</option>`).join("")}</select></label>
         <div class="row" style="align-self:end"><button class="btn small primary" data-addp="${esc(s.id)}">Add player</button></div>
         <p class="muted" id="ap-hint-${s.id}" style="grid-column:1/-1;font-size:.85rem">Start typing a name or email to find a registered player. Their court is picked from their level, and the booking shows in their My bookings. Anyone not on the list is added as a walk-in.</p>
-      </div></details>
-    <details class="sub" id="es-${s.id}"><summary><b>Edit session &amp; courts</b> <span class="muted">(date, time, venue, court levels, places)</span></summary>
-      <div class="grid2 sub-body">
+      </div>`,
+        ci:`<div style="display:grid;gap:10px">${checkinList(s)}</div>`,
+        mail:`${(()=>{ const k=slotKey(s), want=S.players.filter(p=>(p.remind||[]).includes(k) && p.email && !S.bookings.some(b=>b.sessionId===s.id && b.playerId===p.id && b.status!=="cancelled"));
+      if(!want.length) return "";
+      const emails=want.map(p=>p.email).join(","), subj=`Book your Dropshot Folks session: ${fmtLong(s.date)}`;
+      const body=`Hi! Places are open for ${fmtLong(s.date)}, ${s.start}–${s.end}${venueOf(s).venue?" at "+venueOf(s).venue:""}.\n\nBook here: ${BOOK_URL}\n\nSee you on court!`;
+      return `<div class="banner info"><div class="grow"><b>${want.length} player${want.length>1?"s want":" wants"} a reminder</b> for this session and ${want.length>1?"haven't":"hasn't"} booked yet: ${want.map(p=>esc(p.name)).join(", ")}</div>
+        <span class="row"><button class="btn small primary" data-remindmail="${esc(s.id)}">📧 Email them</button><button class="btn small" data-copy="${esc(emails)}">Copy emails</button></span></div>` })()}<div class="row"><button class="btn small primary" data-mailrem="${s.id}">📧 Email reminder + rules</button>${s.remindedAt?`<span class="chip st-confirmed">Reminder sent ${esc(new Date(s.remindedAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))}</span>`:""}<button class="btn small" data-msg="${s.id}">Copy reminder message</button><button class="btn small" data-emails="${s.id}">Copy player emails</button></div>`,
+        pr:partnersPanel(s),
+        es:`      <div class="grid2 sub-body">
         <label class="f">Date<input id="es-date-${s.id}" type="date" value="${esc(s.date)}"></label>
         <label class="f">Start<input id="es-start-${s.id}" type="time" value="${esc(s.start)}"></label>
         <label class="f">End<input id="es-end-${s.id}" type="time" value="${esc(s.end)}"></label>
@@ -1263,7 +1267,10 @@ function adminSession(s){
         <p class="muted" style="grid-column:1/-1;font-size:.85rem">Set places to 0 if a court isn't running. Players go to the first running court that includes their level.</p>
         <label class="row" style="grid-column:1/-1;gap:6px"><input type="checkbox" style="width:auto" id="es-all-${s.id}"> Use this court setup for every upcoming ${esc(slotLabel(s))} session</label>
         <div class="row" style="grid-column:1/-1"><button class="btn small primary" data-savesess="${esc(s.id)}">Save session</button><button class="btn small" data-stdcourts="${esc(s.id)}">Use standard courts</button><span class="muted" style="font-size:.82rem">D- Court 1 · D+ Court 2 · C- Court 3 · C+ Court 4, and moves booked players to match.</span></div>
-      </div></details>
+      </div>`,
+        hc:`<div class="row code-row">${S.secrets[s.id]?`<b class="code">${esc(S.secrets[s.id])}</b><button class="btn small" data-copy="${esc(S.secrets[s.id])}">Copy</button><button class="btn small ghost" data-newcode="${esc(s.id)}">New code</button>`:`<button class="btn small primary" data-newcode="${esc(s.id)}">Create code</button>`}</div><p class="muted" style="font-size:.82rem">Give it to whoever runs the court-side device. A new code locks out devices using the old one.</p>`,
+        set:`<div class="row">${v.address?`<span class="muted" style="flex-basis:100%">📍 ${esc(v.address)}</span>`:""}<button class="btn small" data-toggle="${s.id}">${s.open===false?"🔓 Open booking":"🔒 Close booking"}</button>${s.cancelled?`<span class="chip st-cancelled">Cancelled</span>`:`<button class="btn small ghost danger" data-cancsess="${s.id}">Cancel session</button>`}<button class="btn small ghost danger" data-delsess="${s.id}">Delete session</button></div><p class="muted" style="font-size:.85rem">Close booking stops new bookings. Cancel keeps the session but tells everyone booked. Delete removes it.</p>`
+      }[cur]}</div>` })()}
     <textarea id="msg-${s.id}" rows="6" hidden readonly></textarea>
   </div></details>`;
 }
@@ -1798,6 +1805,7 @@ document.addEventListener("click", async e=>{
     for(const b of ls2) await setBooking(b.id,{status:"cancelled"},"Not paid within 24 hours, so the place was released.",null);
     if(s) wlPing("freed", s.id); toast(`Released ${ls2.length} place${ls2.length>1?"s":""} ✓`); return }
   if(ds.spamrm && S.isAdmin){ await spamRemove(ds.spamrm); return }
+  if(ds.sact){ const [sid,k]=ds.sact.split("|"); S.sact={...(S.sact||{}), [sid]:k}; if(k!=="pr") S.pairPick=null; render(); return }
   if(ds.cancsess){ await cancelSessions([ds.cancsess]); return }
   if(ds.selcanc){ if(S.sel?.size) await cancelSessions([...S.sel]); return }
   if(ds.mailwait){ const s=S.sessions.find(x=>x.id===ds.mailwait); if(s) await emailWaiters(s); return }

@@ -66,15 +66,15 @@ section,.band{padding:clamp(72px,10vw,128px) 0;position:relative}
 .brand{display:flex;align-items:center;gap:.7rem;text-decoration:none;color:var(--cream);font-family:'Fraunces',serif;font-size:1.35rem;letter-spacing:-.01em;white-space:nowrap;flex-shrink:0}
 .brand img{width:56px;height:42px;border-radius:9px;object-fit:cover;padding:3px;background:#efe2c6;box-shadow:0 2px 10px rgba(0,0,0,.18)}
 .brand em{color:var(--beige-deep)}
-#navMenu{display:flex;list-style:none;gap:1.4rem;margin-left:auto}
+#navMenu{display:flex;list-style:none;gap:1.05rem;margin-left:auto}
 #navMenu a{color:rgba(250,243,227,.85);text-decoration:none;font-size:.92rem;font-weight:500;position:relative;padding:.3rem 0;white-space:nowrap}
 #navMenu a::after{content:"";position:absolute;left:0;right:100%;bottom:0;height:1.5px;background:var(--beige-deep);transition:right .25s ease}
 #navMenu a:hover{color:var(--cream)}
 #navMenu a:hover::after{right:0}
-.nav-cta{margin-left:.5rem;padding:.65rem 1.2rem;font-size:.9rem;white-space:nowrap}
+.nav-cta{margin-left:.5rem;padding:.65rem 1.2rem;font-size:.9rem;white-space:nowrap;flex-shrink:0}
 .nav-toggle{display:none;margin-left:auto;background:transparent;border:1.5px solid rgba(250,243,227,.4);color:var(--cream);width:44px;height:44px;border-radius:12px;cursor:pointer}
 .nav-toggle svg{width:22px;height:22px;margin:auto}
-@media (max-width:1240px){
+@media (max-width:1400px){
   #navMenu{display:none;position:absolute;top:100%;left:var(--gutter);right:var(--gutter);flex-direction:column;gap:0;background:var(--maroon-ink);border:1px solid rgba(216,196,160,.2);border-radius:16px;padding:.6rem;box-shadow:var(--shadow);margin-top:8px}
   #navMenu.open{display:flex}
   #navMenu a{display:block;padding:.85rem 1rem;border-radius:10px;font-size:1rem}
@@ -728,6 +728,28 @@ footer ul a:hover{color:var(--cream)}
 .btn-gold::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.55) 50%,transparent 70%);transform:translateX(-120%);animation:shine 4.5s ease-in-out 2s infinite}
 @keyframes shine{0%,70%{transform:translateX(-120%)}100%{transform:translateX(120%)}}
 .tilt{transition:transform .25s ease-out;transform-style:preserve-3d;will-change:transform}
+/* animated menu icons: a gentle wave runs along the menu, and each icon has its own trick on hover */
+#navMenu a{display:inline-flex;align-items:center;gap:.32rem}
+.ni{display:inline-grid;place-items:center;width:1.15em;height:1.15em;flex:none;transform-origin:50% 70%;animation:niWave 7s ease-in-out infinite;animation-delay:calc(var(--i,0) * .18s + 1.5s)}
+.ni svg{width:100%;height:100%;display:block}
+@keyframes niWave{0%,8%,100%{transform:none}3%{transform:translateY(-4px) rotate(-8deg) scale(1.15)}6%{transform:translateY(0) rotate(4deg)}}
+#navMenu a:hover .ni,#navMenu a:focus-visible .ni,.nav-cta:hover .ni{animation-duration:.9s;animation-iteration-count:1;animation-delay:0s}
+a:hover .ni-about{animation-name:niHop}            @keyframes niHop{30%{transform:translateY(-6px)}55%{transform:translateY(0) scaleY(.85)}75%{transform:translateY(-2px)}}
+a:hover .ni-games{animation-name:niFlip}           @keyframes niFlip{40%{transform:translateY(-7px) rotate(200deg)}100%{transform:rotate(360deg)}}
+a:hover .ni-tournaments{animation-name:niTilt}     @keyframes niTilt{25%{transform:rotate(-16deg) scale(1.15)}50%{transform:rotate(14deg) scale(1.15)}75%{transform:rotate(-8deg)}}
+a:hover .ni-photos{animation-name:niFlash}         @keyframes niFlash{20%{transform:scale(1.3);filter:drop-shadow(0 0 6px #fff)}40%{transform:scale(.9);filter:none}}
+a:hover .ni-reviews{animation-name:niSpin;color:var(--gold)} @keyframes niSpin{to{transform:rotate(360deg) scale(1.1)}}
+a:hover .ni-coaching{animation-name:niPulse}       @keyframes niPulse{30%{transform:scale(1.35)}60%{transform:scale(.9)}}
+a:hover .ni-join{animation-name:niWiggle}          @keyframes niWiggle{20%{transform:rotate(-14deg)}40%{transform:rotate(12deg)}60%{transform:rotate(-8deg)}80%{transform:rotate(5deg)}}
+a:hover .ni-volunteer{animation-name:niBeat;color:#ff7b8a} @keyframes niBeat{15%{transform:scale(1.35)}30%{transform:scale(1)}45%{transform:scale(1.25)}60%{transform:scale(1)}}
+a:hover .ni-team{animation-name:niHop}
+a:hover .ni-instagram{animation-name:niTwist;color:#fff;background:radial-gradient(circle at 30% 107%,#fdf497 0%,#fd5949 45%,#d6249f 60%,#285AEB 90%);border-radius:7px;padding:2px} @keyframes niTwist{40%{transform:rotate(-15deg) scale(1.25)}100%{transform:none}}
+.nav-cta .ni{animation-name:niWiggle;animation-duration:4.5s;animation-delay:2.5s}
+/* the logo floats like a shuttle in the air */
+.hero-logo img{animation:logoFloat 5s ease-in-out 1s infinite}
+@keyframes logoFloat{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-8px) rotate(-3deg)}}
+.hero-logo img:hover{animation:niFlip .9s ease-in-out}
+@media (prefers-reduced-motion:reduce){.ni,.hero-logo img{animation:none!important}}
 @media (prefers-reduced-motion:reduce){.hero-shuttle{display:none}.hero .kicker,.hero h1,.hero-sub,.hero-actions,.stats,.next-card,.hero-logo,.tagline,.btn-gold::after{animation:none}}
 </style>
 </head>
@@ -741,18 +763,18 @@ footer ul a:hover{color:var(--cream)}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
     </button>
     <ul id="navMenu">
-      <li><a href="#about">About</a></li>
-      <li><a href="#games">Games</a></li>
-      <li><a href="#tournaments">Tournaments</a></li>
-      <li><a href="#photos">Photos</a></li>
-      <li><a href="#reviews">Reviews</a></li>
-      <li><a href="#coaching">Coaching</a></li>
-      <li><a href="#join">Join</a></li>
-      <li><a href="#volunteer">Volunteer</a></li>
-      <li><a href="#team">Our Team</a></li>
-      <li><a href="https://www.instagram.com/dropshot_folks/" target="_blank" rel="noopener">Instagram</a></li>
+      <li><a href="#about" style="--i:0"><span class="ni ni-about" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg></span>About</a></li>
+      <li><a href="#games" style="--i:1"><span class="ni ni-games" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a3 3 0 0 0 3-3H9a3 3 0 0 0 3 3z"/><path d="M9 18L6 4M15 18l3-14M12 18V3M7.5 11h9"/></svg></span>Games</a></li>
+      <li><a href="#tournaments" style="--i:2"><span class="ni ni-tournaments" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3"/></svg></span>Tournaments</a></li>
+      <li><a href="#photos" style="--i:3"><span class="ni ni-photos" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7l2-3h4l2 3"/><circle cx="12" cy="13.5" r="3.5"/></svg></span>Photos</a></li>
+      <li><a href="#reviews" style="--i:4"><span class="ni ni-reviews" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></span>Reviews</a></li>
+      <li><a href="#coaching" style="--i:5"><span class="ni ni-coaching" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".8" fill="currentColor"/></svg></span>Coaching</a></li>
+      <li><a href="#join" style="--i:6"><span class="ni ni-join" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></svg></span>Join</a></li>
+      <li><a href="#volunteer" style="--i:7"><span class="ni ni-volunteer" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></span>Volunteer</a></li>
+      <li><a href="#team" style="--i:8"><span class="ni ni-team" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.4"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M15 14.3c3 .1 6 1.9 6 5.7"/></svg></span>Our Team</a></li>
+      <li><a href="https://www.instagram.com/dropshot_folks/" target="_blank" rel="noopener" style="--i:9"><span class="ni ni-instagram" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg></span>Instagram</a></li>
     </ul>
-    <a href="book/" class="btn btn-gold nav-cta">Book a Session</a>
+    <a href="book/" class="btn btn-gold nav-cta"><span class="ni ni-book" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M9 15l2 2 4-4"/></svg></span>Book a Session</a>
   </div>
 </nav>
 

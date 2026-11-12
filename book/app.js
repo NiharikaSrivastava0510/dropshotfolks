@@ -501,13 +501,9 @@ function viewReception(s){
     <input id="rc-q" class="rc-q" type="search" placeholder="🔎 Type your name…" autocomplete="off" autocapitalize="words" spellcheck="false" aria-label="Find your name">
     ${(()=>{ const tile=b=>{ const st=b.checkedIn&&!b.outAt?"in":b.outAt?"left":"";
         return `<button type="button" class="rc-name ${st}" data-rcpick="${esc(b.id)}"><b>${esc(b.name)}</b><span>${st==="in"?`✓ Here since ${tm(b.inAt)}`:st==="left"?`Left ${tm(b.outAt)}`:"Tap to check in"}</span></button>` };
-      const courts=[...new Set([...courtsOf(s), ...list.map(b=>b.court)])].sort((a,b)=>a-b).filter(c=>list.some(b=>b.court===c));
-      if(!courts.length) return q.length>=2 ? `<div class="empty">No one called “${esc(q)}” is booked. Check the spelling, or ask at reception.</div>`
-        : `<div class="rc-courts-sum">${courtsOf(s).filter(c=>all.some(b=>b.court===c)).map(c=>{ const inC=all.filter(b=>b.court===c); return `<div class="rc-court-box" style="--cc:${CLR[c]||"var(--accent)"}"><div class="rc-court-hd"><b>Court ${c}</b><span>${esc(courtName(s,c))}</span><span class="rc-count">${inC.filter(b=>b.checkedIn&&!b.outAt).length} of ${inC.length} here</span></div></div>` }).join("")}</div>
-          <p class="rc-sub">👆 Start typing your name above (at least 2 letters).</p>`;
-      return courts.map(c=>{ const on=list.filter(b=>b.court===c), inC=all.filter(b=>b.court===c), hereC=inC.filter(b=>b.checkedIn&&!b.outAt).length;
-        return `<div class="rc-court-box" style="--cc:${CLR[c]||"var(--accent)"}"><div class="rc-court-hd"><b>Court ${c}</b><span>${esc(courtName(s,c))} ${courtChips(s,c)}</span><span class="rc-count">${hereC} of ${inC.length} here</span></div>
-          <div class="rc-grid">${on.map(tile).join("")}</div></div>` }).join("") })()}
+      if(list.length) return `<div class="rc-grid">${list.map(tile).join("")}</div>`;
+      if(q.length>=2) return `<div class="rc-err" role="alert">😕 We can't find “${esc(q)}”.<br><span>Check the spelling, or ask at reception for help.</span></div>`;
+      return `<p class="rc-sub">👆 Start typing your name above (at least 2 letters).</p>`; })()}
     <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><p class="muted" style="font-size:.85rem">Can't find your name? Ask at reception.</p><span class="row" style="gap:6px">${showAll?`<button class="btn small" data-rcall="0">🙈 Hide names</button>`:`<button class="btn small ghost" data-rcall="1" title="Receptionist: needs the PIN">🔑 Show all names</button>`}<button class="btn small ghost" data-rcexit="1" title="Needs the PIN">🔒 Exit display mode</button></span></div></section>`;
 }
 /* ---------- court display: a locked screen in the hall with one big tab per court (swipe, arrow keys or tap) ---------- */
@@ -695,8 +691,8 @@ function quizFields(prefix, ans){
 }
 /* umpire voice and racket sounds (Web Speech and Web Audio, nothing to download) */
 let audioCtx=null;
-function sfx(kind){
-  if(!S.fx) return;
+function sfx(kind, force=false){
+  if(!S.fx && !force) return;
   try{
     audioCtx ||= new (window.AudioContext||window.webkitAudioContext)();
     const t=audioCtx.currentTime, tone=(f,at,d,type="sine",vol=.18)=>{ const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.type=type; o.frequency.value=f; g.gain.setValueAtTime(vol,t+at); g.gain.exponentialRampToValueAtTime(.001,t+at+d); o.connect(g).connect(audioCtx.destination); o.start(t+at); o.stop(t+at+d) };
@@ -707,6 +703,7 @@ function sfx(kind){
     if(kind==="win"){ tone(660,.08,.18); tone(880,.22,.3) }
     if(kind==="lose"){ tone(330,.08,.2,"triangle"); tone(220,.24,.3,"triangle") }
     if(kind==="power"){ tone(520,.06,.12,"triangle",.12); tone(700,.16,.16,"triangle",.12) }
+    if(kind==="error"){ tone(240,0,.16,"square",.13); tone(170,.19,.32,"square",.13) }
     if(kind==="match"){ [523,659,784,1046].forEach((f,k)=>tone(f,.1+k*.14,.35)) }
   }catch{}
 }
@@ -1808,7 +1805,9 @@ function apFind(typed){
   return byName.length===1 ? byName[0] : null;
 }
 document.addEventListener("input", e=>{
-  if(e.target.id==="rc-q"){ render(); return }
+  if(e.target.id==="rc-q"){ render(); clearTimeout(S.rcErrT);
+    S.rcErrT=setTimeout(()=>{ const q=String($("#rc-q")?.value||"").trim().toLowerCase(); if(q.length>=2 && document.querySelector(".rc-err") && S.rcErrQ!==q){ S.rcErrQ=q; sfx("error",true); try{ navigator.vibrate?.(200) }catch{} } },700);
+    return }
   const sid=e.target.dataset?.apsearch; if(!sid) return;
   const s=S.sessions.find(x=>x.id===sid), p=apFind(e.target.value), hint=$("#ap-hint-"+sid); if(!s||!hint) return;
   if(!p){ hint.textContent = e.target.value.trim() ? "Not a registered player. They'll be added as a walk-in on the court you choose." : "Start typing a name or email to find a registered player."; return }
@@ -2024,7 +2023,7 @@ document.addEventListener("click", async e=>{
     t.disabled=true;
     if(!await setBooking(id, patch, v==="in"?`Checked in at ${at} (reception).`:`Checked out at ${at} (reception).`, null)){ t.disabled=false; return }
     S.rcPick=null; S.rcAll=null; S.rcDone={id, out:v!=="in", until:Date.now()+9000}; const q=document.getElementById("rc-q"); if(q) q.value="";
-    render(); if(v==="in") sfx("power");
+    render(); if(v==="in") sfx("match",true);
     clearTimeout(S.rcTimer); S.rcTimer=setTimeout(()=>{ if(S.rcDone?.id===id){ S.rcDone=null; render() } },9000); return }
   if(ds.checkin){ const b=S.bookings.find(x=>x.id===ds.checkin); if(!b) return; const s=S.sessions.find(x=>x.id===b.sessionId);
     if(!canRun(s)){ toast("Open host view to check people in"); return }

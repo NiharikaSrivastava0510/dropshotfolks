@@ -223,3 +223,7 @@ body.reception-on .who, body.reception-on .toprow{display:none!important}
 .rc-courts-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
 .rc-courts-sum .rc-court-box{box-shadow:3px 3px 0 var(--stk)}
 .rc-courts-sum .rc-court-hd{border-bottom:0}
+.rc-err{text-align:center;font-family:var(--display);font-weight:800;font-size:1.5rem;color:var(--bad);background:var(--bad-bg);border:2.5px solid var(--stk);border-radius:20px;padding:22px;box-shadow:4px 4px 0 var(--stk);animation:rcShake .45s}
+.rc-err span{font-family:var(--body);font-weight:600;font-size:1rem;color:var(--ink)}
+@keyframes rcShake{20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(4px)}}
+@media (prefers-reduced-motion:reduce){.rc-err{animation:none}}

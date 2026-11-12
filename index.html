@@ -212,6 +212,11 @@ section,.band{padding:clamp(72px,10vw,128px) 0;position:relative}
 .t-list li span:first-child{color:var(--muted)}
 .t-list li span:last-child{text-align:right;font-weight:500}
 .t-card .btn{margin-top:auto;align-self:flex-start}
+.t-cancelled .t-list,.t-cancelled .t-tags,.t-cancelled .t-title{opacity:.55}
+.t-cancelled .t-date{background:#8E1F2A}
+.t-stamp{position:absolute;bottom:1.6rem;right:-2.8rem;transform:rotate(-35deg);background:#C0392B;color:#fff;font-family:'Geist Mono',monospace;font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:.8rem;padding:.4rem 3rem;box-shadow:0 6px 16px -6px rgba(0,0,0,.5);z-index:2}
+.t-cancel-note{background:#F8DCD7;color:#5A1520;border:2px solid #C0392B;border-radius:14px;padding:.8rem 1rem;margin:0 0 1rem;line-height:1.45}
+.t-closed{background:transparent;border:2px dashed currentColor;color:var(--maroon-ink);cursor:default;opacity:.7}
 .t-later{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-top:1rem}
 .t-mini{background:rgba(250,243,227,.06);color:var(--cream);border:1px solid rgba(216,196,160,.2);box-shadow:none;padding:1.4rem}
 .t-mini::before{height:3px;opacity:.7}
@@ -997,12 +1002,14 @@ footer ul a:hover{color:var(--cream)}
         <ul class="t-list"><li><span>Time</span><span>9:00am – 4:00pm</span></li><li><span>Venue</span><span>Westminster City School, 55 Palace St, SW1E 5HJ</span></li><li><span>Entry</span><span>£22 per person</span></li><li><span>Places</span><span>18 teams</span></li><li><span>Prizes</span><span>Trophy, medals, prizes · free T-shirts</span></li><li><span>Registration closes</span><span>13 Oct</span></li></ul>
         <a class="btn btn-maroon" href="tourney/?t=t20261018&amp;tab=teams">Teams, fixtures &amp; live scores →</a>
       </article>
-      <article class="t-card reveal" data-ends="2026-11-21">
-        <div class="t-top"><div class="t-name">Net Play</div><div class="t-date">Sat 21 Nov 2026</div></div>
+      <article class="t-card t-cancelled reveal" data-ends="2026-11-21">
+        <div class="t-stamp" aria-hidden="true">Cancelled</div>
+        <div class="t-top"><div class="t-name">Net Play</div><div class="t-date"><s>Sat 21 Nov 2026</s></div></div>
+        <div class="t-cancel-note" role="status"><b>❌ This tournament has been cancelled.</b> Everyone who registered will get a full refund within 15 working days. Sorry, and thank you for your support. 💛</div>
         <div class="t-title">Net Play Badminton Tournament</div>
         <div class="t-tags">Men's, women's &amp; mixed doubles · all levels, 18+ · 💷 cash prizes</div>
         <ul class="t-list"><li><span>Time</span><span>12:00 – 6:00pm</span></li><li><span>Venue</span><span>Barking Sporthouse, Lodge Ave, Dagenham RM8 2JR</span></li><li><span>Prizes</span><span>£300 · £200 · £100 in each category: men's, women's and mixed doubles</span></li><li><span>Entry</span><span>£30 per player · £27 early bird until 30 Oct</span></li><li><span>Places</span><span>24 teams per category</span></li><li><span>Format</span><span>Groups of 3, then 8-team knockout</span></li><li><span>Spectators</span><span>£2 on the door</span></li><li><span>Registration closes</span><span>18 Nov</span></li></ul>
-        <a class="btn btn-maroon" href="tourney/?t=t20261121&amp;tab=reg">Register your team →</a>
+        <span class="btn t-closed" aria-disabled="true">Registration closed</span>
       </article>
     </div>
 

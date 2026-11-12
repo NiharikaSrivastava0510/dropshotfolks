@@ -924,14 +924,20 @@ function regSignIn(t){
         <button class="btn primary" type="submit">Email me a login code</button><button class="btn" data-psignin="google" type="button">Continue with Google</button></form>`}</div>`;
 }
 const tLinkUrl = () => location.origin+location.pathname+"?t="+encodeURIComponent(T()?.id||"")+"&tab=reg";
+// tournaments that have been cancelled: registration is closed and everyone sees why
+const CANCELLED = { t20261121: "This tournament has been cancelled. Everyone who registered will get a full refund within 15 working days. Sorry, and thank you for your support." };
+// matches "t20261121" and "t20261121-awtk"
+const cancelledMsg = t => t?.id ? (CANCELLED[t.id] || CANCELLED[String(t.id).split("-")[0]] || "") : "";
+const cancelBanner = t => cancelledMsg(t) ? `<section class="panel" style="border:3px solid #C0392B;background:#F8DCD7;color:#5A1520"><h2 style="color:#8E1F2A">❌ Cancelled</h2><p style="margin:0">${esc(cancelledMsg(t))}</p></section>` : "";
 function viewReg(){
-  const t=T(); if(!t) return noTourney();
+  let t=T(); if(!t) return noTourney();
+  if(cancelledMsg(t) && !S.isAdmin) t={...t, regOpen:false};   // cancelled: no registration form for players
   if(S.isAdmin && S.newT) return orgBar(t)+viewOrg("new");
   if(S.isAdmin && S.editDetails) return orgBar(t)+viewOrg("details");
   const mine=S.uid && !S.isAdmin?S.teams.filter(x=>x.tid===t.id && x.createdBy===S.uid):[];
   const full=c=>Number(t.maxTeams)>0 && teamsOf(t,c).length>=Number(t.maxTeams);
   const mapQ=[t.venue,t.address].filter(Boolean).join(", "), r=rules(t);
-  return `${orgBar(t)}${pickBar(t)}<section class="panel thero ${t.poster?"":"noposter"}">${t.poster?`<div class="tposter"><img src="${esc(t.poster)}" alt="${esc(t.name||"Tournament")} poster"></div>`:""}<div class="tinfo">
+  return `${orgBar(t)}${pickBar(t)}${cancelBanner(t)}<section class="panel thero ${t.poster?"":"noposter"}">${t.poster?`<div class="tposter"><img src="${esc(t.poster)}" alt="${esc(t.name||"Tournament")} poster"></div>`:""}<div class="tinfo">
       ${S.isAdmin?`<button class="btn small editbtn" data-editdetails="1">✏️ Edit details</button>`:""}<span class="lbl">${esc(fmtDate(t.date))}${t.venue?` · ${esc(t.venue)}`:""}</span>
       <div class="big">${esc(t.name||"Tournament")}</div>
       ${t.info?`<p>${esc(t.info).replace(/\n/g,"<br>")}</p>`:""}

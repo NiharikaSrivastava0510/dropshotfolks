@@ -925,10 +925,10 @@ function regSignIn(t){
 }
 const tLinkUrl = () => location.origin+location.pathname+"?t="+encodeURIComponent(T()?.id||"")+"&tab=reg";
 // tournaments that have been cancelled: registration is closed and everyone sees why
-const CANCELLED = { t20261121: "This tournament has been cancelled. Everyone who registered will get a full refund within 15 working days. Sorry, and thank you for your support." };
+const CANCELLED = { t20261121: "Net Play has moved from Saturday 21 November to Saturday 20 February 2027. Registered teams keep their place, and registration reopens soon. Can't make the new date? You'll get a full refund." };
 // matches "t20261121" and "t20261121-awtk"
 const cancelledMsg = t => t?.id ? (CANCELLED[t.id] || CANCELLED[String(t.id).split("-")[0]] || "") : "";
-const cancelBanner = t => cancelledMsg(t) ? `<section class="panel" style="border:3px solid #C0392B;background:#F8DCD7;color:#5A1520"><h2 style="color:#8E1F2A">❌ Cancelled</h2><p style="margin:0">${esc(cancelledMsg(t))}</p></section>` : "";
+const cancelBanner = t => cancelledMsg(t) ? `<section class="panel" style="border:3px solid #E3A82B;background:#FBF1DC;color:#4A3410"><h2 style="color:#7A1E2C">📅 New date</h2><p style="margin:0">${esc(cancelledMsg(t))}</p></section>` : "";
 function viewReg(){
   let t=T(); if(!t) return noTourney();
   if(cancelledMsg(t) && !S.isAdmin) t={...t, regOpen:false};   // cancelled: no registration form for players
@@ -1445,9 +1445,9 @@ document.addEventListener("click", async e=>{
   if(ds.mailall){ await mailAll(t); return }
   if((ds.cancelteam || ds.cancelall) && S.isAdmin){ const note=($("#cancel-note")?.value||"").trim()||CANCEL_NOTE; S.cancelNote=note; db.collection("tourneys").doc(t.id).set({cancelNote:note},{merge:true}).catch(()=>{});
     const list=ds.cancelall?teamsOf(t).filter(x=>S.contacts[x.id]?.email):[teamById(ds.cancelteam)].filter(Boolean);
-    if(ds.cancelall && !confirm(`Email the cancellation and refund message to all ${list.length} team${list.length===1?"":"s"} now?`)) return;
+    if(ds.cancelall && !confirm(`Email the new date (and refund offer) to all ${list.length} team${list.length===1?"":"s"} now?`)) return;
     S.mailing=true; render(); let n=0; for(const x of list){ toast(`Emailing ${x.name} (${n+1}/${list.length})…`); if(await cancelTeam(t,x,note)) n++; else break }
-    S.mailing=false; render(); toast(n===list.length?`Cancellation emailed to ${n} team${n===1?"":"s"} ✓`:`Emailed ${n} of ${list.length}. Try again.`); return }
+    S.mailing=false; render(); toast(n===list.length?`New date emailed to ${n} team${n===1?"":"s"} ✓`:`Emailed ${n} of ${list.length}. Try again.`); return }
   if((ds.finalteam || ds.finalall) && S.isAdmin){ const note=($("#final-note")?.value||"").trim()||FINAL_NOTE; S.finalNote=note; db.collection("tourneys").doc(t.id).set({finalNote:note},{merge:true}).catch(()=>{});
     const list=ds.finalall?teamsOf(t).filter(x=>x.status==="confirmed"&&S.contacts[x.id]?.email&&S.codes[x.id]?.code):[teamById(ds.finalteam)].filter(Boolean);
     if(ds.finalall && !confirm(`Email the final details to all ${list.length} teams now?`)) return;
@@ -1902,14 +1902,14 @@ async function finalTeam(t, x, note){
   const at=nowIso(); S.codes[x.id]={...S.codes[x.id], finalAt:at}; await db.collection("tcodes").doc(x.id).set({finalAt:at},{merge:true}).catch(()=>{}); return true;
 }
 /* ---------- cancellation: tell every registered team, and ask for bank details for their refund ---------- */
-const CANCEL_NOTE = "We're really sorry: this tournament has been cancelled. Everyone gets a full refund of their entry fee within 15 working days.\n\nTo get your refund, please reply to this email with the bank details we should pay it to:\n• Account holder name\n• Sort code\n• Account number\n\nPlease only send these three things. We will never ask for your card number, PIN or online banking password.\n\nThank you so much for your support, and we hope to see you at the next one. 💛";
-function cancelMsg(t, x, note){ return `Hi ${x.name},\n\n❌ ${t.name||"The tournament"} on ${fmtDate(t.date)} has been cancelled.\n\n${note}\n\nTeam: ${x.name} (${playersOf(x).join(", ")})\n\nDropshot Folks` }
+const CANCEL_NOTE = "We're really sorry: Net Play can't go ahead on Saturday 21 November. It has moved to Saturday 20 February 2027.\n\nYour team keeps its place, so you don't need to do anything if you can make the new date.\n\nCan't make 20 February? You'll get a full refund of your entry fee within 15 working days. Just reply to this email with the bank details we should pay it to:\n• Account holder name\n• Sort code\n• Account number\n\nPlease only send these three things. We will never ask for your card number, PIN or online banking password.\n\nThank you so much for your support, and we hope to see you at the next one. 💛";
+function cancelMsg(t, x, note){ return `Hi ${x.name},\n\n📅 ${t.name||"The tournament"} has a new date.\n\n${note}\n\nTeam: ${x.name} (${playersOf(x).join(", ")})\n\nDropshot Folks` }
 function cancelHtml(t, x, note){
   return `<div style="margin:0;padding:24px 12px;background:#EADBC8;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto"><tr><td>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;margin:0 0 16px"><tr><td style="background:#7A1E2C;border:3px solid #2B2B2B;border-bottom-width:7px;border-radius:20px;padding:18px 20px">
     <div style="display:inline-block;background:#EADBC8;color:#7A1E2C;border:2px solid #2B2B2B;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:800;letter-spacing:.12em">DROPSHOT FOLKS</div>
-    <div style="font-family:'Arial Black',Arial,sans-serif;font-size:28px;line-height:1.1;font-weight:800;color:#fff;margin:12px 0 4px">❌ Tournament cancelled</div>
-    <div style="font-size:16px;color:#F1E3CF">${esc(t.name||"Tournament")} · ${esc(fmtDate(t.date))}</div></td></tr></table>
+    <div style="font-family:'Arial Black',Arial,sans-serif;font-size:28px;line-height:1.1;font-weight:800;color:#fff;margin:12px 0 4px">📅 New date: Sat 20 Feb 2027</div>
+    <div style="font-size:16px;color:#F1E3CF">${esc(t.name||"Tournament")} · moved from Sat 21 Nov</div></td></tr></table>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;margin:0 0 16px"><tr><td style="background:#F6EEE3;border:3px solid #2B2B2B;border-bottom-width:7px;border-radius:20px;padding:18px 20px;color:#2B2B2B;font-size:16px;line-height:1.55">
     <p style="margin:0 0 12px">Hi <b>${esc(x.name)}</b>,</p>
     <p style="margin:0 0 12px">${esc(note).replace(/\n/g,"<br>")}</p>
@@ -1918,14 +1918,14 @@ function cancelHtml(t, x, note){
 }
 async function cancelTeam(t, x, note){
   const c=S.contacts[x.id]||{}; if(!c.email) return false;
-  const r=await mailPost({to:c.email, cc:[c.email2,c.email3,c.email4].filter(Boolean), subject:`❌ Cancelled: ${t.name||"Tournament"} · ${fmtDate(t.date)} · your refund`, text:cancelMsg(t,x,note), html:cancelHtml(t,x,note)});
+  const r=await mailPost({to:c.email, cc:[c.email2,c.email3,c.email4].filter(Boolean), subject:`📅 New date: ${t.name||"Tournament"} has moved to Sat 20 Feb 2027`, text:cancelMsg(t,x,note), html:cancelHtml(t,x,note)});
   if(!r.ok){ toast(`Email to ${x.name} didn't send: ${r.error||"unknown error"}`); return false }
   const at=nowIso(); S.codes[x.id]={...S.codes[x.id], cancelAt:at}; await db.collection("tcodes").doc(x.id).set({cancelAt:at},{merge:true}).catch(()=>{}); return true;
 }
 function cancelPanel(t){
   const ts=teamsOf(t), note=S.cancelNote??t.cancelNote??CANCEL_NOTE, emailable=ts.filter(x=>S.contacts[x.id]?.email), sent=ts.filter(x=>S.codes[x.id]?.cancelAt).length;
-  return `<details class="mailset" open style="border:3px solid #C0392B"><summary>❌ Cancellation &amp; refund: tell every team${sent?` · <b>${sent} of ${ts.length} emailed ✓</b>`:""}</summary>
-    <p class="muted" style="margin:8px 0">Emails each registered team (captain, with the other players copied) that the tournament is cancelled and asks them to reply with their bank details for the refund. Replies come to your email.</p>
+  return `<details class="mailset" open style="border:3px solid #C0392B"><summary>📅 New date: tell every team (and offer refunds)${sent?` · <b>${sent} of ${ts.length} emailed ✓</b>`:""}</summary>
+    <p class="muted" style="margin:8px 0">Emails each registered team (captain, with the other players copied) that the tournament has moved to Sat 20 Feb 2027, their place is kept, and anyone who can't make it can reply with bank details for a refund. Replies come to your email.</p>
     <label class="f">Message<textarea id="cancel-note" rows="9">${esc(note)}</textarea></label>
     <div class="row">${S.mail?.url?`<button class="btn small primary" data-cancelall="1"${S.mailing||!emailable.length?" disabled":""}>📧 Email all ${emailable.length} team${emailable.length===1?"":"s"}</button>`:`<span class="muted">Set up 📧 Automatic emails below to send these, or use WhatsApp.</span>`}</div>
     <div class="finlist">${ts.map(x=>{ const c=S.contacts[x.id]||{}, ph=ukPhone(c.phone);

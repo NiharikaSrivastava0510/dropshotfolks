@@ -217,10 +217,11 @@ function rotInfo(s){
   // a session's rotation only runs on its own day, between its start and end times
   const rs = /^\d\d:\d\d$/.test(s.rotStart||"") ? new Date(`${s.date}T${s.rotStart}:00`) : null;
   const startT = rs && rs>=sessStart(s) && rs<sessEnd(s) ? rs : sessStart(s);
-  const mins = Number(s.gameMins)||GAME_MINS, ms = mins*60e3, end = sessEnd(s), now = Date.now();
+  const re = /^\d\d:\d\d$/.test(s.rotEnd||"") ? new Date(`${s.date}T${s.rotEnd}:00`) : null;
+  const mins = Number(s.gameMins)||GAME_MINS, ms = mins*60e3, end = re && re>startT && re<=sessEnd(s) ? re : sessEnd(s), now = Date.now();
   const total = Math.max(1, Math.floor((end-startT)/ms));
   const idx = now<startT ? -1 : Math.min(total-1, Math.floor((now-startT)/ms));
-  return {startT, mins, total, idx, live: now>=startT && now<end, done: now>=end, at:i=>new Date(startT.getTime()+i*ms)};
+  return {startT, endT:end, mins, total, idx, live: now>=startT && now<end, done: now>=end, at:i=>new Date(startT.getTime()+i*ms)};
 }
 function courtRoster(s,c){ return S.bookings.filter(b=>b.sessionId===s.id && b.court===c && ACTIVE.includes(b.status) && !b.absent).sort((a,b)=>String(a.createdAt).localeCompare(b.createdAt)) }
 function schedule(ids,total,mate=mates){
@@ -1197,16 +1198,18 @@ function orgOverview(){
 }
 // the rotation box on a session card: game length, when games start, and how courts move on
 function rotPanel(s){
-  const r=rotInfo(s), mins=r.mins, mode=s.rotMode==="clock"?"clock":"score", from=s.rotStart||s.start;
+  const r=rotInfo(s), mins=r.mins, mode=s.rotMode==="clock"?"clock":"score", from=hhmm(r.startT), to=hhmm(r.endT);
   const most=Math.max(0,...courtsOf(s).map(c=>courtRoster(s,c).length));
   const each = most>=4 ? Math.floor(r.total*4/most) : null;
   return `<div class="grid2 sub-body">
     <label class="f">Minutes per game<input id="rt-mins-${s.id}" type="number" min="5" max="60" step="1" value="${mins}"></label>
     <label class="f">First game starts at<input id="rt-start-${s.id}" type="time" min="${esc(s.start)}" max="${esc(s.end)}" value="${esc(from)}"></label>
+    <label class="f">Last game ends at<input id="rt-end-${s.id}" type="time" min="${esc(s.start)}" max="${esc(s.end)}" value="${esc(to)}"></label>
+    <p class="muted" style="font-size:.85rem;align-self:end;margin:0">Session runs ${esc(s.start)}–${esc(s.end)}. The rotation has to fit inside it.</p>
     <label class="f" style="grid-column:1/-1">Courts move to the next game
       <select id="rt-mode-${s.id}"><option value="score" ${mode==="score"?"selected":""}>When the score is saved</option><option value="clock" ${mode==="clock"?"selected":""}>When the time is up (timer)</option></select></label>
     <div class="row" style="grid-column:1/-1;gap:6px;flex-wrap:wrap">${[10,12,15,20].map(m=>`<button type="button" class="btn small ${m===mins?"primary":""}" data-rtpreset="${esc(s.id)}|${m}">${m} min</button>`).join("")}</div>
-    <div class="banner info" style="grid-column:1/-1"><div class="grow"><b>${r.total} game${r.total===1?"":"s"} per court</b>, ${hhmm(r.at(0))} to ${hhmm(sessEnd(s))}${from!==s.start?` · warm-up ${esc(s.start)}–${esc(from)}`:""}${each!=null?` · about ${each} games each with ${most} on a court`:""}<br><span class="muted" style="font-size:.85rem">${Array.from({length:Math.min(r.total,12)},(_,i)=>`Game ${i+1} ${hhmm(r.at(i))}`).join(" · ")}${r.total>12?" …":""}</span></div></div>
+    <div class="banner info" style="grid-column:1/-1"><div class="grow"><b>${r.total} game${r.total===1?"":"s"} per court</b>, ${from} to ${to}${from!==s.start?` · warm-up ${esc(s.start)}–${esc(from)}`:""}${each!=null?` · about ${each} games each with ${most} on a court`:""}<br><span class="muted" style="font-size:.85rem">${Array.from({length:Math.min(r.total,12)},(_,i)=>`Game ${i+1} ${hhmm(r.at(i))}`).join(" · ")}${r.total>12?" …":""}</span></div></div>
     <p class="muted" style="grid-column:1/-1;font-size:.85rem">${mode==="clock"?"Timer: every court moves on when the time is up, even if no score was saved. Live courts show a countdown.":"By score: a court moves on as soon as its score is saved, so faster games mean more games. The times above are a guide."}</p>
     <label class="row" style="grid-column:1/-1;gap:6px"><input type="checkbox" style="width:auto" id="rt-all-${s.id}"> Use this for every upcoming ${esc(slotLabel(s))} session</label>
     <div class="row" style="grid-column:1/-1"><button class="btn small primary" data-rtsave="${esc(s.id)}">Save rotation</button></div>
@@ -1703,13 +1706,14 @@ document.addEventListener("click", async e=>{
   if(ds.confirm){ setBooking(ds.confirm,{status:"confirmed"},"Payment received. Your place is confirmed — see you on court!","Confirmed"); return }
   if(ds.rtpreset){ const [sid,m]=ds.rtpreset.split("|"); const el=$(`#rt-mins-${sid}`); if(el){ el.value=m; el.closest(".act-panel")?.querySelectorAll("[data-rtpreset]").forEach(b=>b.classList.toggle("primary", b===t)) } return }
   if(ds.rtsave){ const sid=ds.rtsave, s=S.sessions.find(x=>x.id===sid); if(!s) return;
-    const mins=Math.round(Number($(`#rt-mins-${sid}`).value)), st=$(`#rt-start-${sid}`).value, mode=$(`#rt-mode-${sid}`).value==="clock"?"clock":"score";
+    const mins=Math.round(Number($(`#rt-mins-${sid}`).value)), st=$(`#rt-start-${sid}`).value, en=$(`#rt-end-${sid}`).value, mode=$(`#rt-mode-${sid}`).value==="clock"?"clock":"score";
     if(!(mins>=5 && mins<=60)){ toast("Pick between 5 and 60 minutes per game"); return }
     if(st && (st<s.start || st>=s.end)){ toast(`The first game has to start between ${s.start} and ${s.end}`); return }
-    const rot={gameMins:mins, rotStart:st && st!==s.start ? st : "", rotMode:mode};
+    if(en && (en>s.end || en<=(st||s.start))){ toast(`The last game has to end after the first game starts, and by ${s.end}`); return }
+    const rot={gameMins:mins, rotStart:st && st!==s.start ? st : "", rotEnd:en && en!==s.end ? en : "", rotMode:mode};
     const {id,...body}=s; if(!await save("sessions",id,{...body,...rot},"Rotation saved")) return;
     if($(`#rt-all-${sid}`)?.checked){ const same=upcoming().filter(x=>x.id!==sid && slotKey(x)===slotKey(s));
-      for(const x of same){ const {id:xid,...xb}=x; await save("sessions",xid,{...xb, gameMins:mins, rotMode:mode, rotStart: st && st!==s.start && st>=x.start && st<x.end ? st : ""}) }
+      for(const x of same){ const {id:xid,...xb}=x; await save("sessions",xid,{...xb, gameMins:mins, rotMode:mode, rotStart: st && st!==s.start && st>=x.start && st<x.end ? st : "", rotEnd: en && en!==s.end && en>x.start && en<=x.end ? en : ""}) }
       toast(`Rotation copied to ${same.length} more session${same.length===1?"":"s"}`) }
     return }
   if(ds.offer){ setBooking(ds.offer,{status:"awaiting"},"A place opened up. Please pay to confirm."); return }

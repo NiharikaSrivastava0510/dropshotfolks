@@ -215,7 +215,8 @@ const mates = (a,b) => partnerIds(a).includes(b) && partnerIds(b).includes(a);
 /* ---------- rotation: same answer for everyone, worked out from the roster and the clock ---------- */
 function rotInfo(s){
   // a session's rotation only runs on its own day, between its start and end times
-  const startT = sessStart(s);
+  const rs = /^\d\d:\d\d$/.test(s.rotStart||"") ? new Date(`${s.date}T${s.rotStart}:00`) : null;
+  const startT = rs && rs>=sessStart(s) && rs<sessEnd(s) ? rs : sessStart(s);
   const mins = Number(s.gameMins)||GAME_MINS, ms = mins*60e3, end = sessEnd(s), now = Date.now();
   const total = Math.max(1, Math.floor((end-startT)/ms));
   const idx = now<startT ? -1 : Math.min(total-1, Math.floor((now-startT)/ms));
@@ -353,7 +354,9 @@ function scoreForm(s,c,gi,sc,idp){
 // Which game is on now: each court moves on as soon as its game's score is saved.
 function courtNow(s,c,games,r){
   const done=Object.keys(s.scores?.[c]||{}).map(Number).filter(i=>scoreOf(s,c,i));
-  return {cur: done.length ? Math.min(Math.max(...done)+1, Math.max(0,games.length-1)) : 0, byScore:true};
+  const byS = done.length ? Math.min(Math.max(...done)+1, Math.max(0,games.length-1)) : 0;
+  if(s.rotMode==="clock" && r.live) return {cur: Math.min(Math.max(byS, r.idx), Math.max(0,games.length-1)), byScore:false};
+  return {cur: byS, byScore:true};
 }
 function gameBox(s,c,i,x,names,r,cur=0){
   const sc = scoreOf(s,c,i), teams = sc ? [sc.a,sc.b] : x.teams;
@@ -820,7 +823,7 @@ function viewLive(){
   return `<section class="panel">
     <div><h2>Live courts</h2><p class="muted">Four play doubles while the others rest, and everyone gets the same number of games. When a game's score is saved, the next four go on.</p></div>
     <div class="sess">${ups.slice(0,6).map(x=>`<button data-live="${x.id}" aria-pressed="${x.id===s.id}"><b>${fmtDate(x.date)}</b><span>${esc(x.start)}–${esc(x.end)}${rotInfo(x).live?" · live now":""}</span></button>`).join("")}</div>
-    <p>${r.live?`<span class="dot pulse"></span><b>Live now</b> · each court moves to its next game when the score is saved`:r.done?"This session has finished.":`First game at <b>${hhmm(r.startT)}</b> · starts in <span class="cd" data-at="${r.startT.toISOString()}">–</span>`} ${v.venue?` · ${esc(v.venue)}`:""}</p>
+    <p>${r.live?`<span class="dot pulse"></span><b>Live now</b> · ${s.rotMode==="clock"?`${r.mins}-minute games · next game in <span class="cd" data-at="${r.at(r.idx+1).toISOString()}">–</span>`:"each court moves to its next game when the score is saved"}`:r.done?"This session has finished.":`First game at <b>${hhmm(r.startT)}</b> · starts in <span class="cd" data-at="${r.startT.toISOString()}">–</span>`} ${v.venue?` · ${esc(v.venue)}`:""}</p>
   </section>
   <div class="court-grid">${courtsOf(s).map(c=>courtLive(s,c)).join("")}</div>
   <section class="panel">${leaderboard()}</section>`;
@@ -1192,6 +1195,23 @@ function orgOverview(){
   </tbody></table></div></section>`;
   return html;
 }
+// the rotation box on a session card: game length, when games start, and how courts move on
+function rotPanel(s){
+  const r=rotInfo(s), mins=r.mins, mode=s.rotMode==="clock"?"clock":"score", from=s.rotStart||s.start;
+  const most=Math.max(0,...courtsOf(s).map(c=>courtRoster(s,c).length));
+  const each = most>=4 ? Math.floor(r.total*4/most) : null;
+  return `<div class="grid2 sub-body">
+    <label class="f">Minutes per game<input id="rt-mins-${s.id}" type="number" min="5" max="60" step="1" value="${mins}"></label>
+    <label class="f">First game starts at<input id="rt-start-${s.id}" type="time" min="${esc(s.start)}" max="${esc(s.end)}" value="${esc(from)}"></label>
+    <label class="f" style="grid-column:1/-1">Courts move to the next game
+      <select id="rt-mode-${s.id}"><option value="score" ${mode==="score"?"selected":""}>When the score is saved</option><option value="clock" ${mode==="clock"?"selected":""}>When the time is up (timer)</option></select></label>
+    <div class="row" style="grid-column:1/-1;gap:6px;flex-wrap:wrap">${[10,12,15,20].map(m=>`<button type="button" class="btn small ${m===mins?"primary":""}" data-rtpreset="${esc(s.id)}|${m}">${m} min</button>`).join("")}</div>
+    <div class="banner info" style="grid-column:1/-1"><div class="grow"><b>${r.total} game${r.total===1?"":"s"} per court</b>, ${hhmm(r.at(0))} to ${hhmm(sessEnd(s))}${from!==s.start?` · warm-up ${esc(s.start)}–${esc(from)}`:""}${each!=null?` · about ${each} games each with ${most} on a court`:""}<br><span class="muted" style="font-size:.85rem">${Array.from({length:Math.min(r.total,12)},(_,i)=>`Game ${i+1} ${hhmm(r.at(i))}`).join(" · ")}${r.total>12?" …":""}</span></div></div>
+    <p class="muted" style="grid-column:1/-1;font-size:.85rem">${mode==="clock"?"Timer: every court moves on when the time is up, even if no score was saved. Live courts show a countdown.":"By score: a court moves on as soon as its score is saved, so faster games mean more games. The times above are a guide."}</p>
+    <label class="row" style="grid-column:1/-1;gap:6px"><input type="checkbox" style="width:auto" id="rt-all-${s.id}"> Use this for every upcoming ${esc(slotLabel(s))} session</label>
+    <div class="row" style="grid-column:1/-1"><button class="btn small primary" data-rtsave="${esc(s.id)}">Save rotation</button></div>
+  </div>`;
+}
 // the waiting list box on a session card: who's waiting, in order, per court
 function waitPanel(s){
   const how = `<p class="muted" style="font-size:.85rem;margin:0">When a court is full, new bookings go on its waiting list. If someone cancels, everyone waiting for that court is emailed and the first to tap <b>Take the place</b> in My bookings gets it. You can also give a place straight away with <b>Offer place</b>.</p>`;
@@ -1240,13 +1260,14 @@ function adminSession(s){
       return `<div class="banner info"><div class="grow"><b>A place is free and people are waiting:</b> ${cs.map(c=>`Court ${c}: ${freeOn(s,c)} free, ${waitersOn(s,c).length} waiting`).join(" · ")}. Waiting players can tap <b>Take the place</b> in My bookings.</div><button class="btn small primary" data-mailwait="${s.id}">📧 Email the waiting list</button></div>` })()}
     ${(()=>{ const want=S.players.filter(p=>(p.remind||[]).includes(slotKey(s)) && p.email && !S.bookings.some(b=>b.sessionId===s.id && b.playerId===p.id && b.status!=="cancelled")).length;
       const tiles=[["bkl","👥","Bookings",`${booked}/${places}${cnt("waitlist")?` · ${cnt("waitlist")} waiting`:""}`],["wl","⏳","Waiting list",cnt("waitlist")?`${cnt("waitlist")} waiting`:"nobody waiting"],["addp","➕","Add a player","registered or walk-in"],["ci","✅","Check-in",`${here} of ${booked} here`],
-        ["mail","📧","Emails",want?`${want} want a reminder`:s.remindedAt?"reminder sent ✓":"reminder, rules"],["pr","🤝","Partners",`${(s.pairs||[]).length} pair${(s.pairs||[]).length===1?"":"s"}`],
+        ["mail","📧","Emails",want?`${want} want a reminder`:s.remindedAt?"reminder sent ✓":"reminder, rules"],["rot","🔄","Rotation",`${Number(s.gameMins)||GAME_MINS} min games · ${s.rotMode==="clock"?"timer":"by score"}`],["pr","🤝","Partners",`${(s.pairs||[]).length} pair${(s.pairs||[]).length===1?"":"s"}`],
         ["es","✏️","Edit session","time, venue, courts, fee"],["hc","🔑","Host code",S.secrets[s.id]?"set":"not set"],["set","⚙️","Close or cancel",s.open===false?"booking closed":"booking open"]];
       const cur=sactOf(s);
       return `<div class="acts">${tiles.map(([k,ic,t,sub])=>`<button type="button" class="act ${k===cur?"on":""} ${(k==="mail"&&want)||(k==="wl"&&courtsOf(s).some(c=>freeOn(s,c)>0&&waitersOn(s,c).length))?"ping":""}" data-sact="${esc(s.id)}|${k}" aria-pressed="${k===cur}"><span class="act-ic">${ic}</span><b>${t}</b><span>${esc(sub)}</span></button>`).join("")}</div>
       <div class="act-panel">${{
         bkl:`<div class="tbl"><table><thead><tr><th>Player</th><th>Ref</th><th>Status</th><th>Court</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${cancelled?`<details class="sub" id="canc-${s.id}"><summary><b>Cancelled</b> <span class="muted">(${cancelled})</span></summary><div class="sub-body" style="display:grid;gap:6px">${inS.filter(b=>b.status==="cancelled").map(b=>`<div class="row" style="justify-content:space-between"><span>${esc(b.name)} · Court ${esc(b.court)}</span><span class="row"><button class="btn small" data-restore="${esc(b.id)}">Restore</button><button class="btn small ghost danger" data-bdel="${esc(b.id)}">Delete</button></span></div>`).join("")}</div></details>`:""}`,
         wl:waitPanel(s),
+        rot:rotPanel(s),
         addp:`      <div class="grid2 sub-body">
         <label class="f">Player<input id="ap-name-${s.id}" list="ap-list-${s.id}" data-apsearch="${esc(s.id)}" placeholder="Search registered players, or type a new name" autocomplete="off"></label>
         <datalist id="ap-list-${s.id}">${S.players.filter(p=>!S.bookings.some(b=>b.sessionId===s.id && b.playerId===p.id && b.status!=="cancelled")).slice().sort((a,b)=>String(a.name).localeCompare(b.name)).map(p=>`<option value="${esc(apLabel(p))}"></option>`).join("")}</datalist>
@@ -1680,6 +1701,17 @@ document.addEventListener("click", async e=>{
     if(await savePlayer({...meP(), levelRequest:lv})) toast("Request sent to the organiser"); return }
   // organiser
   if(ds.confirm){ setBooking(ds.confirm,{status:"confirmed"},"Payment received. Your place is confirmed — see you on court!","Confirmed"); return }
+  if(ds.rtpreset){ const [sid,m]=ds.rtpreset.split("|"); const el=$(`#rt-mins-${sid}`); if(el){ el.value=m; el.closest(".act-panel")?.querySelectorAll("[data-rtpreset]").forEach(b=>b.classList.toggle("primary", b===t)) } return }
+  if(ds.rtsave){ const sid=ds.rtsave, s=S.sessions.find(x=>x.id===sid); if(!s) return;
+    const mins=Math.round(Number($(`#rt-mins-${sid}`).value)), st=$(`#rt-start-${sid}`).value, mode=$(`#rt-mode-${sid}`).value==="clock"?"clock":"score";
+    if(!(mins>=5 && mins<=60)){ toast("Pick between 5 and 60 minutes per game"); return }
+    if(st && (st<s.start || st>=s.end)){ toast(`The first game has to start between ${s.start} and ${s.end}`); return }
+    const rot={gameMins:mins, rotStart:st && st!==s.start ? st : "", rotMode:mode};
+    const {id,...body}=s; if(!await save("sessions",id,{...body,...rot},"Rotation saved")) return;
+    if($(`#rt-all-${sid}`)?.checked){ const same=upcoming().filter(x=>x.id!==sid && slotKey(x)===slotKey(s));
+      for(const x of same){ const {id:xid,...xb}=x; await save("sessions",xid,{...xb, gameMins:mins, rotMode:mode, rotStart: st && st!==s.start && st>=x.start && st<x.end ? st : ""}) }
+      toast(`Rotation copied to ${same.length} more session${same.length===1?"":"s"}`) }
+    return }
   if(ds.offer){ setBooking(ds.offer,{status:"awaiting"},"A place opened up. Please pay to confirm."); return }
   if(ds.absent){ const b=S.bookings.find(x=>x.id===ds.absent); setBooking(ds.absent,{absent:!b.absent},null, b.absent?"Back in the rotation":"Taken out of the rotation"); return }
   if(ds.acancel){ arm(t,"Confirm cancel",async()=>{ const b=S.bookings.find(x=>x.id===ds.acancel), was=b?.status;

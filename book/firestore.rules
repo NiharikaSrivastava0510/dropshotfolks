@@ -261,6 +261,30 @@ service cloud.firestore {
         && request.resource.data.code == get(/databases/$(database)/documents/tsecrets/$(request.resource.data.tid)).data.code;
     }
 
+    // Thursday check list (dropshotfolks.co.uk/thursday): anyone can send answers without signing in,
+    // only ticks from the lists below are accepted, and only the organiser can read them.
+    // Keep the option lists in sync with thursday/questions.js.
+    function pickOne(d, k, opts) { return !(k in d) || d[k] in opts; }
+    function pickMany(d, k, opts) { return !(k in d) || (d[k] is list && d[k].size() > 0 && d[k].size() <= opts.size() && d[k].hasOnly(opts)); }
+    function validSurvey(d) {
+      return d.keys().hasOnly(['form', 'at', 'often', 'likes', 'heard', 'brought', 'recommend', 'without', 'better', 'local', 'age', 'comment'])
+        && d.form == 'thursday' && d.at == request.time
+        && d.often in ['first', 'monthly', 'most', 'every']
+        && pickMany(d, 'likes', ['level', 'friendly', 'organised', 'value', 'time', 'location', 'fitness', 'friends'])
+        && pickMany(d, 'heard', ['friend', 'social', 'whatsapp', 'google', 'meetup', 'other'])
+        && pickOne(d, 'brought', ['none', 'one', 'few', 'many'])
+        && pickOne(d, 'recommend', ['yes', 'maybe', 'no'])
+        && pickMany(d, 'without', ['less', 'stop', 'elsewhere', 'saturday'])
+        && pickMany(d, 'better', ['courts', 'longer', 'weekday', 'coaching', 'great'])
+        && pickMany(d, 'local', ['live', 'work', 'study'])
+        && pickOne(d, 'age', ['u18', '18', '25', '35', '45', '55'])
+        && shortText(d.get('comment', ''), 500);
+    }
+    match /surveys/{id} {
+      allow create: if validSurvey(request.resource.data);
+      allow read, update, delete: if isAdmin();
+    }
+
     // Small profile photos shown on the live courts.
     // Who each player wants to partner. Public so every device works out the same court rotation.
     match /partners/{uid} {

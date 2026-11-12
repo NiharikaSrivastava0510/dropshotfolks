@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com; connect-src 'self' https://*.googleapis.com; img-src 'self' data:; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Thursday Check List · Dropshot Folks</title>
+<meta name="description" content="A one-minute tick-box check list about the Dropshot Folks Thursday badminton session.">
+<link rel="icon" href="../images/logo-mark.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=Geist:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="style.css?v=1">
+<script src="../vendor/firebase-10.12.2/firebase-app-compat.js"></script>
+<script src="../vendor/firebase-10.12.2/firebase-firestore-compat.js"></script>
+<script src="../book/firebase-config.js"></script>
+<script src="questions.js?v=1"></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><img src="../images/logo-mark.png" alt=""><h1>Dropshot Folks<small>Thursday night badminton · Swanlea School</small></h1></div>
+</header>
+
+<main class="wrap">
+  <section id="formView">
+    <div class="intro">
+      <h2>Thursday quick check list</h2>
+      <p class="muted">Just tick the boxes. It takes about a minute, there's no sign-in and we don't ask your name. Your answers help us keep Thursday going.</p>
+    </div>
+    <form id="survey" novalidate>
+      <div id="questions"></div>
+      <fieldset class="card">
+        <legend><span class="n" id="lastN"></span>Anything else you'd like to tell us?<span class="hint">Optional</span></legend>
+        <textarea name="comment" maxlength="500" placeholder="What you love, what we could do better…"></textarea>
+      </fieldset>
+      <button class="btn full" type="submit" id="send">Send my answers</button>
+      <p class="err" id="err" role="alert" hidden></p>
+    </form>
+  </section>
+
+  <section id="doneView" class="card thanks" hidden>
+    <div class="big" aria-hidden="true">🏸</div>
+    <h2>Thank you!</h2>
+    <p class="muted">Your answers have been sent. See you on court on Thursday.</p>
+    <button class="btn line" type="button" id="again">Fill it in for someone else</button>
+  </section>
+
+  <p class="foot"><a href="../">dropshotfolks.co.uk</a></p>
+</main>
+
+<script src="form.js?v=1"></script>
+</body>
+</html>

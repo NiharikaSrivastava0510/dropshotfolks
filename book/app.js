@@ -1331,7 +1331,7 @@ function adminSession(s){
           <textarea id="mn-${s.id}" rows="7">${esc(mailNoteOf(s))}</textarea>
           <div class="row" style="flex-wrap:wrap;gap:8px"><button class="btn small" data-mnsave="${esc(s.id)}">Save note</button><button class="btn small ghost" data-mnreset="${esc(s.id)}">Reset to the standard note</button>
             <label class="row" style="gap:6px;font-size:.88rem"><input type="checkbox" style="width:auto" id="mn-all-${s.id}"> Use for every upcoming ${esc(slotLabel(s))} session</label></div>
-          <details id="mnprev-${s.id}"><summary>Preview the email</summary><pre style="white-space:pre-wrap;font:inherit;font-size:.88rem;margin:8px 0 0">${esc(reminderMail(s,{name:"Alex Player",email:"",bookings:[{name:"Alex Player",court:courtsOf(s)[0]||1,status:"confirmed",ref:"DSF ALEX"}]}).text)}</pre></details></div>
+          <details id="mnprev-${s.id}"><summary>Preview the email</summary><pre style="white-space:pre-wrap;font:inherit;font-size:.88rem;margin:8px 0 0">${(()=>{ const r=bookedPeople(s)[0]; return r?`<span class="muted">Example: what ${esc(r.name)} gets. Everyone sees their own court.</span>\n\n${esc(reminderMail(s,r).text)}`:"No one is booked yet." })()}</pre></details></div>
         <div class="row"><button class="btn small primary" data-mailrem="${s.id}">📧 Email reminder + rules</button>${s.remindedAt?`<span class="chip st-confirmed">Reminder sent ${esc(new Date(s.remindedAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))}</span>`:""}<button class="btn small" data-msg="${s.id}">Copy reminder message</button><button class="btn small" data-emails="${s.id}">Copy player emails</button></div>`,
         pr:partnersPanel(s),
         es:`      <div class="grid2 sub-body">
@@ -1607,7 +1607,7 @@ async function sendAll(mails, fallbackSubject, fallbackText){
 async function emailReminder(s){
   const people=bookedPeople(s); if(!people.length){ toast("No one with an email is booked on this session yet"); return }
   if(!confirm(`Email the reminder and session rules to ${people.length} player${people.length>1?"s":""}?`)) return;
-  const mails=people.map(r=>reminderMail(s,r)), n=await sendAll(mails, mails[0].subject.replace(/^Reminder/,"Reminder"), reminderText(s));
+  const mails=people.map(r=>reminderMail(s,r)), n=await sendAll(mails, mails[0].subject.replace(/: Court \d+ ·/," ·"), reminderText(s));
   if(n>0){ const {id,...body}=s; await save("sessions",id,{...body, remindedAt:nowIso()}); toast(`Reminder and rules emailed to ${n} of ${mails.length} ✓`) }
   const miss=noEmail(s); if(miss.length) setTimeout(()=>toast(`No email for: ${miss.map(b=>b.name).join(", ")}. Message them yourself.`),2500);
 }

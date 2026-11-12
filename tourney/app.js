@@ -1177,7 +1177,7 @@ function viewOrg(only){
         return `${junk.length?`<div class="rulesbar"><b>🧹 ${junk.length} team${junk.length>1?"s look":" looks"} like automated test entries</b> (fake 07700 900 phone numbers or an "automated test" note): ${junk.map(x=>esc(x.name)).join(", ")}.
           <div class="row" style="margin-top:6px"><button class="btn small primary" data-rmjunk="1">Remove ${junk.length>1?`all ${junk.length}`:"it"}</button></div></div>`:""}<div class="row"><span class="muted">${ts.length} teams · ${ts.filter(x=>x.status==="confirmed").length} confirmed</span>${ts.some(x=>x.status!=="confirmed")?`<button class="btn small" data-confirmall="${esc(S.cat)}">Confirm all</button>`:""}</div>
         <div class="otl">${ts.map(x=>teamCard(t,x)).join("")}</div>` })()}
-      ${finalPanel(t)}${mailPanel(t)}${recordsPanel()}
+      ${cancelledMsg(t)?cancelPanel(t):""}${finalPanel(t)}${mailPanel(t)}${recordsPanel()}
       <p class="muted" style="font-size:.82rem">📥 Import takes Google Form responses (.xlsx or .csv): teams already here get their contact details filled in, new teams are added.</p></section>`;
   if(ot==="fixtures") body=`<section class="panel"><h2>1 · Groups</h2>${catBar(t)}
       <p class="muted">${isTeam(t)?`${Number(t.numGroups)>0?`${Number(t.numGroups)} groups`:`Groups of about ${Number(t.groupSize)||3}`}; every tie is men's, women's and two mixed doubles. Top ${Number(t.advance)||2} per group go through.`:`Groups of about ${Number(t.groupSize)||4}; everyone plays everyone in their group. ${Number(t.advance)===1?"The winner":`The top ${Number(t.advance)||2}`} of each group go${Number(t.advance)===1?"es":""} through.`} Only confirmed teams are included. Change group sizes in 📝 Details.</p>
@@ -1443,6 +1443,11 @@ document.addEventListener("click", async e=>{
   if(ds.openko){ const d=document.querySelector("details.vm[id$='-ko']"); if(d){ d.open=true; const el=document.querySelector(`[data-medit="${ds.openko}_MD"]`)?.closest(".tie")||d; el.scrollIntoView({behavior:"smooth",block:"center"}); el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"),1600) } return }
   if(ds.mailteam){ const x=teamById(ds.mailteam); if(x) await mailTeam(t,x); return }
   if(ds.mailall){ await mailAll(t); return }
+  if((ds.cancelteam || ds.cancelall) && S.isAdmin){ const note=($("#cancel-note")?.value||"").trim()||CANCEL_NOTE; S.cancelNote=note; db.collection("tourneys").doc(t.id).set({cancelNote:note},{merge:true}).catch(()=>{});
+    const list=ds.cancelall?teamsOf(t).filter(x=>S.contacts[x.id]?.email):[teamById(ds.cancelteam)].filter(Boolean);
+    if(ds.cancelall && !confirm(`Email the cancellation and refund message to all ${list.length} team${list.length===1?"":"s"} now?`)) return;
+    S.mailing=true; render(); let n=0; for(const x of list){ toast(`Emailing ${x.name} (${n+1}/${list.length})…`); if(await cancelTeam(t,x,note)) n++; else break }
+    S.mailing=false; render(); toast(n===list.length?`Cancellation emailed to ${n} team${n===1?"":"s"} ✓`:`Emailed ${n} of ${list.length}. Try again.`); return }
   if((ds.finalteam || ds.finalall) && S.isAdmin){ const note=($("#final-note")?.value||"").trim()||FINAL_NOTE; S.finalNote=note; db.collection("tourneys").doc(t.id).set({finalNote:note},{merge:true}).catch(()=>{});
     const list=ds.finalall?teamsOf(t).filter(x=>x.status==="confirmed"&&S.contacts[x.id]?.email&&S.codes[x.id]?.code):[teamById(ds.finalteam)].filter(Boolean);
     if(ds.finalall && !confirm(`Email the final details to all ${list.length} teams now?`)) return;
@@ -1895,6 +1900,37 @@ async function finalTeam(t, x, note){
     text:finalMsg(t,x,note), html:finalHtml(t,x,note), png:await b64(await passPng(t,x,code)), file:`${x.name.replace(/[^\w]+/g,"-")}-team-pass.png`});
   if(!r.ok){ toast(`Email to ${x.name} didn't send: ${r.error||"unknown error"}`); return false }
   const at=nowIso(); S.codes[x.id]={...S.codes[x.id], finalAt:at}; await db.collection("tcodes").doc(x.id).set({finalAt:at},{merge:true}).catch(()=>{}); return true;
+}
+/* ---------- cancellation: tell every registered team, and ask for bank details for their refund ---------- */
+const CANCEL_NOTE = "We're really sorry: this tournament has been cancelled. Everyone gets a full refund of their entry fee within 15 working days.\n\nTo get your refund, please reply to this email with the bank details we should pay it to:\n• Account holder name\n• Sort code\n• Account number\n\nPlease only send these three things. We will never ask for your card number, PIN or online banking password.\n\nThank you so much for your support, and we hope to see you at the next one. 💛";
+function cancelMsg(t, x, note){ return `Hi ${x.name},\n\n❌ ${t.name||"The tournament"} on ${fmtDate(t.date)} has been cancelled.\n\n${note}\n\nTeam: ${x.name} (${playersOf(x).join(", ")})\n\nDropshot Folks` }
+function cancelHtml(t, x, note){
+  return `<div style="margin:0;padding:24px 12px;background:#EADBC8;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto"><tr><td>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;margin:0 0 16px"><tr><td style="background:#7A1E2C;border:3px solid #2B2B2B;border-bottom-width:7px;border-radius:20px;padding:18px 20px">
+    <div style="display:inline-block;background:#EADBC8;color:#7A1E2C;border:2px solid #2B2B2B;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:800;letter-spacing:.12em">DROPSHOT FOLKS</div>
+    <div style="font-family:'Arial Black',Arial,sans-serif;font-size:28px;line-height:1.1;font-weight:800;color:#fff;margin:12px 0 4px">❌ Tournament cancelled</div>
+    <div style="font-size:16px;color:#F1E3CF">${esc(t.name||"Tournament")} · ${esc(fmtDate(t.date))}</div></td></tr></table>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;margin:0 0 16px"><tr><td style="background:#F6EEE3;border:3px solid #2B2B2B;border-bottom-width:7px;border-radius:20px;padding:18px 20px;color:#2B2B2B;font-size:16px;line-height:1.55">
+    <p style="margin:0 0 12px">Hi <b>${esc(x.name)}</b>,</p>
+    <p style="margin:0 0 12px">${esc(note).replace(/\n/g,"<br>")}</p>
+    <p style="margin:0;padding:10px 12px;background:#fff;border:2px dashed #2B2B2B;border-radius:12px;font-size:14px">Team: <b>${esc(x.name)}</b> · ${esc(playersOf(x).join(", "))}</p></td></tr></table>
+  <p style="text-align:center;font-size:13px;color:#5C4B48;margin:0">Dropshot Folks · <i>Play. Meet. Repeat.</i></p></td></tr></table></div>`;
+}
+async function cancelTeam(t, x, note){
+  const c=S.contacts[x.id]||{}; if(!c.email) return false;
+  const r=await mailPost({to:c.email, cc:[c.email2,c.email3,c.email4].filter(Boolean), subject:`❌ Cancelled: ${t.name||"Tournament"} · ${fmtDate(t.date)} · your refund`, text:cancelMsg(t,x,note), html:cancelHtml(t,x,note)});
+  if(!r.ok){ toast(`Email to ${x.name} didn't send: ${r.error||"unknown error"}`); return false }
+  const at=nowIso(); S.codes[x.id]={...S.codes[x.id], cancelAt:at}; await db.collection("tcodes").doc(x.id).set({cancelAt:at},{merge:true}).catch(()=>{}); return true;
+}
+function cancelPanel(t){
+  const ts=teamsOf(t), note=S.cancelNote??t.cancelNote??CANCEL_NOTE, emailable=ts.filter(x=>S.contacts[x.id]?.email), sent=ts.filter(x=>S.codes[x.id]?.cancelAt).length;
+  return `<details class="mailset" open style="border:3px solid #C0392B"><summary>❌ Cancellation &amp; refund: tell every team${sent?` · <b>${sent} of ${ts.length} emailed ✓</b>`:""}</summary>
+    <p class="muted" style="margin:8px 0">Emails each registered team (captain, with the other players copied) that the tournament is cancelled and asks them to reply with their bank details for the refund. Replies come to your email.</p>
+    <label class="f">Message<textarea id="cancel-note" rows="9">${esc(note)}</textarea></label>
+    <div class="row">${S.mail?.url?`<button class="btn small primary" data-cancelall="1"${S.mailing||!emailable.length?" disabled":""}>📧 Email all ${emailable.length} team${emailable.length===1?"":"s"}</button>`:`<span class="muted">Set up 📧 Automatic emails below to send these, or use WhatsApp.</span>`}</div>
+    <div class="finlist">${ts.map(x=>{ const c=S.contacts[x.id]||{}, ph=ukPhone(c.phone);
+      return `<div class="finrow"><b>${esc(x.name)}</b><span class="muted">${esc(playersOf(x).join(", "))}${c.email?"":" · no email"}</span>${S.codes[x.id]?.cancelAt?`<span class="chip st-confirmed">Emailed ✓</span>`:""}
+        <span class="row">${S.mail?.url&&c.email?`<button class="btn small" data-cancelteam="${esc(x.id)}"${S.mailing?" disabled":""}>📧 ${S.codes[x.id]?.cancelAt?"Again":"Email"}</button>`:""}${ph?`<a class="btn small" href="https://wa.me/${esc(ph)}?text=${encodeURIComponent(cancelMsg(t,x,note))}" target="_blank" rel="noopener">💬 WhatsApp</a>`:""}</span></div>` }).join("") || `<p class="muted">No teams registered.</p>`}</div></details>`;
 }
 function finalPanel(t){
   const ts=teamsOf(t).filter(x=>x.status==="confirmed"), note=S.finalNote??t.finalNote??FINAL_NOTE, emailable=ts.filter(x=>S.contacts[x.id]?.email&&S.codes[x.id]?.code), sent=ts.filter(x=>S.codes[x.id]?.finalAt).length;

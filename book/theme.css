@@ -176,3 +176,11 @@ body.reception-on #tabs, body.reception-on #viewbar, body.reception-on #nextup, 
 .rc-court{min-width:14rem;padding:16px 26px}
 .rc-court b{font-size:3.6rem}
 .rc-big{font-size:1.25rem;padding:16px 24px}
+/* reception: one box per court, each in its court colour */
+.rc-court-box{border:2.5px solid var(--stk);border-radius:22px;overflow:hidden;box-shadow:4px 4px 0 var(--stk);background:color-mix(in srgb,var(--cc) 8%,var(--surface))}
+.rc-court-hd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--cc);color:#fff;padding:12px 16px;border-bottom:2.5px solid var(--stk)}
+.rc-court-hd b{font-family:var(--display);font-size:1.7rem;line-height:1}
+.rc-court-hd .rc-count{margin-left:auto;background:#fff;color:#2B2B2B;border:2px solid var(--stk);border-radius:999px;padding:3px 12px;font-weight:800;font-size:.9rem}
+.rc-court-box .rc-grid{padding:14px}
+/* display mode: nothing but the reception screen */
+body.reception-on .who, body.reception-on .toprow{display:none!important}

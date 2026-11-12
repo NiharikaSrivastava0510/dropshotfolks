@@ -494,9 +494,14 @@ function viewReception(s){
   return `<section class="rc"><div class="rc-head"><div><span class="lbl">${esc(fmtLong(s.date))} · ${esc(s.start)}–${esc(s.end)}${v.venue?` · ${esc(v.venue)}`:""}</span>
       <h2>Welcome to Dropshot Folks 🏸</h2><p class="rc-sub" style="text-align:left">Find your name and tap it to check in.</p></div><span class="chip st-confirmed">${here} of ${all.length} here</span></div>
     <input id="rc-q" class="rc-q" type="search" placeholder="🔎 Type your name…" autocomplete="off" autocapitalize="words" spellcheck="false" aria-label="Find your name">
-    <div class="rc-grid">${list.map(b=>{ const st=b.checkedIn&&!b.outAt?"in":b.outAt?"left":"";
-      return `<button type="button" class="rc-name ${st}" data-rcpick="${esc(b.id)}"><b>${esc(b.name)}</b><span>${st==="in"?`✓ Court ${esc(b.court)} · ${tm(b.inAt)}`:st==="left"?`Left ${tm(b.outAt)}`:"Tap to check in"}</span></button>` }).join("") || `<div class="empty">No one called “${esc(q)}” is booked. Ask the host.</div>`}</div>
-    <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><p class="muted" style="font-size:.85rem">Not on the list? Ask the host to add you.</p><button class="btn small ghost" data-rcexit="1">Exit reception</button></div></section>`;
+    ${(()=>{ const tile=b=>{ const st=b.checkedIn&&!b.outAt?"in":b.outAt?"left":"";
+        return `<button type="button" class="rc-name ${st}" data-rcpick="${esc(b.id)}"><b>${esc(b.name)}</b><span>${st==="in"?`✓ Here since ${tm(b.inAt)}`:st==="left"?`Left ${tm(b.outAt)}`:"Tap to check in"}</span></button>` };
+      const courts=[...new Set([...courtsOf(s), ...list.map(b=>b.court)])].sort((a,b)=>a-b).filter(c=>list.some(b=>b.court===c));
+      if(!courts.length) return `<div class="empty">No one called “${esc(q)}” is booked. Ask the host.</div>`;
+      return courts.map(c=>{ const on=list.filter(b=>b.court===c), inC=all.filter(b=>b.court===c), hereC=inC.filter(b=>b.checkedIn&&!b.outAt).length;
+        return `<div class="rc-court-box" style="--cc:${CLR[c]||"var(--accent)"}"><div class="rc-court-hd"><b>Court ${c}</b><span>${esc(courtName(s,c))} ${courtChips(s,c)}</span><span class="rc-count">${hereC} of ${inC.length} here</span></div>
+          <div class="rc-grid">${on.map(tile).join("")}</div></div>` }).join("") })()}
+    <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><p class="muted" style="font-size:.85rem">Not on the list? Ask the host to add you.</p><button class="btn small ghost" data-rcexit="1" title="Needs the PIN">🔒 Exit display mode</button></div></section>`;
 }
 // organiser's Reception tab: pick a session and turn this device into the check-in screen at the door
 function orgReception(){
@@ -510,7 +515,7 @@ function orgReception(){
       return `<div class="bk" style="flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;${isToday?"background:color-mix(in srgb,var(--gold) 25%,var(--surface))":""}">
         <div><b>${isToday?"Today · ":""}${esc(fmtLong(s.date))}</b><br><span class="muted">${esc(s.title||"Session")} · ${esc(s.start)}–${esc(s.end)} · ${here} of ${all.length} checked in</span></div>
         <button class="btn ${isToday?"primary":""}" data-rcopen="${esc(s.id)}">🛎️ Open reception</button></div>` }).join("")}</div>
-    <p class="muted" style="font-size:.85rem">To leave the reception screen, tap <b>Exit reception</b> twice. For a host's own device, they open Host view with the session code and tap Open reception screen there.</p></section>`;
+    <p class="muted" style="font-size:.85rem">Opening it puts the device in <b>display mode</b>: players can only check in. You choose a 4-digit PIN, and you need it to leave. For a host's own device, they open Host view with the session code and tap Open reception screen there.</p></section>`;
 }
 function viewCourt(){
   if(!S.loaded) return `<section class="panel"><div class="empty loading">Loading…</div></section>`;
@@ -1413,6 +1418,13 @@ setInterval(async ()=>{
   }
 }, 15000);
 async function saveSessionPatch(sid, patch, msg){ const s=S.sessions.find(x=>x.id===sid); if(!s) return false; const {id,...body}=s; return save("sessions",id,{...body,...patch},msg) }
+// display mode (reception screen): only the reception buttons and the name search work
+document.addEventListener("click", e=>{
+  if(!document.body.classList.contains("reception-on")) return;
+  const el=e.target.closest("button,a,input,summary,label"); if(!el) return;
+  if(el.id==="rc-q" || Object.keys(el.dataset||{}).some(k=>/^rc/.test(k))) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+}, true);
 document.addEventListener("click", async e=>{
   const t=e.target.closest("button"); if(!t) return; const ds=t.dataset;
   if(ds.pairwith){ const [sid,a]=ds.pairwith.split("|"); S.pairPick={sid,a}; render();
@@ -1897,8 +1909,13 @@ document.addEventListener("click", async e=>{
     if(Store.mode==="db"){ try{ await Store.db.collection("secrets").doc(sid).set({code}); toast(`Code ${code} ready`) }catch{ toast("Couldn't save the code") } }
     else { S.secrets[sid]=code; render() }
     return }
-  if(ds.rcopen){ S.reception=ds.rcopen; ls.set("dsf:reception",ds.rcopen); S.rcPick=null; S.rcDone=null; render(); window.scrollTo({top:0}); return }
-  if(ds.rcexit){ arm(t,"Tap again to exit",()=>{ S.reception=null; ls.set("dsf:reception",null); render() }); return }
+  if(ds.rcopen){ const pin=prompt("Display mode locks this screen so players can only check in.\n\nChoose a 4-digit PIN. You'll need it to leave display mode.");
+    if(pin==null) return; if(!/^\d{4}$/.test(pin.trim())){ toast("The PIN must be 4 numbers"); return }
+    ls.set("dsf:rcpin",pin.trim()); S.reception=ds.rcopen; ls.set("dsf:reception",ds.rcopen); S.rcPick=null; S.rcDone=null; render(); window.scrollTo({top:0});
+    document.documentElement.requestFullscreen?.().catch(()=>{}); return }
+  if(ds.rcexit){ const want=ls.get("dsf:rcpin",null), pin=prompt("Enter the 4-digit PIN to leave display mode"); if(pin==null) return;
+    if(want && pin.trim()!==want){ toast("Wrong PIN"); return }
+    S.reception=null; ls.set("dsf:reception",null); ls.set("dsf:rcpin",null); document.fullscreenElement && document.exitFullscreen?.().catch(()=>{}); render(); return }
   if(ds.rcpick){ S.rcPick=ds.rcpick; render(); window.scrollTo({top:0}); return }
   if(ds.rcok){ S.rcPick=null; S.rcDone=null; render(); window.scrollTo({top:0}); return }
   if(ds.rcgo){ const [id,v]=ds.rcgo.split("|"), b=S.bookings.find(x=>x.id===id); if(!b) return; const now=nowIso(), at=hhmm(new Date());
@@ -1990,7 +2007,7 @@ document.addEventListener("click", async e=>{
     for(const b of ls2) await setBooking(b.id,{status:"cancelled"},"Not paid within 24 hours, so the place was released.",null);
     if(s) wlPing("freed", s.id); toast(`Released ${ls2.length} place${ls2.length>1?"s":""} ✓`); return }
   if(ds.spamrm && S.isAdmin){ await spamRemove(ds.spamrm); return }
-  if(ds.sact && ds.sact.endsWith("|rc")){ const sid=ds.sact.split("|")[0]; S.reception=sid; ls.set("dsf:reception",sid); S.rcPick=null; S.rcDone=null; render(); window.scrollTo({top:0}); return }
+  if(ds.sact && ds.sact.endsWith("|rc")){ const b2=document.createElement("button"); b2.dataset.rcopen=ds.sact.split("|")[0]; document.body.appendChild(b2); b2.click(); b2.remove(); return }
   if(ds.sact){ const [sid,k]=ds.sact.split("|"); S.sact={...(S.sact||{}), [sid]:k}; if(k!=="pr") S.pairPick=null; render(); return }
   if(ds.cancsess){ await cancelSessions([ds.cancsess]); return }
   if(ds.selcanc){ if(S.sel?.size) await cancelSessions([...S.sel]); return }

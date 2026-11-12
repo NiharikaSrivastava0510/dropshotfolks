@@ -452,7 +452,7 @@ function checkinList(s){
   if(!list.length) return `<div class="empty">No one booked yet.</div>`;
   const left=b=>b.checkedIn && b.outAt, onCourt=list.filter(b=>b.checkedIn && !b.outAt).length, gone=list.filter(left).length, away=list.filter(b=>b.absent && !b.checkedIn).length, org=S.isAdmin && S.view==="organiser";
   const tm=iso=>iso?esc(hhmm(new Date(iso))):"";
-  return `<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><p><b>${onCourt} of ${list.length} here</b>${gone?` · ${gone} left`:""}${away?` · ${away} not coming`:""}</p>${org&&list.some(b=>b.inAt)?`<button class="btn small ghost" data-cicsv="${esc(s.id)}">⬇️ Arrival &amp; leaving times (CSV)</button>`:""}</div>
+  return `<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><p><b>${onCourt} of ${list.length} here</b>${gone?` · ${gone} left`:""}${away?` · ${away} not coming`:""}</p>${org&&list.some(b=>b.inAt||b.checkedIn||b.absent)?`<span class="row" style="gap:6px"><button class="btn small ghost" data-cicsv="${esc(s.id)}">⬇️ Arrival &amp; leaving times (CSV)</button><button class="btn small ghost danger" data-cireset="${esc(s.id)}">↺ Reset all check-ins</button></span>`:""}</div>
   <p class="muted" style="font-size:.85rem">Tap <b>Here</b> when someone arrives and <b>Leaving</b> when they go: the times are saved automatically, and people who leave drop out of the rotation.</p>
   <div class="ci">${list.map(b=>`<div class="ci-row ${b.checkedIn&&!b.outAt?"in":""} ${b.absent?"out":""}">
     <span class="pl">${avatar(b.playerId,b.name,"sm")}<span>${esc(b.name)}${b.inAt?`<br><span class="muted" style="font-size:.8rem">In ${tm(b.inAt)}${b.outAt?` · Out ${tm(b.outAt)}`:""}</span>`:""}</span></span>
@@ -1938,6 +1938,10 @@ document.addEventListener("click", async e=>{
         v==="in"?`${b.name} in at ${at}`:v==="leave"?`${b.name} left at ${at}`:v==="back"?`${b.name} is back`:v==="out"?`${b.name} marked not here`:"Check-in cleared") };
     if(v==="reset" && b.checkedIn) arm(t,"Tap again to undo", go); else go();
     return }
+  if(ds.cireset && S.isAdmin){ const sid=ds.cireset; arm(t,"Tap again to reset everyone",async()=>{
+      const bs=S.bookings.filter(b=>b.sessionId===sid && (b.checkedIn||b.inAt||b.outAt||b.absent));
+      for(const b of bs) await setBooking(b.id,{checkedIn:false, absent:false, inAt:"", outAt:""},"Check-in reset by the organiser.",null);
+      toast(`Check-ins reset (${bs.length})`) }); return }
   if(ds.cicsv){ const s=S.sessions.find(x=>x.id===ds.cicsv); if(!s) return;
     const t2=iso=>iso?hhmm(new Date(iso)):"", mins=b=>b.inAt&&b.outAt?Math.round((new Date(b.outAt)-new Date(b.inAt))/60000):"";
     const rows=[["Name","Court","In","Out","Minutes"], ...S.bookings.filter(b=>b.sessionId===s.id && ACTIVE.includes(b.status)).sort((a,b)=>String(a.inAt||"~").localeCompare(String(b.inAt||"~"))).map(b=>[b.name,b.court,t2(b.inAt),t2(b.outAt),mins(b)])];

@@ -37,12 +37,6 @@ service cloud.firestore {
       let p = /databases/$(database)/documents/sessions/$(sid);
       return exists(p) && get(p).data.get('open', true) != false && get(p).data.get('cancelled', false) != true;
     }
-    // true on the session's date (UTC midnight to 6am the next day, which covers UK evening sessions in summer and winter time)
-    function onSessionDay(sid) {
-      let d = get(/databases/$(database)/documents/sessions/$(sid)).data.date.split('-');
-      let day = timestamp.date(int(d[0]), int(d[1]), int(d[2]));
-      return request.time >= day && request.time < day + duration.value(30, 'h');
-    }
     function levelCode(v) { return v in ['E-', 'E', 'D-', 'D+', 'C-', 'C+']; }
     // What a player may store on their own record.
     function validPlayer(d) {
@@ -140,16 +134,6 @@ service cloud.firestore {
              && request.resource.data.get('hostId', null) == resource.data.get('hostId', null)
              && validBooking(id, request.resource.data)
              && levelFitsCourt(request.resource.data))));
-      // players check themselves (and their guests) in and out on the day of the session
-      allow update: if signedIn()
-        && (resource.data.playerId == request.auth.uid || resource.data.hostId == request.auth.uid)
-        && resource.data.status in ['awaiting', 'paid', 'confirmed']
-        && onSessionDay(resource.data.sessionId)
-        && onlyChanges(['absent', 'checkedIn', 'inAt', 'outAt', 'log'])
-        && request.resource.data.get('absent', false) is bool
-        && request.resource.data.get('checkedIn', false) is bool
-        && shortText(request.resource.data.get('inAt', ''), 40) && shortText(request.resource.data.get('outAt', ''), 40)
-        && request.resource.data.get('log', []) is list && request.resource.data.get('log', []).size() <= 60;
       // session view devices: check-in only
       allow update: if unlockOk(resource.data.sessionId)
         && onlyChanges(['absent', 'checkedIn', 'inAt', 'outAt', 'log'])

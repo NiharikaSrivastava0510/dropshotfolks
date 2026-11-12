@@ -154,3 +154,25 @@ nav.tabs button[aria-selected="true"]{background:#7A1E2C;color:#fff}
 .ci-go{font-size:1.08rem;padding:12px 18px}
 @media (prefers-reduced-motion:no-preference){.ci-go{animation:ciNudge 2.2s ease-in-out infinite}@keyframes ciNudge{0%,70%,100%{transform:none}80%{transform:translateY(-3px) rotate(-1deg)}90%{transform:translateY(0) rotate(1deg)}}
   .ci-court{animation:ciPop .5s cubic-bezier(.2,1.6,.4,1)}@keyframes ciPop{from{transform:scale(.6);opacity:0}}}
+/* reception screen at the door: big, simple, nothing else on screen */
+body.reception-on #tabs, body.reception-on #viewbar, body.reception-on #nextup, body.reception-on .hshuttle{display:none!important}
+.rc{background:var(--surface);border:2.5px solid var(--stk);border-radius:26px;box-shadow:6px 6px 0 var(--stk);padding:22px;display:grid;gap:16px}
+.rc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.rc-head h2{font-size:clamp(1.6rem,4vw,2.4rem)}
+.rc-q{font-size:1.4rem;padding:16px 18px;border-radius:18px;width:100%}
+.rc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.rc-name{all:unset;cursor:pointer;display:grid;gap:4px;padding:16px;border:2.5px solid var(--stk);border-radius:18px;background:var(--surface);box-shadow:4px 4px 0 var(--stk);transition:transform .12s}
+.rc-name b{font-family:var(--display);font-size:1.25rem;line-height:1.15}
+.rc-name span{font-size:.9rem;color:var(--muted)}
+.rc-name:hover{transform:translate(-1px,-2px) rotate(-.4deg)}
+.rc-name:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--stk)}
+.rc-name:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
+.rc-name.in{background:color-mix(in srgb,var(--pop-lime) 40%,var(--surface))}
+.rc-name.in span{color:var(--ink);font-weight:700}
+.rc-name.left{opacity:.6}
+.rc-done{justify-items:center;text-align:center;padding:40px 22px}
+.rc-hi{font-family:var(--display);font-weight:800;font-size:clamp(1.8rem,5vw,3rem);line-height:1.1}
+.rc-sub{font-size:1.15rem;text-align:center}
+.rc-court{min-width:14rem;padding:16px 26px}
+.rc-court b{font-size:3.6rem}
+.rc-big{font-size:1.25rem;padding:16px 24px}

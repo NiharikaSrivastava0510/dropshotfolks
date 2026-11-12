@@ -188,6 +188,8 @@ const S = {
   rotEdit: {}, pedit: null,         // organiser: game being edited per court, player being edited
   kiosk: ls.get("dsf:kiosk", null), // session this device has open in host view
   reception: ls.get("dsf:reception", null), // session this device shows as the check-in screen at the door
+  cdisplay: ls.get("dsf:cdisplay", null),   // session this device shows as the court rotation screen (display mode)
+  cdScores: ls.get("dsf:cdscores", false), cdTab: ls.get("dsf:cdtab", 1), cdAuto: ls.get("dsf:cdauto", false),
   unlock: null, secrets: {}         // this device's unlock; organiser: session codes
 };
 const meP = () => S.players.find(p=>p.id===S.me) || null;
@@ -505,6 +507,44 @@ function viewReception(s){
           <div class="rc-grid">${on.map(tile).join("")}</div></div>` }).join("") })()}
     <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><p class="muted" style="font-size:.85rem">Not on the list? Ask the host to add you.</p><button class="btn small ghost" data-rcexit="1" title="Needs the PIN">🔒 Exit display mode</button></div></section>`;
 }
+/* ---------- court display: a locked screen in the hall with one big tab per court (swipe, arrow keys or tap) ---------- */
+function viewCourtDisplay(s){
+  const r=rotInfo(s), courts=courtsOf(s), tabs=[...courts,"all"], cur=tabs.includes(S.cdTab)?S.cdTab:courts[0];
+  const nm=(names,id)=>esc(names[id]||S.players.find(p=>p.id===id)?.name||"Player");
+  const team=(t,names)=>`<div class="cd-team">${t.map(id=>`<span>${nm(names,id)}</span>`).join("")}</div>`;
+  const status = r.live ? (s.rotMode==="clock"?`<span class="dot pulse"></span>Live · next game in <span class="cd" data-at="${r.at(r.idx+1).toISOString()}">–</span>`:`<span class="dot pulse"></span>Live · courts move on when the score is saved`)
+    : r.free ? `🏸 Rotation finished · free play until ${esc(s.end)}` : r.done ? "Session finished" : `First game at ${hhmm(r.startT)} · starts in <span class="cd" data-at="${r.startT.toISOString()}">–</span>`;
+  const court=(c,big)=>{ const {roster,games,names}=courtPlan(s,c), {cur:gi}=courtNow(s,c,games,r), g=games[gi], nx=games[gi+1], nx2=games[gi+2], sc=scoreOf(s,c,gi);
+    const head=`<div class="cd-hd" style="--cc:${CLR[c]}"><b>Court ${c}</b><span>${esc(courtName(s,c))} ${courtChips(s,c)}</span><span class="cd-pill">${roster.length} ${ciStarted(s)?"here":"booked"}</span></div>`;
+    if(!g) return `<div class="cd-court ${big?"big":""}" style="--cc:${CLR[c]}">${head}<div class="cd-body"><p class="cd-empty">Waiting for 4 players${ciStarted(s)?" to check in":""} · ${roster.length} so far</p></div></div>`;
+    const teams=sc?[sc.a,sc.b]:g.teams;
+    return `<div class="cd-court ${big?"big":""}" style="--cc:${CLR[c]}">${head}<div class="cd-body">
+      <span class="lbl">${r.live?"On court now":"First up"} · Game ${gi+1}</span>
+      <div class="cd-match">${team(teams[0],names)}<i>${sc?`${sc.sa}–${sc.sb}`:"vs"}</i>${team(teams[1],names)}</div>
+      ${S.cdScores && canRun(s) && big ? scoreForm(s,c,gi,sc,"d") : ""}
+      ${nx?`<div class="cd-next"><span class="lbl">Next up · get ready</span><div class="cd-match sm">${team(nx.teams[0],names)}<i>vs</i>${team(nx.teams[1],names)}</div></div>`:""}
+      ${big&&nx2?`<div class="cd-next later"><span class="lbl">After that</span><div class="cd-match sm">${team(nx2.teams[0],names)}<i>vs</i>${team(nx2.teams[1],names)}</div></div>`:""}
+      ${g.sit.length?`<p class="cd-rest"><b>Resting:</b> ${g.sit.map(id=>nm(names,id)).join(", ")}</p>`:""}
+    </div></div>` };
+  return `<section class="cdisp">
+    <div class="cd-top"><div><span class="lbl">${esc(fmtLong(s.date))} · ${esc(s.start)}–${esc(s.end)}${venueOf(s).venue?` · ${esc(venueOf(s).venue)}`:""}</span><p class="cd-status">${status}</p></div>
+      <span class="row" style="gap:6px"><button class="btn small ${S.cdAuto?"primary":"ghost"}" data-cdauto="1" aria-pressed="${!!S.cdAuto}">${S.cdAuto?"⏸ Auto-cycle on":"▶ Auto-cycle"}</button><button class="btn small ghost" data-cdexit="1" title="Needs the PIN">🔒 Exit</button></span></div>
+    <div class="cd-tabs" role="tablist">${tabs.map(c=>`<button role="tab" data-cdtab="${c}" aria-selected="${c===cur}" style="--cc:${c==="all"?"var(--ink)":CLR[c]}">${c==="all"?"All courts":`Court ${c}`}</button>`).join("")}</div>
+    <div class="cd-stage" id="cdStage">${cur==="all"?`<div class="cd-grid">${courts.map(c=>court(c,false)).join("")}</div>`:court(cur,true)}</div>
+    <p class="cd-hint">Swipe left or right${matchMedia("(hover:hover)").matches?", or use the ← → keys,":""} to see the other courts.</p>
+  </section>`;
+}
+function cdMove(dir){ const s=S.sessions.find(x=>x.id===S.cdisplay); if(!s) return; const tabs=[...courtsOf(s),"all"], i=Math.max(0,tabs.indexOf(S.cdTab));
+  S.cdTab=tabs[(i+dir+tabs.length)%tabs.length]; ls.set("dsf:cdtab",S.cdTab); render();
+  const st=$("#cdStage"); if(st){ st.classList.remove("slide-l","slide-r"); void st.offsetWidth; st.classList.add(dir>0?"slide-l":"slide-r") } }
+// swipe (touch), two-finger swipe (trackpad) and arrow keys move between courts
+(()=>{ let x0=null, y0=null, wheelAt=0;
+  document.addEventListener("touchstart",e=>{ if(!S.cdisplay||!document.body.classList.contains("display-on")) return; x0=e.touches[0].clientX; y0=e.touches[0].clientY },{passive:true});
+  document.addEventListener("touchend",e=>{ if(x0==null) return; const dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0; x0=null; if(Math.abs(dx)>60 && Math.abs(dx)>Math.abs(dy)*1.5) cdMove(dx<0?1:-1) },{passive:true});
+  document.addEventListener("wheel",e=>{ if(!document.body.classList.contains("display-on")||!S.cdisplay) return; if(Math.abs(e.deltaX)<30||Math.abs(e.deltaX)<Math.abs(e.deltaY)) return; const now=Date.now(); if(now-wheelAt<700) return; wheelAt=now; cdMove(e.deltaX>0?1:-1) },{passive:true});
+  document.addEventListener("keydown",e=>{ if(!document.body.classList.contains("display-on")||!S.cdisplay||/INPUT|TEXTAREA/.test(document.activeElement?.tagName||"")) return; if(e.key==="ArrowRight") cdMove(1); if(e.key==="ArrowLeft") cdMove(-1) });
+  setInterval(()=>{ if(S.cdisplay && S.cdAuto && document.body.classList.contains("display-on") && !/INPUT/.test(document.activeElement?.tagName||"")) cdMove(1) }, 12000);
+})();
 // organiser's Reception tab: pick a session and turn this device into the check-in screen at the door
 function orgReception(){
   if(!S.isAdmin) return notOrg;
@@ -516,7 +556,8 @@ function orgReception(){
     <div style="display:grid;gap:12px">${ups.map(s=>{ const all=S.bookings.filter(b=>b.sessionId===s.id && ACTIVE.includes(b.status)), here=all.filter(b=>b.checkedIn&&!b.outAt).length, isToday=new Date(s.date+"T12:00:00").toDateString()===today;
       return `<div class="bk" style="flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;${isToday?"background:color-mix(in srgb,var(--gold) 25%,var(--surface))":""}">
         <div><b>${isToday?"Today · ":""}${esc(fmtLong(s.date))}</b><br><span class="muted">${esc(s.title||"Session")} · ${esc(s.start)}–${esc(s.end)} · ${here} of ${all.length} checked in</span></div>
-        <button class="btn ${isToday?"primary":""}" data-rcopen="${esc(s.id)}">🛎️ Open reception</button></div>` }).join("")}</div>
+        <span class="row" style="gap:8px"><button class="btn ${isToday?"primary":""}" data-rcopen="${esc(s.id)}">🛎️ Open reception</button><button class="btn" data-cdopen="${esc(s.id)}">📺 Court display</button></span></div>` }).join("")}</div>
+    <p class="muted" style="font-size:.85rem"><b>📺 Court display</b> shows the rotation on a laptop or tablet in the hall, one big tab per court: swipe, use the ← → keys, or turn on auto-cycle. It's locked with a PIN too.</p>
     <p class="muted" style="font-size:.85rem">Opening it puts the device in <b>display mode</b>: players can only check in. You choose a 4-digit PIN, and you need it to leave. For a host's own device, they open Host view with the session code and tap Open reception screen there.</p></section>`;
 }
 function viewCourt(){
@@ -525,7 +566,7 @@ function viewCourt(){
   if(!s || !canRun(s)) return `<section class="panel"><div><h2>Host view</h2><p class="muted">For whoever is hosting the session. Enter the code the organiser gives you. Once it's open on this device you can check people in, enter scores and see the rotation for that session.</p></div>
     <div class="row" style="max-width:440px;flex-wrap:nowrap"><input id="k-code" placeholder="Session code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" style="text-transform:uppercase;letter-spacing:.2em;font-family:var(--mono)"><button class="btn primary" data-kopen="1">Open</button></div></section>`;
   const r=rotInfo(s), v=venueOf(s);
-  return `<section class="panel"><div class="row" style="justify-content:space-between;align-items:flex-start"><div><span class="lbl">Host view · you're hosting</span><h2>${fmtLong(s.date)} · ${esc(s.start)}–${esc(s.end)}</h2><p class="muted">${esc(v.venue||"")}${r.done?" · finished":r.live?" · live now":` · starts ${esc(s.start)}`}</p></div><span class="row" style="gap:6px"><button class="btn small primary" data-rcopen="${esc(s.id)}">🛎️ Open reception screen</button><button class="btn small ghost" data-kexit="1">Close host view</button></span></div>
+  return `<section class="panel"><div class="row" style="justify-content:space-between;align-items:flex-start"><div><span class="lbl">Host view · you're hosting</span><h2>${fmtLong(s.date)} · ${esc(s.start)}–${esc(s.end)}</h2><p class="muted">${esc(v.venue||"")}${r.done?" · finished":r.live?" · live now":` · starts ${esc(s.start)}`}</p></div><span class="row" style="gap:6px"><button class="btn small primary" data-rcopen="${esc(s.id)}">🛎️ Open reception screen</button><button class="btn small" data-cdopen="${esc(s.id)}">📺 Court display</button><button class="btn small ghost" data-kexit="1">Close host view</button></span></div>
     <p class="muted" style="font-size:.88rem">Players check themselves in on the reception screen at the door. Enter each game's score below to keep the courts moving. When you save a score, the next four players pop up on screen and everyone's phone with the booking page open tells them they're on or up next.</p>
 </section>
   <div class="court-grid">${courtsOf(s).map(c=>courtLive(s,c)).join("")}</div>`;
@@ -552,8 +593,10 @@ function render(){
     "o-overview":orgOverview, "o-sessions":orgSessions, "o-players":orgPlayers, "o-club":orgClub, "o-reception":orgReception};
   const head = view==="organiser" ? modeBanner() : reminderBanner() + modeBanner();
   const rs = S.reception && S.sessions.find(x=>x.id===S.reception), rcOn = !!(rs && canRun(rs));
-  document.body.classList.toggle("reception-on", rcOn);
-  $("#main").innerHTML = (Store.mode!=="db" && !LOCAL) ? setupPanel() : rcOn ? viewReception(rs) : head + (views[tab]||viewBook)();
+  const ds_ = !rcOn && S.cdisplay && S.sessions.find(x=>x.id===S.cdisplay), cdOn = !!(ds_ && canRun(ds_));
+  document.body.classList.toggle("reception-on", rcOn || cdOn);
+  document.body.classList.toggle("display-on", cdOn);
+  $("#main").innerHTML = (Store.mode!=="db" && !LOCAL) ? setupPanel() : rcOn ? viewReception(rs) : cdOn ? viewCourtDisplay(ds_) : head + (views[tab]||viewBook)();
   if(S.lastTab!==tab){ const m=$("#main"); m.classList.remove("swap"); void m.offsetWidth; m.classList.add("swap"); S.lastTab=tab }
   const nc=$("#nextup"); if(nc){ const h=S.loaded?nextChip():""; nc.innerHTML=h; nc.hidden=!h }
   tickCountdowns();
@@ -882,6 +925,7 @@ function viewLive(){
   if(!s) return `<section class="panel"><h2>Live courts</h2><div class="empty">No sessions coming up.</div></section>`;
   const r = rotInfo(s), v = venueOf(s);
   return `<section class="panel">
+    ${canRun(s)?`<div class="row" style="justify-content:flex-end"><button class="btn small primary" data-cdopen="${esc(s.id)}">📺 Open court display</button></div>`:""}
     <div><h2>Live courts</h2><p class="muted">Four play doubles while the others rest, and everyone gets the same number of games. When a game's score is saved, the next four go on.</p></div>
     <div class="sess">${ups.slice(0,6).map(x=>`<button data-live="${x.id}" aria-pressed="${x.id===s.id}"><b>${fmtDate(x.date)}</b><span>${esc(x.start)}–${esc(x.end)}${rotInfo(x).live?" · live now":""}</span></button>`).join("")}</div>
     <p>${r.live?`<span class="dot pulse"></span><b>Live now</b> · ${s.rotMode==="clock"?`${r.mins}-minute games · next game in <span class="cd" data-at="${r.at(r.idx+1).toISOString()}">–</span>`:"each court moves to its next game when the score is saved"}`:r.free?`🏸 <b>Rotation finished</b> · free play until ${esc(s.end)}`:r.done?"This session has finished.":`First game at <b>${hhmm(r.startT)}</b> · starts in <span class="cd" data-at="${r.startT.toISOString()}">–</span>`} ${v.venue?` · ${esc(v.venue)}`:""}</p>
@@ -1424,7 +1468,8 @@ async function saveSessionPatch(sid, patch, msg){ const s=S.sessions.find(x=>x.i
 document.addEventListener("click", e=>{
   if(!document.body.classList.contains("reception-on")) return;
   const el=e.target.closest("button,a,input,summary,label"); if(!el) return;
-  if(el.id==="rc-q" || Object.keys(el.dataset||{}).some(k=>/^rc/.test(k))) return;
+  if(el.id==="rc-q" || Object.keys(el.dataset||{}).some(k=>/^(rc|cd)/.test(k))) return;
+  if(S.cdScores && document.body.classList.contains("display-on") && (el.closest(".scorein"))) return;
   e.preventDefault(); e.stopImmediatePropagation();
 }, true);
 document.addEventListener("click", async e=>{
@@ -1920,6 +1965,18 @@ document.addEventListener("click", async e=>{
     S.reception=null; ls.set("dsf:reception",null); ls.set("dsf:rcpin",null); document.fullscreenElement && document.exitFullscreen?.().catch(()=>{}); render(); return }
   if(ds.rcpick){ S.rcPick=ds.rcpick; render(); window.scrollTo({top:0}); return }
   if(ds.rcok){ S.rcPick=null; S.rcDone=null; render(); window.scrollTo({top:0}); return }
+  if(ds.cdopen){ const pin=prompt("Court display locks this screen so people can only see the courts.\n\nChoose a 4-digit PIN. You'll need it to leave display mode.");
+    if(pin==null) return; if(!/^\d{4}$/.test(pin.trim())){ toast("The PIN must be 4 numbers"); return }
+    const scores=confirm("Let people enter game scores on this screen?\n\nOK = yes, scores can be entered here\nCancel = view only");
+    ls.set("dsf:rcpin",pin.trim()); S.cdisplay=ds.cdopen; ls.set("dsf:cdisplay",ds.cdopen); S.cdScores=scores; ls.set("dsf:cdscores",scores);
+    S.cdTab=courtsOf(S.sessions.find(x=>x.id===ds.cdopen))[0]||1; ls.set("dsf:cdtab",S.cdTab); render(); window.scrollTo({top:0});
+    document.documentElement.requestFullscreen?.().catch(()=>{}); return }
+  if(ds.cdexit){ const want=ls.get("dsf:rcpin",null), pin=prompt("Enter the 4-digit PIN to leave display mode"); if(pin==null) return;
+    if(want && pin.trim()!==want){ toast("Wrong PIN"); return }
+    S.cdisplay=null; ls.set("dsf:cdisplay",null); ls.set("dsf:rcpin",null); document.fullscreenElement && document.exitFullscreen?.().catch(()=>{}); render(); return }
+  if(ds.cdtab){ const v=ds.cdtab==="all"?"all":Number(ds.cdtab), s=S.sessions.find(x=>x.id===S.cdisplay), tabs=s?[...courtsOf(s),"all"]:[]; const dir=tabs.indexOf(v)>=tabs.indexOf(S.cdTab)?1:-1;
+    S.cdTab=v; ls.set("dsf:cdtab",v); render(); const st=$("#cdStage"); if(st){ st.classList.add(dir>0?"slide-l":"slide-r") } return }
+  if(ds.cdauto){ S.cdAuto=!S.cdAuto; ls.set("dsf:cdauto",S.cdAuto); render(); toast(S.cdAuto?"Courts change every 12 seconds":"Auto-cycle off"); return }
   if(ds.rcundo){ const b=S.bookings.find(x=>x.id===ds.rcundo); if(!b) return; const want=ls.get("dsf:rcpin",null);
     if(want){ const pin=prompt(`Organiser only: enter the PIN to undo ${b.name}'s check-in`); if(pin==null) return; if(pin.trim()!==want){ toast("Wrong PIN"); return } }
     if(!await setBooking(b.id,{checkedIn:false, absent:false, inAt:"", outAt:""},"Check-in undone by the organiser.",null)) return;

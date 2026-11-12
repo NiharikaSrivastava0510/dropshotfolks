@@ -214,3 +214,9 @@ body.reception-on .who, body.reception-on .toprow{display:none!important}
 .cd-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:14px}
 .cd-grid .cd-team span{font-size:clamp(1rem,1.8vw,1.4rem)}
 .cd-hint{text-align:center;font-size:.85rem;color:var(--muted)}
+/* names of everyone booked on a court; checked-in ones stand out */
+.cl-names{display:flex;flex-wrap:wrap;gap:6px}
+.cl-nm{display:inline-flex;align-items:center;gap:6px;border:2px solid var(--stk);border-radius:999px;padding:3px 10px 3px 4px;font-weight:600;font-size:.9rem;background:var(--surface);opacity:.6}
+.cl-nm.in{opacity:1;background:color-mix(in srgb,var(--pop-lime) 40%,var(--surface));font-weight:800}
+.cl-nm.left{opacity:.45;text-decoration:line-through}
+.cd-court .cl-nm{font-size:1.05rem;padding:6px 14px}

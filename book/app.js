@@ -230,12 +230,12 @@ function rotInfo(s){
   // live: the rotation is running · on: anywhere in the booked session (warm-up, rotation, free play after it) · free: rotation over, session still on
   return {startT, endT:end, mins, total, idx, live: now>=startT && now<end, on: now>=sessStart(s) && now<sessEnd(s), free: now>=end && now<sessEnd(s), done: now>=sessEnd(s), at:i=>new Date(startT.getTime()+i*ms)};
 }
-// once anyone has checked in, a court's rotation is the people who've arrived, in the order they arrived; before that, everyone booked
+// a court's rotation is only the people who have checked in at reception, in the order they arrived
 const ciStarted = s => S.bookings.some(b=>b.sessionId===s.id && ACTIVE.includes(b.status) && b.checkedIn);
+const courtBooked = (s,c) => S.bookings.filter(b=>b.sessionId===s.id && b.court===c && ACTIVE.includes(b.status)).sort((a,b)=>String(a.name).localeCompare(b.name));
 function courtRoster(s,c){
-  const list=S.bookings.filter(b=>b.sessionId===s.id && b.court===c && ACTIVE.includes(b.status) && !b.absent);
-  return ciStarted(s) ? list.filter(b=>b.checkedIn && !b.outAt).sort((a,b)=>String(a.inAt||"~").localeCompare(String(b.inAt||"~")) || String(a.createdAt).localeCompare(b.createdAt))
-    : list.sort((a,b)=>String(a.createdAt).localeCompare(b.createdAt)) }
+  return S.bookings.filter(b=>b.sessionId===s.id && b.court===c && ACTIVE.includes(b.status) && !b.absent && b.checkedIn && !b.outAt)
+    .sort((a,b)=>String(a.inAt||"~").localeCompare(String(b.inAt||"~")) || String(a.createdAt).localeCompare(b.createdAt)) }
 function schedule(ids,total,mate=mates){
   const n=ids.length; if(n<4) return [];
   const played={}, last={}, pc={}, key=(a,b)=>a<b?a+"|"+b:b+"|"+a;
@@ -515,8 +515,9 @@ function viewCourtDisplay(s){
   const status = r.live ? (s.rotMode==="clock"?`<span class="dot pulse"></span>Live · next game in <span class="cd" data-at="${r.at(r.idx+1).toISOString()}">–</span>`:`<span class="dot pulse"></span>Live · courts move on when the score is saved`)
     : r.free ? `🏸 Rotation finished · free play until ${esc(s.end)}` : r.done ? "Session finished" : `First game at ${hhmm(r.startT)} · starts in <span class="cd" data-at="${r.startT.toISOString()}">–</span>`;
   const court=(c,big)=>{ const {roster,games,names}=courtPlan(s,c), {cur:gi}=courtNow(s,c,games,r), g=games[gi], nx=games[gi+1], nx2=games[gi+2], sc=scoreOf(s,c,gi);
-    const head=`<div class="cd-hd" style="--cc:${CLR[c]}"><b>Court ${c}</b><span>${esc(courtName(s,c))} ${courtChips(s,c)}</span><span class="cd-pill">${roster.length} ${ciStarted(s)?"here":"booked"}</span></div>`;
-    if(!g) return `<div class="cd-court ${big?"big":""}" style="--cc:${CLR[c]}">${head}<div class="cd-body"><p class="cd-empty">Waiting for 4 players${ciStarted(s)?" to check in":""} · ${roster.length} so far</p></div></div>`;
+    const head=`<div class="cd-hd" style="--cc:${CLR[c]}"><b>Court ${c}</b><span>${esc(courtName(s,c))} ${courtChips(s,c)}</span><span class="cd-pill">${roster.length} here · ${courtBooked(s,c).length} booked</span></div>`;
+    if(!g) return `<div class="cd-court ${big?"big":""}" style="--cc:${CLR[c]}">${head}<div class="cd-body"><p class="cd-empty">Rotation starts once 4 players have checked in at reception · ${roster.length} here so far</p>
+      <div class="cl-names" style="justify-content:center">${courtBooked(s,c).map(b=>{ const st=b.checkedIn&&!b.outAt?"in":b.outAt?"left":""; return `<span class="cl-nm ${st}"><span>${esc(b.name)}</span>${st==="in"?" ✓":""}</span>` }).join("")}</div></div></div>`;
     const teams=sc?[sc.a,sc.b]:g.teams;
     return `<div class="cd-court ${big?"big":""}" style="--cc:${CLR[c]}">${head}<div class="cd-body">
       <span class="lbl">${r.live?"On court now":"First up"} · Game ${gi+1}</span>
@@ -966,7 +967,7 @@ function courtLive(s,c){
   const {roster,r,games,names}=courtPlan(s,c);
   const {cur, byScore} = courtNow(s,c,games,r), g = games[cur], nx = games[cur+1];
   let body;
-  if(!games.length) body = `<div class="empty">${ciStarted(s)?`Rotation starts once 4 players have checked in on this court. ${roster.length} here so far.`:`Rotation starts once 4 players have booked. ${roster.length} so far.`}</div>`;
+  if(!games.length) body = `<div class="empty">Rotation starts once 4 players have checked in at reception. ${roster.length} of ${courtBooked(s,c).length} here so far.</div>`;
   else body = `
     <div class="lbl">${r.live?`Game ${cur+1} · on court now`:`Game ${cur+1} · first up`}</div>
     ${(()=>{ const sc = scoreOf(s,c,cur), tm = sc ? [sc.a,sc.b] : g.teams;
@@ -978,8 +979,8 @@ function courtLive(s,c){
       ${games.map((x,i)=>gameBox(s,c,i,x,names,r,cur)).join("")}
     </div></details>`;
   return `<div class="court-live ${r.live?"live":""}" style="--cc:${CLR[c]}">
-    <div class="hd"><span class="num">Court ${c}</span><span>${courtChips(s,c)} ${esc(courtName(s,c))}</span><span class="muted" style="font-size:.85rem">${roster.length}/${cap(s,c)} players</span></div>
-    ${roster.length?`<div class="stack">${roster.map(b=>avatar(b.playerId,b.name)).join("")}</div>`:""}
+    <div class="hd"><span class="num">Court ${c}</span><span>${courtChips(s,c)} ${esc(courtName(s,c))}</span><span class="muted" style="font-size:.85rem">${roster.length} here · ${courtBooked(s,c).length}/${cap(s,c)} booked</span></div>
+    ${courtBooked(s,c).length?`<div class="cl-names">${courtBooked(s,c).map(b=>{ const st=b.checkedIn&&!b.outAt?"in":b.outAt?"left":""; return `<span class="cl-nm ${st}">${avatar(b.playerId,b.name,"sm")}<span>${esc(b.name)}</span>${st==="in"?" ✓":st==="left"?" (left)":""}</span>` }).join("")}</div>`:""}
     ${body}
     ${canRun(s) ? (()=>{ const away=S.bookings.filter(b=>b.sessionId===s.id&&b.court===c&&ACTIVE.includes(b.status)&&b.absent);
       return (S.isAdmin && S.view==="organiser" ? rotEditor(s,c,games,roster,r) : "") + `<details id="ctl-${s.id}-${c}"><summary>Who's here (${roster.length})</summary><div style="display:grid;gap:6px;margin-top:8px">
@@ -1050,7 +1051,7 @@ function bookingCard(b,s){
     const {games:gs, r} = courtPlan(s,b.court), {cur} = courtNow(s,b.court,gs,r);
     const mineIdx = gs.map((g,i)=>g.teams.flat().includes(b.playerId)?i:-1).filter(i=>i>=0);
     games = gs.length ? `<p><span class="lbl">Your games</span> ${mineIdx.map(i=>`<span class="chip ${r.live&&i===cur?"st-confirmed":"st-waitlist"}">#${i+1}${i===cur&&r.live?" · on now":i<cur?" · played":""}</span>`).join(" ")} <a href="#" data-golive="${s.id}">Live court</a></p>`
-      : `<p class="muted">Your rotation appears once 4 players are booked on Court ${esc(b.court)}.</p>`;
+      : `<p class="muted">Your rotation starts once 4 players have checked in at reception on Court ${esc(b.court)}. Tap your name on the reception screen when you arrive.</p>`;
   }
   const cal = b.status==="confirmed" && !past && !isGuest ? `<div class="row"><a class="btn small" href="${gcalUrl(b,s)}" target="_blank" rel="noopener">Add to Google Calendar</a><button class="btn small" data-ics="${esc(b.id)}">Download calendar reminder</button>${v.address?`<a class="btn small" href="${mapsFor(v)}" target="_blank" rel="noopener">Directions</a>`:""}</div>` : "";
   return `<div class="bk">

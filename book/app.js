@@ -1135,21 +1135,37 @@ function viewVenue(){
   const wa = waUrl("Hi, I have a question about a Dropshot Folks session.");
   const venues=[]; [...upcoming().map(venueOf), {venue:c.venue,address:c.address}].forEach(v=>{
     if((v.venue||v.address) && !venues.some(x=>x.venue===v.venue && x.address===v.address)) venues.push(v) });
-  const dayList = v => [...new Set(upcoming().filter(s=>venueOf(s).venue===v.venue).map(s=>`${new Date(s.date+"T12:00:00").toLocaleDateString("en-GB",{weekday:"long"})}s ${s.start}–${s.end}`))].join(" · ");
-  return `<section class="panel"><h2>Getting there</h2>
-    ${venues.length?venues.map(v=>`<div class="bk"><h3>${esc(v.venue||"Venue")}</h3>${dayList(v)?`<p class="muted">${esc(dayList(v))}</p>`:""}
-      ${v.address?`<p class="sel">${esc(v.address)}</p>`:""}
-      <div class="row"><a class="btn primary small" href="${mapsFor(v)}" target="_blank" rel="noopener">Open in Google Maps</a>${v.address?`<button class="btn small" data-copy="${esc(v.address)}">Copy address</button>`:""}</div></div>`).join("")
-    :`<div class="empty">The organiser hasn't added a venue yet.</div>`}
+  const days = v => [...new Set(upcoming().filter(s=>venueOf(s).venue===v.venue).map(s=>`${new Date(s.date+"T12:00:00").toLocaleDateString("en-GB",{weekday:"long"})}s · ${t12(s.start)}–${t12(s.end)}`))];
+  const nextAt = v => upcoming().find(s=>venueOf(s).venue===v.venue && !s.cancelled);
+  const icon = v => /school|academy|college/i.test(v.venue||"") ? "🏫" : /leisure|sports|centre|center/i.test(v.venue||"") ? "🏟️" : "📍";
+  const tint = ["var(--d2)","var(--c2)","var(--d1)","var(--c1)"];
+  // one price per session type, written the same way ("15£", "15" and "£15" all show as £15)
+  const nice = f => { const m=String(f||"").match(/\d+(?:\.\d{1,2})?/); return m ? "£"+m[0] : String(f||"") };
+  const fees=[...new Map(upcoming().filter(x=>!x.cancelled && feeOf(x)).map(x=>[(x.title||"Session")+"|"+nice(feeOf(x)), [x.title||"Session", nice(feeOf(x))]])).values()];
+  return `<section class="panel vn-hero"><span class="lbl">Venue &amp; contact</span><h2>Come play with us 📍</h2><p class="muted">Where we play, how to reach the organiser, and what it costs.</p></section>
+  <div class="vn-grid">${venues.length?venues.map((v,k)=>{ const nx=nextAt(v);
+    return `<article class="vn-card" style="--vc:${tint[k%tint.length]}">
+      <div class="vn-band"><span class="vn-ic">${icon(v)}</span><div><b>${esc(v.venue||"Venue")}</b>${v.address?`<span>${esc(v.address)}</span>`:""}</div></div>
+      <div class="vn-body">
+        ${days(v).length?`<div class="vn-chips">${days(v).map(d=>`<span>🗓️ ${esc(d)}</span>`).join("")}</div>`:""}
+        ${nx?`<p class="vn-next">Next: <b>${esc(fmtDate(nx.date))} · ${esc(t12(nx.start))}</b> · <span class="cd" data-at="${sessStart(nx).toISOString()}">–</span> to go</p>`:""}
+        <div class="row"><a class="btn primary" href="${mapsFor(v)}" target="_blank" rel="noopener">🗺️ Get directions</a>${v.address?`<button class="btn small" data-copy="${esc(v.address)}">📋 Copy address</button>`:""}</div>
+      </div></article>` }).join("")
+    :`<div class="empty">The organiser hasn't added a venue yet.</div>`}</div>
+  <section class="vn-contact">
+    <div class="vn-who"><span class="vn-av">${esc(String(c.orgName||"D").trim().charAt(0).toUpperCase())}</span><div><span class="lbl">Your organiser</span><b>${esc(c.orgName||"Dropshot Folks")}</b></div></div>
+    <h2>Got a question? 💬</h2>
+    <p>Level reviews, refunds, or can't book? Just reach out.</p>
+    ${c.orgPhone||c.orgEmail||wa?`<div class="vn-acts">
+      ${wa?`<a class="vn-act wa" href="${wa}" target="_blank" rel="noopener"><span>💬</span><b>WhatsApp</b></a>`:""}
+      ${c.orgPhone?`<a class="vn-act" href="tel:${esc(String(c.orgPhone).replace(/[^\d+]/g,""))}"><span>📞</span><b>Call</b></a>`:""}
+      ${c.orgEmail?`<a class="vn-act" href="mailto:${esc(c.orgEmail)}?subject=${encodeURIComponent("Dropshot Folks question")}"><span>✉️</span><b>Email</b></a>`:""}
+    </div>`:`<p>Contact details will appear here once the organiser adds them.</p>`}
   </section>
-  <section class="panel"><h2>Contact the organiser</h2>
-    ${c.orgName||c.orgPhone||c.orgEmail?`${c.orgName?`<p>Organiser: <b>${esc(c.orgName)}</b></p>`:""}
-    <div class="row">${wa?`<a class="btn primary" href="${wa}" target="_blank" rel="noopener">💬 WhatsApp</a>`:""}${c.orgPhone?`<a class="btn primary" href="tel:${esc(String(c.orgPhone).replace(/[^\d+]/g,""))}">📞 Call</a>`:""}${c.orgEmail?`<a class="btn primary" href="mailto:${esc(c.orgEmail)}?subject=${encodeURIComponent("Dropshot Folks question")}">✉️ Email</a>`:""}</div>
-    <p class="muted">Contact the organiser about level reviews, refunds, or if you can't book.</p>`
-    :`<div class="empty">Contact details will appear here once the organiser adds them.</div>`}
-  </section>
-  <section class="panel"><h2>Payment &amp; cancellations</h2><p>${esc(c.policy)}</p>${(()=>{ const fees=[...new Map(upcoming().filter(x=>!x.cancelled).map(x=>[(x.title||"Session")+"|"+feeOf(x), [x.title||"Session", feeOf(x)]])).values()].filter(([,f])=>f);
-      return fees.length ? `<p>${fees.map(([t,f])=>`${esc(t)}: <b>${esc(f)}</b>`).join(" · ")} per person per session</p>` : c.price?`<p>Session fee: <b>${esc(money(c.price))}</b></p>`:"" })()}</section>`;
+  <section class="panel vn-pay"><h2>💷 Prices &amp; paying</h2>
+    <div class="vn-fees">${fees.length?fees.map(([t,f])=>`<div class="vn-fee"><b>${esc(f)}</b><span>${esc(t)}</span></div>`).join(""):c.price?`<div class="vn-fee"><b>${esc(money(c.price))}</b><span>per session</span></div>`:""}</div>
+    ${fees.length||c.price?`<p class="muted" style="font-size:.88rem">Per person, per session.</p>`:""}
+    <div class="vn-policy">⏱️ ${esc(c.policy||"")}</div></section>`;
 }
 
 /* ---------- organiser ---------- */

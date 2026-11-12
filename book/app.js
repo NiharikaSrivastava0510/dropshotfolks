@@ -461,8 +461,8 @@ function checkinList(s){
     <span class="muted" style="font-size:.82rem">Court ${esc(b.court)}${org?" "+stChip(b.status):""}</span>
     <span class="row" style="gap:6px;margin-left:auto">${
       !b.checkedIn ? `<button class="btn small" data-checkin="${esc(b.id)}" data-v="in">Here</button><button class="btn small ${b.absent?"out-on":"ghost"}" data-checkin="${esc(b.id)}" data-v="${b.absent?"reset":"out"}" aria-pressed="${!!b.absent}">Not here</button>`
-      : b.outAt ? `<span class="chip st-cancelled">Left ${tm(b.outAt)}</span><button class="btn small" data-checkin="${esc(b.id)}" data-v="back">Back</button>`
-      : `<button class="btn small primary" data-checkin="${esc(b.id)}" data-v="reset" aria-pressed="true" title="Tap twice to undo the check-in">✓ In ${tm(b.inAt)||"here"}</button><button class="btn small ghost" data-checkin="${esc(b.id)}" data-v="leave">Leaving</button>`}</span>
+      : b.outAt ? `<span class="chip st-cancelled">Left ${tm(b.outAt)}</span><button class="btn small" data-checkin="${esc(b.id)}" data-v="back">Back</button>${org?`<button class="btn small ghost danger" data-checkin="${esc(b.id)}" data-v="reset" title="Clear the check-in and times (e.g. a test)">↺ Reset</button>`:""}`
+      : `<span class="chip st-confirmed">✓ In ${tm(b.inAt)||"here"}</span><button class="btn small ghost" data-checkin="${esc(b.id)}" data-v="leave">Leaving</button>${org?`<button class="btn small ghost danger" data-checkin="${esc(b.id)}" data-v="reset" title="Clear the check-in and times (e.g. a test)">↺ Reset</button>`:""}`}</span>
   </div>`).join("")}</div>`;
 }
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -2036,7 +2036,7 @@ document.addEventListener("click", async e=>{
       : {checkedIn:false, absent:false, inAt:"", outAt:""};
       setBooking(b.id, patch, v==="in"?`Checked in at ${at}.`:v==="leave"?`Left at ${at}.`:v==="back"?`Back at ${at}.`:v==="out"?"Marked not here.":"Check-in cleared.",
         v==="in"?`${b.name} in at ${at}`:v==="leave"?`${b.name} left at ${at}`:v==="back"?`${b.name} is back`:v==="out"?`${b.name} marked not here`:"Check-in cleared") };
-    if(v==="reset" && b.checkedIn) arm(t,"Tap again to undo", go); else go();
+    if(v==="reset" && b.checkedIn) arm(t,"Tap again to reset", go); else go();
     return }
   if(ds.cireset && S.isAdmin){ const sid=ds.cireset; arm(t,"Tap again to reset everyone",async()=>{
       const bs=S.bookings.filter(b=>b.sessionId===sid && (b.checkedIn||b.inAt||b.outAt||b.absent));

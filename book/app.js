@@ -224,7 +224,8 @@ function rotInfo(s){
   const mins = Number(s.gameMins)||GAME_MINS, ms = mins*60e3, end = re && re>startT && re<=sessEnd(s) ? re : sessEnd(s), now = Date.now();
   const total = Math.max(1, Math.floor((end-startT)/ms));
   const idx = now<startT ? -1 : Math.min(total-1, Math.floor((now-startT)/ms));
-  return {startT, endT:end, mins, total, idx, live: now>=startT && now<end, done: now>=end, at:i=>new Date(startT.getTime()+i*ms)};
+  // live: the rotation is running · on: anywhere in the booked session (warm-up, rotation, free play after it) · free: rotation over, session still on
+  return {startT, endT:end, mins, total, idx, live: now>=startT && now<end, on: now>=sessStart(s) && now<sessEnd(s), free: now>=end && now<sessEnd(s), done: now>=sessEnd(s), at:i=>new Date(startT.getTime()+i*ms)};
 }
 function courtRoster(s,c){ return S.bookings.filter(b=>b.sessionId===s.id && b.court===c && ACTIVE.includes(b.status) && !b.absent).sort((a,b)=>String(a.createdAt).localeCompare(b.createdAt)) }
 function schedule(ids,total,mate=mates){
@@ -435,7 +436,7 @@ function burst(icons=["🏸","🎉","✨","🪶","🎊","🏆"]){
 function nextChip(){
   const s=upcoming()[0]; if(!s) return "";
   const r=rotInfo(s), v=venueOf(s);
-  return r.live ? `<span class="nc-live"></span><b>Live now</b> · ${esc(v.venue||"on court")} · <a href="#" data-go="live">Live courts →</a>`
+  return r.on ? `<span class="nc-live"></span><b>Live now</b> · ${esc(v.venue||"on court")} · <a href="#" data-go="live">Live courts →</a>`
     : `🏸 Next: <b>${fmtDate(s.date)} · ${esc(s.start)}</b> · starts in <span class="cd" data-at="${sessStart(s).toISOString()}">–</span>`;
 }
 
@@ -486,7 +487,7 @@ function render(){
   // players only ever get the player view; the organiser can switch
   const view = S.isAdmin ? S.view : "player", tabs = TABS[view];
   const tab = tabs.some(([k])=>k===S.tab) ? S.tab : tabs[0][0];
-  const anyLive = S.sessions.some(s=>rotInfo(s).live);
+  const anyLive = S.sessions.some(s=>rotInfo(s).on);
   $("#viewbar").hidden = !S.isAdmin;
   document.querySelectorAll("#viewbar [data-view]").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.view===view)));
   $("#tabs").innerHTML = tabs.map(([k,label])=>`<button role="tab" data-tab="${k}" aria-selected="${k===tab}">${k==="live"&&anyLive?'<span class="dot pulse"></span>':""}${esc(label)}</button>`).join("");
@@ -814,7 +815,7 @@ function liveKey(){ return S.sessions.map(s=>s.id+":"+rotInfo(s).idx).join(",") 
 function pickLiveSession(){
   const ups = upcoming();
   if(S.liveSess && ups.find(s=>s.id===S.liveSess)) return ups.find(s=>s.id===S.liveSess);
-  return ups.find(s=>rotInfo(s).live) || ups[0] || null;
+  return ups.find(s=>rotInfo(s).on) || ups[0] || null;
 }
 function teamHtml(team, names){
   return team.map(id=>`<div class="pl ${id===S.me?"me":""}">${avatar(id,names[id])}<span>${esc(names[id])}</span></div>`).join("");
@@ -827,7 +828,7 @@ function viewLive(){
   return `<section class="panel">
     <div><h2>Live courts</h2><p class="muted">Four play doubles while the others rest, and everyone gets the same number of games. When a game's score is saved, the next four go on.</p></div>
     <div class="sess">${ups.slice(0,6).map(x=>`<button data-live="${x.id}" aria-pressed="${x.id===s.id}"><b>${fmtDate(x.date)}</b><span>${esc(x.start)}–${esc(x.end)}${rotInfo(x).live?" · live now":""}</span></button>`).join("")}</div>
-    <p>${r.live?`<span class="dot pulse"></span><b>Live now</b> · ${s.rotMode==="clock"?`${r.mins}-minute games · next game in <span class="cd" data-at="${r.at(r.idx+1).toISOString()}">–</span>`:"each court moves to its next game when the score is saved"}`:r.done?"This session has finished.":`First game at <b>${hhmm(r.startT)}</b> · starts in <span class="cd" data-at="${r.startT.toISOString()}">–</span>`} ${v.venue?` · ${esc(v.venue)}`:""}</p>
+    <p>${r.live?`<span class="dot pulse"></span><b>Live now</b> · ${s.rotMode==="clock"?`${r.mins}-minute games · next game in <span class="cd" data-at="${r.at(r.idx+1).toISOString()}">–</span>`:"each court moves to its next game when the score is saved"}`:r.free?`🏸 <b>Rotation finished</b> · free play until ${esc(s.end)}`:r.done?"This session has finished.":`First game at <b>${hhmm(r.startT)}</b> · starts in <span class="cd" data-at="${r.startT.toISOString()}">–</span>`} ${v.venue?` · ${esc(v.venue)}`:""}</p>
   </section>
   <div class="court-grid">${courtsOf(s).map(c=>courtLive(s,c)).join("")}</div>
   <section class="panel">${leaderboard()}</section>`;
@@ -1152,7 +1153,7 @@ const orgClub = () => S.isAdmin ? orgParts().club : notOrg;
 function orgOverview(){
   if(!S.isAdmin) return notOrg;
   if(!S.loaded) return `<section class="panel"><div class="empty loading">Loading…</div></section>`;
-  const ups = upcoming(), s = ups.find(x=>rotInfo(x).live) || ups[0], warn = "";
+  const ups = upcoming(), s = ups.find(x=>rotInfo(x).on) || ups[0], warn = "";
   const toCheck = S.bookings.filter(b=>b.status==="paid" && ups.some(x=>x.id===b.sessionId));
   const reqs = S.players.filter(p=>p.levelRequest);
   const missing = ["price","accountNumber","orgPhone"].filter(k=>!S.cfg[k]);
@@ -1163,7 +1164,7 @@ function orgOverview(){
   const n = st => inS.filter(b=>b.status===st).length;
   const playing = inS.filter(b=>ACTIVE.includes(b.status)).length, capTotal=[1,2,3,4].reduce((t,c)=>t+cap(s,c),0);
   html += `<section class="panel">
-    <div class="row" style="justify-content:space-between"><div><h2>${r.live?'<span class="dot pulse"></span>Live now: ':"Next session: "}${fmtLong(s.date)}</h2><p class="muted">${esc(s.start)}–${esc(s.end)}${v.venue?` · ${esc(v.venue)}`:""}${r.live?` · game ${r.idx+1} of ${r.total}`:""}</p></div>
+    <div class="row" style="justify-content:space-between"><div><h2>${r.on?'<span class="dot pulse"></span>Live now: ':"Next session: "}${fmtLong(s.date)}</h2><p class="muted">${esc(s.start)}–${esc(s.end)}${v.venue?` · ${esc(v.venue)}`:""}${r.live?` · game ${r.idx+1} of ${r.total}`:""}</p></div>
       <div class="row"><button class="btn small" data-msg="${s.id}">Copy reminder message</button><button class="btn small" data-emails="${s.id}">Copy player emails</button><button class="btn small" data-tab-go="live">Live courts</button></div></div>
     <div class="tiles">
       <div class="tile"><span class="lbl">Booked</span><b>${playing}/${capTotal}</b><span class="muted">places</span></div>
@@ -1295,7 +1296,7 @@ function adminSession(s){
           <span class="lbl">Levels on this court</span><div class="row">${LEVELS.map(l=>`<label class="row" style="gap:4px;font-size:.85rem"><input type="checkbox" style="width:auto" id="es-lv${n}${l.key}-${s.id}" ${courtLevels(s,n).includes(l.code)?"checked":""}>${lvChip(l.code)}</label>`).join("")}</div>
           <label class="f">Places<input id="es-cap${n}-${s.id}" type="number" min="0" max="30" value="${cap(s,n)}"></label></div>`).join("")}
         <p class="muted" style="grid-column:1/-1;font-size:.85rem">Set places to 0 if a court isn't running. Players go to the first running court that includes their level.</p>
-        <label class="row" style="grid-column:1/-1;gap:6px"><input type="checkbox" style="width:auto" id="es-all-${s.id}"> Make this the standard court setup for ${esc(slotLabel(s))} (copies it to every upcoming one, and new ones start with it)</label>
+        <label class="row" style="grid-column:1/-1;gap:6px"><input type="checkbox" style="width:auto" id="es-all-${s.id}"> Make this the standard for ${esc(slotLabel(s))}: courts, places and rotation times (copies it to every upcoming one, and new ones start with it)</label>
         <div class="row" style="grid-column:1/-1"><button class="btn small primary" data-savesess="${esc(s.id)}">Save session</button><button class="btn small" data-stdcourts="${esc(s.id)}">Use standard courts</button><span class="muted" style="font-size:.82rem">${stdOf(s)?`Your standard: ${[1,2,3,4].filter(n=>Number(stdOf(s).capacity?.[n])>0).map(n=>`Court ${n} ${courtLevels({courts:stdOf(s).courts},n).join("/")}`).join(" · ")}`:"D- Court 1 · D+ Court 2 · C- Court 3 · C+ Court 4"}, and moves booked players to match.</span></div>
       </div>`,
         hc:`<div class="row code-row">${S.secrets[s.id]?`<b class="code">${esc(S.secrets[s.id])}</b><button class="btn small" data-copy="${esc(S.secrets[s.id])}">Copy</button><button class="btn small ghost" data-newcode="${esc(s.id)}">New code</button>`:`<button class="btn small primary" data-newcode="${esc(s.id)}">Create code</button>`}</div><p class="muted" style="font-size:.82rem">Give it to whoever runs the court-side device. A new code locks out devices using the old one.</p>`,
@@ -1760,9 +1761,10 @@ document.addEventListener("click", async e=>{
     if(!await save("sessions",id,{...body, date:v("date"), start:v("start"), end:v("end"), title:v("title"), venue:v("venue"), address:v("address"), note:v("note"), price:v("price"), rules:v("rules").slice(0,2000), capacity, courts},"Session updated")) return;
     if($(`#es-all-${sid}`)?.checked){
       const same=upcoming().filter(x=>x.id!==sid && slotKey(x)===slotKey(s));
-      for(const x of same){ const {id:xid,...xb}=x; await save("sessions",xid,{...xb, capacity, courts}) }
-      // and it becomes the club standard for this day and time: new sessions start with it
-      await save("config","main",{...S.cfg, std:{...(S.cfg.std||{}), [slotKey(s)]:{courts, capacity}}});
+      const rot={gameMins:Number(s.gameMins)||GAME_MINS, rotStart:s.rotStart||"", rotEnd:s.rotEnd||"", rotMode:s.rotMode||"score"};
+      for(const x of same){ const {id:xid,...xb}=x; await save("sessions",xid,{...xb, capacity, courts, ...(x.start===s.start&&x.end===s.end?rot:{})}) }
+      // and it becomes the club standard for this day and time: new sessions start with it (courts, places and rotation times)
+      await save("config","main",{...S.cfg, std:{...(S.cfg.std||{}), [slotKey(s)]:{courts, capacity, ...rot}}});
       toast(`Saved as your standard ${slotLabel(s)} setup, and copied to ${same.length} more session${same.length===1?"":"s"}`);
     }
     return }
@@ -1926,7 +1928,7 @@ document.addEventListener("submit", async e=>{
       const d=new Date(date+"T12:00:00"); d.setDate(d.getDate()+7*w);
       const day=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
       const st=!$("#s-alllv").checked && stdOf({date:day,start});
-      if(!await save("sessions",`s${day}-${start.replace(":","")}`,{...base,date:day,...(st?{courts:st.courts,capacity:st.capacity}:{})})) return;
+      if(!await save("sessions",`s${day}-${start.replace(":","")}`,{...base,date:day,...(st?{courts:st.courts,capacity:st.capacity,...(st.gameMins?{gameMins:st.gameMins,rotStart:st.rotStart||"",rotEnd:st.rotEnd||"",rotMode:st.rotMode||"score"}:{})}:{})})) return;
     }
     toast(weeks>1?`${weeks} sessions added`:"Session added");
   }

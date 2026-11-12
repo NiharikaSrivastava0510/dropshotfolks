@@ -1493,12 +1493,12 @@ const t12 = hm => { const [h,m]=String(hm||"").split(":").map(Number); if(!Numbe
 function defaultMailNote(s){
   const ph=S.cfg.orgPhone||"the organiser";
   return [
-    `🕡 Entry is from ${t12(s.start)}.`,
-    `🚪 If nobody is at the door when you arrive, please don't try to get in yourself. Call ${ph} (a phone call, not WhatsApp).`,
-    `🏃 Warm up for 5 minutes before the first game starts.`,
-    `🔄 The rotation goes in the order people arrive, so check in at the reception screen as soon as you get in.`,
-    `🏸 Please only play on your own court.`,
-    `🚿 There are no showers. You can change in the toilets on the right-hand side of the hallway to the sports hall.`
+    `🕡 Doors open at ${t12(s.start)}.`,
+    `🚪 Nobody at the door? Please don't try to get in yourself. Call ${ph} (a phone call, not WhatsApp).`,
+    `🔥 5-minute warm-up before the first game.`,
+    `🔄 The rotation goes in the order people arrive, so tap your name on the reception screen as soon as you get in. Early birds play first!`,
+    `🏸 Stick to your own court, please.`,
+    `🚿 No showers. You can change in the toilets on the right-hand side of the hallway to the sports hall.`
   ].join("\n");
 }
 const mailNoteOf = s => s?.mailNote ?? defaultMailNote(s);
@@ -1536,21 +1536,56 @@ async function mailPost(body){
     const r=await fetch(S.mail.url,{method:"POST", body:JSON.stringify({...body, token})}); return await r.json() }
   catch(e){ return {ok:false, error:"Couldn't reach the email script"} }
 }
-const mailBox = (title, inner) => `<div style="background:#F3E9D9;padding:24px 12px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif"><div style="max-width:560px;margin:0 auto;background:#FCF7EE;border-radius:18px;overflow:hidden;border:1px solid #DFCDAE">
-  <div style="background:#7A2331;color:#fff;padding:20px 24px;text-align:center"><div style="font-size:22px;font-weight:800;letter-spacing:.04em">DROPSHOT FOLKS</div><div style="color:#EBD9BA;font-size:15px;margin-top:4px">${esc(title)}</div></div>
-  <div style="padding:22px 24px;color:#24100F;font-size:16px;line-height:1.55">${inner}<p style="margin:18px 0 0">See you on court! 🏸<br><b>Dropshot Folks</b></p></div></div></div>`;
+const mailBox = (title, inner) => `<div style="margin:0;padding:24px 12px;background:#EADBC8;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto"><tr><td>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;margin:0 0 16px"><tr><td style="background:#7A1E2C;border:3px solid #2B2B2B;border-bottom-width:7px;border-radius:20px;padding:18px 20px">
+    <div style="display:inline-block;background:#EADBC8;color:#7A1E2C;border:2px solid #2B2B2B;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:800;letter-spacing:.12em">DROPSHOT FOLKS</div>
+    <div style="font-family:'Bricolage Grotesque','Arial Black',Arial,sans-serif;font-size:26px;line-height:1.1;font-weight:800;color:#FFFFFF;margin:12px 0 0">${esc(title)}</div></td></tr></table>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;margin:0 0 16px"><tr><td style="background:#F6EEE3;border:3px solid #2B2B2B;border-bottom-width:7px;border-radius:20px;padding:18px 20px;color:#2B2B2B;font-size:16px;line-height:1.55">${inner.replace(/background:#7A2331;color:#fff/g,"background:#E3A82B;color:#2B2B2B;border:3px solid #2B2B2B;border-bottom-width:5px")}</td></tr></table>
+  <p style="text-align:center;font-size:15px;color:#2B2B2B;margin:0 0 4px">See you on court 🏸</p><p style="text-align:center;font-size:13px;color:#5C4B48;margin:0">Dropshot Folks · <i>Play. Meet. Repeat.</i></p></td></tr></table></div>`;
 const htmlText = t => esc(t).replace(/\n/g,"<br>");
+// the reminder email: bold "sticker" style in the club colours, built with tables and inline styles so it looks right in every mail app
 function reminderMail(s, r){
-  const v=venueOf(s), when=`${fmtLong(s.date)}, ${s.start}–${s.end}`, fee=feeOf(s);
-  const lines=r.bookings.map(b=>`• ${b.name}: Court ${b.court} (${courtName(s,b.court)}) · ${b.status==="waitlist"?"on the waiting list":b.status==="awaiting"?`not paid yet${fee?`: please pay ${fee}`:""}, reference ${b.ref}`:"place confirmed"}`);
-  const text=`Hi ${r.name.split(" ")[0]},\n\nA reminder for your Dropshot Folks session${s.title?` (${s.title})`:""}:\n\n📅 ${when}\n📍 ${[v.venue,v.address].filter(Boolean).join(", ")}${v.address||v.venue?`\n${mapsFor(v)}`:""}\n\n${lines.join("\n")}${mailNoteOf(s)?`\n\n📌 Before you come\n${mailNoteOf(s)}`:""}\n\n📜 Session rules\n${rulesOf(s)}\n\nYour bookings and game rotation: ${BOOK_URL}\n\nSee you on court!\nDropshot Folks`;
-  const html=mailBox(`${s.title||"Session reminder"} · ${fmtLong(s.date)}`, `<p style="margin:0 0 12px">Hi ${esc(r.name.split(" ")[0])}, a reminder for your session:</p>
-    <p style="margin:0 0 6px">📅 <b>${esc(when)}</b></p><p style="margin:0 0 12px">📍 ${esc([v.venue,v.address].filter(Boolean).join(", "))}${v.address||v.venue?` · <a href="${esc(mapsFor(v))}">Directions</a>`:""}</p>
-    <p style="margin:0 0 12px">${lines.map(esc).join("<br>")}</p>
-    ${mailNoteOf(s)?`<div style="background:#FBF1DC;border:1px solid #E3A82B;border-radius:12px;padding:12px 14px;margin:14px 0"><b>📌 Before you come</b><br>${htmlText(mailNoteOf(s))}</div>`:""}
-    <div style="background:#fff;border:1px solid #EAD9BD;border-radius:12px;padding:12px 14px;margin:14px 0"><b>📜 Session rules</b><br>${htmlText(rulesOf(s))}</div>
-    <p style="text-align:center;margin:18px 0 0"><a href="${esc(BOOK_URL)}" style="display:inline-block;background:#7A2331;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px">Your bookings →</a></p>`);
-  return {to:r.email, subject:`Reminder: ${s.title||"Dropshot Folks"} · ${fmtLong(s.date)} ${s.start}`, text, html};
+  const v=venueOf(s), fee=feeOf(s), first=r.name.split(" ")[0];
+  const d=new Date(s.date+"T12:00:00"), t0=new Date(); t0.setHours(12,0,0,0);
+  const dd=Math.round((d-t0)/864e5), rel = dd===0?"tonight":dd===1?"tomorrow":`on ${d.toLocaleDateString("en-GB",{weekday:"long"})}`;
+  const when=`${d.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"})} · ${t12(s.start)}–${t12(s.end)}`;
+  const own=r.bookings.find(b=>!b.hostId)||r.bookings[0];
+  const stTxt=b=> b.status==="waitlist"?"⏳ On the waiting list":b.status==="awaiting"?`💸 Not paid yet${fee?`: ${fee}`:""} · ref ${b.ref}`:b.status==="paid"?"🧾 Paid, waiting for the organiser to confirm":"✅ You're confirmed";
+  const note=String(mailNoteOf(s)||"").split("\n").map(x=>x.trim()).filter(Boolean), rules=String(rulesOf(s)||"").split("\n").map(x=>x.trim()).filter(Boolean);
+  // plain-text version
+  const text=`Hey ${first} 👋\n\nIt's game night ${rel}! 🏸\n\n📅 ${when}\n📍 ${[v.venue,v.address].filter(Boolean).join(", ")}${v.address||v.venue?`\n${mapsFor(v)}`:""}\n\n${r.bookings.map(b=>`🎟️ ${b.hostId?b.name+": ":""}Court ${b.court} (${courtName(s,b.court)}) · ${stTxt(b)}`).join("\n")}${note.length?`\n\n📌 Before you pull up\n${note.join("\n")}`:""}\n\n📜 House rules\n${rules.join("\n")}\n\nYour games and live courts: ${BOOK_URL}\n\nSee you on court 🏸\nDropshot Folks · Play. Meet. Repeat.`;
+  // html version
+  const F="font-family:'Bricolage Grotesque','Arial Black',-apple-system,Segoe UI,Roboto,Arial,sans-serif";
+  const B="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif";
+  const card=(bg,inner,extra="")=>`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;margin:0 0 16px"><tr><td style="background:${bg};border:3px solid #2B2B2B;border-bottom-width:7px;border-radius:20px;padding:18px 20px;${extra}">${inner}</td></tr></table>`;
+  const chip=(t,bg="#FFFFFF")=>`<span style="display:inline-block;background:${bg};border:2px solid #2B2B2B;border-radius:999px;padding:5px 12px;margin:0 6px 8px 0;font-size:14px;font-weight:700;color:#2B2B2B">${t}</span>`;
+  const ticket=b=>card("#E3A82B",`<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+      <td style="vertical-align:middle"><div style="font-size:12px;font-weight:800;letter-spacing:.14em;color:#2B2B2B">${b.hostId?esc(b.name).toUpperCase()+"'S COURT":"YOUR COURT"}</div>
+        <div style="${F};font-size:44px;line-height:1;font-weight:800;color:#2B2B2B;margin:4px 0">Court ${esc(b.court)}</div>
+        <div style="font-size:15px;color:#2B2B2B">${esc(courtName(s,b.court))}</div></td>
+      <td style="vertical-align:middle;text-align:right;font-size:46px;line-height:1">🏸</td></tr>
+      <tr><td colspan="2" style="padding-top:12px">${chip(esc(stTxt(b)))}</td></tr></table>`);
+  const list=(arr)=>arr.map(x=>`<tr><td style="padding:7px 0;border-top:2px dashed #E0CDB4;font-size:15px;line-height:1.45;color:#2B2B2B">${esc(x)}</td></tr>`).join("");
+  const html=`<div style="margin:0;padding:24px 12px;background:#EADBC8;font-family:${B}">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto"><tr><td>
+    ${card("#7A1E2C",`<div style="display:inline-block;background:#EADBC8;color:#7A1E2C;border:2px solid #2B2B2B;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:800;letter-spacing:.12em">DROPSHOT FOLKS</div>
+      <div style="${F};font-size:36px;line-height:1.05;font-weight:800;color:#FFFFFF;margin:14px 0 6px">It's game night ${rel}! 🏸</div>
+      <div style="font-size:16px;color:#F1E3CF">${esc(s.title||"Dropshot Folks session")}</div>`)}
+    <p style="font-size:17px;line-height:1.5;color:#2B2B2B;margin:0 0 16px;padding:0 4px">Hey ${esc(first)} 👋 you're on the list. Here's everything you need for ${rel}:</p>
+    ${r.bookings.map(ticket).join("")}
+    ${card("#F6EEE3",`${chip("📅 "+esc(when))}${chip("📍 "+esc(v.venue||"Venue"))}
+      ${v.address?`<div style="font-size:15px;color:#2B2B2B;margin:2px 0 12px">${esc(v.address)}</div>`:""}
+      ${v.address||v.venue?`<a href="${esc(mapsFor(v))}" style="display:inline-block;background:#FFFFFF;color:#2B2B2B;text-decoration:none;font-weight:800;border:2px solid #2B2B2B;border-radius:999px;padding:8px 16px;font-size:14px">🗺️ Get directions</a>`:""}`)}
+    ${note.length?card("#FBF1DC",`<div style="${F};font-size:21px;font-weight:800;color:#2B2B2B;margin:0 0 6px">📌 Before you pull up</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${list(note)}</table>`):""}
+    ${card("#FFFFFF",`<div style="${F};font-size:21px;font-weight:800;color:#2B2B2B;margin:0 0 6px">📜 House rules</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${list(rules)}</table>`)}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:6px 0 18px"><tr><td align="center">
+      <a href="${esc(BOOK_URL)}" style="display:inline-block;background:#E3A82B;color:#2B2B2B;text-decoration:none;${F};font-weight:800;font-size:18px;border:3px solid #2B2B2B;border-bottom-width:6px;border-radius:16px;padding:14px 26px">See your games →</a>
+    </td></tr></table>
+    <p style="text-align:center;font-size:15px;color:#2B2B2B;margin:0 0 4px">See you on court 🏸</p>
+    <p style="text-align:center;font-size:13px;color:#5C4B48;margin:0">Dropshot Folks · <i>Play. Meet. Repeat.</i></p>
+  </td></tr></table></div>`;
+  const subj = own ? `🏸 Game night ${rel}: Court ${own.court} · ${when}` : `🏸 Game night ${rel} · ${when}`;
+  return {to:r.email, subject:subj, text, html};
 }
 function cancelMail(ss, r, reason){
   const list=ss.map(s=>`• ${s.title?s.title+": ":""}${fmtLong(s.date)}, ${s.start}–${s.end}${venueOf(s).venue?` at ${venueOf(s).venue}`:""}`);

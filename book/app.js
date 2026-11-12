@@ -1327,7 +1327,12 @@ function adminSession(s){
       const emails=want.map(p=>p.email).join(","), subj=`Book your Dropshot Folks session: ${fmtLong(s.date)}`;
       const body=`Hi! Places are open for ${fmtLong(s.date)}, ${s.start}–${s.end}${venueOf(s).venue?" at "+venueOf(s).venue:""}.\n\nBook here: ${BOOK_URL}\n\nSee you on court!`;
       return `<div class="banner info"><div class="grow"><b>${want.length} player${want.length>1?"s want":" wants"} a reminder</b> for this session and ${want.length>1?"haven't":"hasn't"} booked yet: ${want.map(p=>esc(p.name)).join(", ")}</div>
-        <span class="row"><button class="btn small primary" data-remindmail="${esc(s.id)}">📧 Email them</button><button class="btn small" data-copy="${esc(emails)}">Copy emails</button></span></div>` })()}<div class="row"><button class="btn small primary" data-mailrem="${s.id}">📧 Email reminder + rules</button>${s.remindedAt?`<span class="chip st-confirmed">Reminder sent ${esc(new Date(s.remindedAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))}</span>`:""}<button class="btn small" data-msg="${s.id}">Copy reminder message</button><button class="btn small" data-emails="${s.id}">Copy player emails</button></div>`,
+        <span class="row"><button class="btn small primary" data-remindmail="${esc(s.id)}">📧 Email them</button><button class="btn small" data-copy="${esc(emails)}">Copy emails</button></span></div>` })()}<div class="bk" style="gap:8px"><b>📌 Before you come <span class="muted" style="font-weight:400">(goes at the top of the reminder email)</span></b>
+          <textarea id="mn-${s.id}" rows="7">${esc(mailNoteOf(s))}</textarea>
+          <div class="row" style="flex-wrap:wrap;gap:8px"><button class="btn small" data-mnsave="${esc(s.id)}">Save note</button><button class="btn small ghost" data-mnreset="${esc(s.id)}">Reset to the standard note</button>
+            <label class="row" style="gap:6px;font-size:.88rem"><input type="checkbox" style="width:auto" id="mn-all-${s.id}"> Use for every upcoming ${esc(slotLabel(s))} session</label></div>
+          <details id="mnprev-${s.id}"><summary>Preview the email</summary><pre style="white-space:pre-wrap;font:inherit;font-size:.88rem;margin:8px 0 0">${esc(reminderMail(s,{name:"Alex Player",email:"",bookings:[{name:"Alex Player",court:courtsOf(s)[0]||1,status:"confirmed",ref:"DSF ALEX"}]}).text)}</pre></details></div>
+        <div class="row"><button class="btn small primary" data-mailrem="${s.id}">📧 Email reminder + rules</button>${s.remindedAt?`<span class="chip st-confirmed">Reminder sent ${esc(new Date(s.remindedAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))}</span>`:""}<button class="btn small" data-msg="${s.id}">Copy reminder message</button><button class="btn small" data-emails="${s.id}">Copy player emails</button></div>`,
         pr:partnersPanel(s),
         es:`      <div class="grid2 sub-body">
         <label class="f">Date<input id="es-date-${s.id}" type="date" value="${esc(s.date)}"></label>
@@ -1483,6 +1488,20 @@ select.gsel{width:auto;padding:3px 6px;font-size:.8rem}
 @media (max-width:520px){.sess-sum{grid-template-columns:auto 1fr}.chev{display:none}}
 @media (prefers-reduced-motion:reduce){.chev{transition:none}}
 </style>`);
+// "Before you come" notes at the top of the reminder email; the organiser can edit them per session
+const t12 = hm => { const [h,m]=String(hm||"").split(":").map(Number); if(!Number.isFinite(h)) return hm||""; return `${(h%12)||12}${m?":"+String(m).padStart(2,"0"):""} ${h<12?"am":"pm"}` };
+function defaultMailNote(s){
+  const ph=S.cfg.orgPhone||"the organiser";
+  return [
+    `🕡 Entry is from ${t12(s.start)}.`,
+    `🚪 If nobody is at the door when you arrive, please don't try to get in yourself. Call ${ph} (a phone call, not WhatsApp).`,
+    `🏃 Warm up for 5 minutes before the first game starts.`,
+    `🔄 The rotation goes in the order people arrive, so check in at the reception screen as soon as you get in.`,
+    `🏸 Please only play on your own court.`,
+    `🚿 There are no showers. You can change in the toilets on the right-hand side of the hallway to the sports hall.`
+  ].join("\n");
+}
+const mailNoteOf = s => s?.mailNote ?? defaultMailNote(s);
 function reminderText(s){
   const v=venueOf(s);
   let t=`🏸 Dropshot Folks reminder: ${fmtLong(s.date)}, ${s.start}–${s.end}\n${v.venue?v.venue+"\n":""}${v.address?v.address+"\n"+mapsFor(v)+"\n":""}\n`;
@@ -1490,7 +1509,7 @@ function reminderText(s){
     t+=`Court ${n} (${courtName(s,n)}): ${names.length?names.join(", "):"places available"}\n`});
   const unpaid=S.bookings.filter(b=>b.sessionId===s.id&&b.status==="awaiting").map(b=>b.name);
   if(unpaid.length) t+=`\nStill to pay: ${unpaid.join(", ")}\n`;
-  return t+`\n📜 Rules\n${rulesOf(s)}\n\nYour game rotation is live on the booking page. See you on court!`;
+  return t+`${mailNoteOf(s)?`\n📌 Before you come\n${mailNoteOf(s)}\n`:""}\n📜 Rules\n${rulesOf(s)}\n\nYour game rotation is live on the booking page. See you on court!`;
 }
 
 
@@ -1524,10 +1543,11 @@ const htmlText = t => esc(t).replace(/\n/g,"<br>");
 function reminderMail(s, r){
   const v=venueOf(s), when=`${fmtLong(s.date)}, ${s.start}–${s.end}`, fee=feeOf(s);
   const lines=r.bookings.map(b=>`• ${b.name}: Court ${b.court} (${courtName(s,b.court)}) · ${b.status==="waitlist"?"on the waiting list":b.status==="awaiting"?`not paid yet${fee?`: please pay ${fee}`:""}, reference ${b.ref}`:"place confirmed"}`);
-  const text=`Hi ${r.name.split(" ")[0]},\n\nA reminder for your Dropshot Folks session${s.title?` (${s.title})`:""}:\n\n📅 ${when}\n📍 ${[v.venue,v.address].filter(Boolean).join(", ")}${v.address||v.venue?`\n${mapsFor(v)}`:""}\n\n${lines.join("\n")}\n\n📜 Session rules\n${rulesOf(s)}\n\nYour bookings and game rotation: ${BOOK_URL}\n\nSee you on court!\nDropshot Folks`;
+  const text=`Hi ${r.name.split(" ")[0]},\n\nA reminder for your Dropshot Folks session${s.title?` (${s.title})`:""}:\n\n📅 ${when}\n📍 ${[v.venue,v.address].filter(Boolean).join(", ")}${v.address||v.venue?`\n${mapsFor(v)}`:""}\n\n${lines.join("\n")}${mailNoteOf(s)?`\n\n📌 Before you come\n${mailNoteOf(s)}`:""}\n\n📜 Session rules\n${rulesOf(s)}\n\nYour bookings and game rotation: ${BOOK_URL}\n\nSee you on court!\nDropshot Folks`;
   const html=mailBox(`${s.title||"Session reminder"} · ${fmtLong(s.date)}`, `<p style="margin:0 0 12px">Hi ${esc(r.name.split(" ")[0])}, a reminder for your session:</p>
     <p style="margin:0 0 6px">📅 <b>${esc(when)}</b></p><p style="margin:0 0 12px">📍 ${esc([v.venue,v.address].filter(Boolean).join(", "))}${v.address||v.venue?` · <a href="${esc(mapsFor(v))}">Directions</a>`:""}</p>
     <p style="margin:0 0 12px">${lines.map(esc).join("<br>")}</p>
+    ${mailNoteOf(s)?`<div style="background:#FBF1DC;border:1px solid #E3A82B;border-radius:12px;padding:12px 14px;margin:14px 0"><b>📌 Before you come</b><br>${htmlText(mailNoteOf(s))}</div>`:""}
     <div style="background:#fff;border:1px solid #EAD9BD;border-radius:12px;padding:12px 14px;margin:14px 0"><b>📜 Session rules</b><br>${htmlText(rulesOf(s))}</div>
     <p style="text-align:center;margin:18px 0 0"><a href="${esc(BOOK_URL)}" style="display:inline-block;background:#7A2331;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px">Your bookings →</a></p>`);
   return {to:r.email, subject:`Reminder: ${s.title||"Dropshot Folks"} · ${fmtLong(s.date)} ${s.start}`, text, html};
@@ -1916,7 +1936,17 @@ document.addEventListener("click", async e=>{
       html:mailBox(`Places are open · ${fmtLong(s.date)}`, `<p style="margin:0 0 12px">Hi ${esc(String(p.name||"").split(" ")[0])}! Places are open for <b>${esc(s.title||"the session")}</b>, ${esc(when)}${v.venue?` at ${esc(v.venue)}`:""}.</p>
         <p style="text-align:center;margin:18px 0 0"><a href="${esc(BOOK_URL)}" style="display:inline-block;background:#7A2331;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px">Book your place →</a></p>`)}));
     const n=await sendAll(mails, mails[0].subject, mails[0].text.replace(/^Hi [^!]+!/,"Hi!")); if(n>0) toast(`Emailed ${n} of ${mails.length} ✓`); return }
-  if(ds.mailrem){ const s=S.sessions.find(x=>x.id===ds.mailrem); if(s) await emailReminder(s); return }
+  if(ds.mnsave || ds.mailrem){ const sid=ds.mnsave||ds.mailrem, s=S.sessions.find(x=>x.id===sid), el=$(`#mn-${sid}`); if(!s) return;
+    // save the note (and copy it to the same day and time if asked) before sending
+    if(el){ const note=el.value.trim().slice(0,3000);
+      if(note!==mailNoteOf(s).trim()){ const {id,...body}=s; if(!await save("sessions",id,{...body, mailNote:note}, ds.mnsave?"Note saved":null)) return; s.mailNote=note }
+      else if(ds.mnsave) toast("Note saved");
+      if($(`#mn-all-${sid}`)?.checked){ const same=upcoming().filter(x=>x.id!==sid && slotKey(x)===slotKey(s));
+        for(const x of same){ const {id:xid,...xb}=x; await save("sessions",xid,{...xb, mailNote:note}) }
+        toast(`Note copied to ${same.length} more session${same.length===1?"":"s"}`) } }
+    if(ds.mailrem) await emailReminder(S.sessions.find(x=>x.id===sid)||s);
+    return }
+  if(ds.mnreset){ const el=$(`#mn-${ds.mnreset}`), s=S.sessions.find(x=>x.id===ds.mnreset); if(el&&s) el.value=defaultMailNote(s); toast("Standard note put back. Tap Save note to keep it."); return }
   if(ds.selon){ S.selOn=true; S.sel=new Set(); render(); return }
   if(ds.selx){ S.selOn=false; S.sel=new Set(); render(); return }
   if(ds.selall){ const all=upcoming().map(x=>x.id); S.sel=new Set(S.sel?.size===all.length?[]:all); render(); return }

@@ -481,7 +481,8 @@ async function tryUnlock(code){
 function viewReception(s){
   const all=S.bookings.filter(b=>b.sessionId===s.id && ACTIVE.includes(b.status)).sort((a,b)=>String(a.name).localeCompare(b.name));
   const q=String(document.getElementById("rc-q")?.value||"").trim().toLowerCase();
-  const list=q?all.filter(b=>String(b.name).toLowerCase().split(/\s+/).some(w=>w.startsWith(q)) || String(b.name).toLowerCase().includes(q)):all;
+  const showAll = S.rcAll && Date.now() < S.rcAll;
+  const list = q.length>=2 ? all.filter(b=>String(b.name).toLowerCase().split(/\s+/).some(w=>w.startsWith(q)) || String(b.name).toLowerCase().startsWith(q)) : showAll ? all : [];
   const tm=iso=>iso?esc(hhmm(new Date(iso))):"", v=venueOf(s), here=all.filter(b=>b.checkedIn&&!b.outAt).length;
   const done=S.rcDone && Date.now()<S.rcDone.until && all.find(b=>b.id===S.rcDone.id);
   if(done){ const pos=courtRoster(s,done.court).findIndex(b=>b.id===done.id)+1;
@@ -496,16 +497,18 @@ function viewReception(s){
       <p class="rc-sub">${pick.checkedIn&&!pick.outAt?`Court ${esc(pick.court)} · arrived ${tm(pick.inAt)}. Leaving now?`:`Court ${esc(pick.court)} · ${esc(courtName(s,pick.court))}`}</p>
       <div class="row" style="justify-content:center;gap:12px;flex-wrap:wrap">${pick.checkedIn&&!pick.outAt?`<button class="btn primary rc-big" data-rcgo="${esc(pick.id)}|out">👋 Check out</button><button class="btn rc-big" data-rcundo="${esc(pick.id)}" title="Organiser only: needs the PIN">↺ Undo check-in</button>`:`<button class="btn primary rc-big" data-rcgo="${esc(pick.id)}|in">✅ Yes, check me in</button>`}<button class="btn rc-big" data-rcok="1">${pick.checkedIn&&!pick.outAt?"Cancel":"No, go back"}</button></div></section>`;
   return `<section class="rc"><div class="rc-head"><div><span class="lbl">${esc(fmtLong(s.date))} · ${esc(s.start)}–${esc(s.end)}${v.venue?` · ${esc(v.venue)}`:""}</span>
-      <h2>Welcome to Dropshot Folks 🏸</h2><p class="rc-sub" style="text-align:left">Find your name and tap it to check in.</p></div><span class="chip st-confirmed">${here} of ${all.length} here</span></div>
+      <h2>Welcome to Dropshot Folks 🏸</h2><p class="rc-sub" style="text-align:left">Type your first or last name, then tap it to check in.</p></div><span class="chip st-confirmed">${here} of ${all.length} here</span></div>
     <input id="rc-q" class="rc-q" type="search" placeholder="🔎 Type your name…" autocomplete="off" autocapitalize="words" spellcheck="false" aria-label="Find your name">
     ${(()=>{ const tile=b=>{ const st=b.checkedIn&&!b.outAt?"in":b.outAt?"left":"";
         return `<button type="button" class="rc-name ${st}" data-rcpick="${esc(b.id)}"><b>${esc(b.name)}</b><span>${st==="in"?`✓ Here since ${tm(b.inAt)}`:st==="left"?`Left ${tm(b.outAt)}`:"Tap to check in"}</span></button>` };
       const courts=[...new Set([...courtsOf(s), ...list.map(b=>b.court)])].sort((a,b)=>a-b).filter(c=>list.some(b=>b.court===c));
-      if(!courts.length) return `<div class="empty">No one called “${esc(q)}” is booked. Ask the host.</div>`;
+      if(!courts.length) return q.length>=2 ? `<div class="empty">No one called “${esc(q)}” is booked. Check the spelling, or ask at reception.</div>`
+        : `<div class="rc-courts-sum">${courtsOf(s).filter(c=>all.some(b=>b.court===c)).map(c=>{ const inC=all.filter(b=>b.court===c); return `<div class="rc-court-box" style="--cc:${CLR[c]||"var(--accent)"}"><div class="rc-court-hd"><b>Court ${c}</b><span>${esc(courtName(s,c))}</span><span class="rc-count">${inC.filter(b=>b.checkedIn&&!b.outAt).length} of ${inC.length} here</span></div></div>` }).join("")}</div>
+          <p class="rc-sub">👆 Start typing your name above (at least 2 letters).</p>`;
       return courts.map(c=>{ const on=list.filter(b=>b.court===c), inC=all.filter(b=>b.court===c), hereC=inC.filter(b=>b.checkedIn&&!b.outAt).length;
         return `<div class="rc-court-box" style="--cc:${CLR[c]||"var(--accent)"}"><div class="rc-court-hd"><b>Court ${c}</b><span>${esc(courtName(s,c))} ${courtChips(s,c)}</span><span class="rc-count">${hereC} of ${inC.length} here</span></div>
           <div class="rc-grid">${on.map(tile).join("")}</div></div>` }).join("") })()}
-    <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><p class="muted" style="font-size:.85rem">Not on the list? Ask the host to add you.</p><button class="btn small ghost" data-rcexit="1" title="Needs the PIN">🔒 Exit display mode</button></div></section>`;
+    <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><p class="muted" style="font-size:.85rem">Can't find your name? Ask at reception.</p><span class="row" style="gap:6px">${showAll?`<button class="btn small" data-rcall="0">🙈 Hide names</button>`:`<button class="btn small ghost" data-rcall="1" title="Receptionist: needs the PIN">🔑 Show all names</button>`}<button class="btn small ghost" data-rcexit="1" title="Needs the PIN">🔒 Exit display mode</button></span></div></section>`;
 }
 /* ---------- court display: a locked screen in the hall with one big tab per court (swipe, arrow keys or tap) ---------- */
 function viewCourtDisplay(s){
@@ -2009,6 +2012,9 @@ document.addEventListener("click", async e=>{
     try{ await setClubPin(v); $("#c-pin").value=""; toast("PIN saved ✓"); render() }catch(e){ console.error(e); toast("Couldn't save the PIN") } return }
   if(ds.pinshow){ S.pinShown=!S.pinShown; render(); return }
   if(ds.pinclear && S.isAdmin){ arm(t,"Tap again to remove",async()=>{ try{ await setClubPin(null); toast("PIN removed"); render() }catch{ toast("Couldn't remove the PIN") } }); return }
+  if(ds.rcall){ if(ds.rcall==="0"){ S.rcAll=null; render(); return }
+    const pin=prompt("Receptionist: enter the PIN to show everyone's names"); if(pin==null) return; if(!pinOk(pin,S.reception)){ toast("Wrong PIN"); return }
+    S.rcAll=Date.now()+3*60e3; render(); toast("Names shown for 3 minutes"); clearTimeout(S.rcAllT); S.rcAllT=setTimeout(()=>{ S.rcAll=null; render() },3*60e3+500); return }
   if(ds.rcundo){ const b=S.bookings.find(x=>x.id===ds.rcundo); if(!b) return; const want=ls.get("dsf:rcpin",null);
     { const pin=prompt(`Organiser only: enter the PIN to undo ${b.name}'s check-in`); if(pin==null) return; if(!pinOk(pin,b.sessionId)){ toast("Wrong PIN"); return } }
     if(!await setBooking(b.id,{checkedIn:false, absent:false, inAt:"", outAt:""},"Check-in undone by the organiser.",null)) return;
@@ -2017,7 +2023,7 @@ document.addEventListener("click", async e=>{
     const patch = v==="in" ? {checkedIn:true, absent:false, inAt:now, outAt:""} : {absent:true, outAt:now};
     t.disabled=true;
     if(!await setBooking(id, patch, v==="in"?`Checked in at ${at} (reception).`:`Checked out at ${at} (reception).`, null)){ t.disabled=false; return }
-    S.rcPick=null; S.rcDone={id, out:v!=="in", until:Date.now()+9000}; const q=document.getElementById("rc-q"); if(q) q.value="";
+    S.rcPick=null; S.rcAll=null; S.rcDone={id, out:v!=="in", until:Date.now()+9000}; const q=document.getElementById("rc-q"); if(q) q.value="";
     render(); if(v==="in") sfx("power");
     clearTimeout(S.rcTimer); S.rcTimer=setTimeout(()=>{ if(S.rcDone?.id===id){ S.rcDone=null; render() } },9000); return }
   if(ds.checkin){ const b=S.bookings.find(x=>x.id===ds.checkin); if(!b) return; const s=S.sessions.find(x=>x.id===b.sessionId);

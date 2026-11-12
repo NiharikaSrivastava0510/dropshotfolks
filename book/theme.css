@@ -220,3 +220,6 @@ body.reception-on .who, body.reception-on .toprow{display:none!important}
 .cl-nm.in{opacity:1;background:color-mix(in srgb,var(--pop-lime) 40%,var(--surface));font-weight:800}
 .cl-nm.left{opacity:.45;text-decoration:line-through}
 .cd-court .cl-nm{font-size:1.05rem;padding:6px 14px}
+.rc-courts-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.rc-courts-sum .rc-court-box{box-shadow:3px 3px 0 var(--stk)}
+.rc-courts-sum .rc-court-hd{border-bottom:0}

@@ -1192,6 +1192,20 @@ function orgOverview(){
   </tbody></table></div></section>`;
   return html;
 }
+// the waiting list box on a session card: who's waiting, in order, per court
+function waitPanel(s){
+  const how = `<p class="muted" style="font-size:.85rem;margin:0">When a court is full, new bookings go on its waiting list. If someone cancels, everyone waiting for that court is emailed and the first to tap <b>Take the place</b> in My bookings gets it. You can also give a place straight away with <b>Offer place</b>.</p>`;
+  const courts = courtsOf(s).filter(c=>waitersOn(s,c).length);
+  if(!courts.length) return `<div style="display:grid;gap:10px"><div class="banner info"><div class="grow"><b>Nobody is on the waiting list.</b> ${[1,2,3,4].some(c=>cap(s,c)&&activeIn(s.id,c).length>cap(s,c))?"Some courts have more players than places because players were added or places were lowered, so no one was put on the waiting list.":"There's still space, so everyone who booked got a place."}</div></div>${how}</div>`;
+  const anyFree = courts.some(c=>freeOn(s,c)>0);
+  return `<div style="display:grid;gap:12px">${anyFree?`<div class="banner ok"><div class="grow"><b>A place is free!</b> Email the waiting list so they can take it, or offer it to someone below.</div><button class="btn small primary" data-mailwait="${s.id}">📧 Email the waiting list</button></div>`:""}
+    ${courts.map(c=>{ const w=waitersOn(s,c).slice().sort((a,b)=>String(a.createdAt).localeCompare(b.createdAt));
+      return `<div class="bk" style="gap:8px"><b>Court ${c} · ${esc(courtName(s,c))} <span class="muted" style="font-weight:400">· ${activeIn(s.id,c).length}/${cap(s,c)} booked · ${freeOn(s,c)>0?`${freeOn(s,c)} free`:"full"}</span></b>
+        ${w.map((b,i)=>{ const em=S.players.find(p=>p.id===(b.hostId||b.playerId))?.email;
+          return `<div class="row" style="justify-content:space-between;gap:8px;flex-wrap:wrap;border-top:1px dashed var(--line);padding-top:8px"><span><span class="chip st-waitlist">#${i+1}</span> <b>${esc(b.name)}</b>${b.hostId?' <span class="muted">(guest)</span>':""}${em?`<br><span class="muted" style="font-size:.82rem">${esc(em)}</span>`:""}<br><span class="muted" style="font-size:.8rem">waiting since ${esc(b.createdAt?new Date(b.createdAt).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"?")}</span></span>
+            <span class="row"><button class="btn small primary" data-offer="${esc(b.id)}">Offer place</button><button class="btn small ghost danger" data-acancel="${esc(b.id)}">Remove</button></span></div>` }).join("")}</div>` }).join("")}
+    ${how}</div>`;
+}
 // which tool box is open on a session card (bookings by default; partners while pairing someone)
 const sactOf = s => S.pairPick?.sid===s.id ? "pr" : (S.sact?.[s.id] || "bkl");
 function adminSession(s){
@@ -1225,13 +1239,14 @@ function adminSession(s){
     ${(()=>{ const cs=courtsOf(s).filter(c=>freeOn(s,c)>0 && waitersOn(s,c).length); if(!cs.length) return "";
       return `<div class="banner info"><div class="grow"><b>A place is free and people are waiting:</b> ${cs.map(c=>`Court ${c}: ${freeOn(s,c)} free, ${waitersOn(s,c).length} waiting`).join(" · ")}. Waiting players can tap <b>Take the place</b> in My bookings.</div><button class="btn small primary" data-mailwait="${s.id}">📧 Email the waiting list</button></div>` })()}
     ${(()=>{ const want=S.players.filter(p=>(p.remind||[]).includes(slotKey(s)) && p.email && !S.bookings.some(b=>b.sessionId===s.id && b.playerId===p.id && b.status!=="cancelled")).length;
-      const tiles=[["bkl","👥","Bookings",`${booked}/${places}${cnt("waitlist")?` · ${cnt("waitlist")} waiting`:""}`],["addp","➕","Add a player","registered or walk-in"],["ci","✅","Check-in",`${here} of ${booked} here`],
+      const tiles=[["bkl","👥","Bookings",`${booked}/${places}${cnt("waitlist")?` · ${cnt("waitlist")} waiting`:""}`],["wl","⏳","Waiting list",cnt("waitlist")?`${cnt("waitlist")} waiting`:"nobody waiting"],["addp","➕","Add a player","registered or walk-in"],["ci","✅","Check-in",`${here} of ${booked} here`],
         ["mail","📧","Emails",want?`${want} want a reminder`:s.remindedAt?"reminder sent ✓":"reminder, rules"],["pr","🤝","Partners",`${(s.pairs||[]).length} pair${(s.pairs||[]).length===1?"":"s"}`],
         ["es","✏️","Edit session","time, venue, courts, fee"],["hc","🔑","Host code",S.secrets[s.id]?"set":"not set"],["set","⚙️","Close or cancel",s.open===false?"booking closed":"booking open"]];
       const cur=sactOf(s);
-      return `<div class="acts">${tiles.map(([k,ic,t,sub])=>`<button type="button" class="act ${k===cur?"on":""} ${k==="mail"&&want?"ping":""}" data-sact="${esc(s.id)}|${k}" aria-pressed="${k===cur}"><span class="act-ic">${ic}</span><b>${t}</b><span>${esc(sub)}</span></button>`).join("")}</div>
+      return `<div class="acts">${tiles.map(([k,ic,t,sub])=>`<button type="button" class="act ${k===cur?"on":""} ${(k==="mail"&&want)||(k==="wl"&&courtsOf(s).some(c=>freeOn(s,c)>0&&waitersOn(s,c).length))?"ping":""}" data-sact="${esc(s.id)}|${k}" aria-pressed="${k===cur}"><span class="act-ic">${ic}</span><b>${t}</b><span>${esc(sub)}</span></button>`).join("")}</div>
       <div class="act-panel">${{
         bkl:`<div class="tbl"><table><thead><tr><th>Player</th><th>Ref</th><th>Status</th><th>Court</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${cancelled?`<details class="sub" id="canc-${s.id}"><summary><b>Cancelled</b> <span class="muted">(${cancelled})</span></summary><div class="sub-body" style="display:grid;gap:6px">${inS.filter(b=>b.status==="cancelled").map(b=>`<div class="row" style="justify-content:space-between"><span>${esc(b.name)} · Court ${esc(b.court)}</span><span class="row"><button class="btn small" data-restore="${esc(b.id)}">Restore</button><button class="btn small ghost danger" data-bdel="${esc(b.id)}">Delete</button></span></div>`).join("")}</div></details>`:""}`,
+        wl:waitPanel(s),
         addp:`      <div class="grid2 sub-body">
         <label class="f">Player<input id="ap-name-${s.id}" list="ap-list-${s.id}" data-apsearch="${esc(s.id)}" placeholder="Search registered players, or type a new name" autocomplete="off"></label>
         <datalist id="ap-list-${s.id}">${S.players.filter(p=>!S.bookings.some(b=>b.sessionId===s.id && b.playerId===p.id && b.status!=="cancelled")).slice().sort((a,b)=>String(a.name).localeCompare(b.name)).map(p=>`<option value="${esc(apLabel(p))}"></option>`).join("")}</datalist>

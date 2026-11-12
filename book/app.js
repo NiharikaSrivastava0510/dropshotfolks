@@ -7,7 +7,7 @@ const LEVELS = [
   {code:"C-", key:"Cm", name:"Mid Intermediate", court:3, desc:"Fast-paced player. Hits smashes, keeps rallies of 10–15 shots, kills at the net, clears and smashes with only a few mistakes."},
   {code:"C+", key:"Cp", name:"High Intermediate (upper)", court:4, desc:"Plays tournaments regularly, knows every shot and makes hardly any mistakes."}
 ];
-// Club rule: no beginners (E- or E) on Thursday sessions, whatever the court setup says.
+// Club rule: no beginners (E- or E) on Thursday sessions unless the organiser puts a beginner level on a court.
 const NO_BEGINNER_DAYS = [4];   // 0 = Sunday … 4 = Thursday
 const beginnersBarred = s => !!s?.date && NO_BEGINNER_DAYS.includes(new Date(s.date+"T12:00:00").getDay());
 const lvByCode = c => LEVELS.find(l=>l.code===c);
@@ -200,8 +200,11 @@ const activeIn = (sid, court) => S.bookings.filter(b=>b.sessionId===sid && b.cou
 const cap = (s,court) => { const v = Number(s.capacity?.[court] ?? s.capacity ?? PER_COURT); return Number.isFinite(v) ? v : PER_COURT };
 const courtsOf = s => [1,2,3,4].filter(c => cap(s,c) > 0);
 // each session can name its courts and choose which levels play on each (default: court n = level n)
-const courtLevels = (s,c) => { const v=s?.courts?.[c]?.levels, l=Array.isArray(v) && v.length ? v : [lvByCourt(c).code];
-  return beginnersBarred(s) ? l.filter(x=>!BEGINNER.includes(x)) : l };
+// the levels the organiser chose for a court (the database rules check the same), else the built-in one
+const courtLevels = (s,c) => { const v=s?.courts?.[c]?.levels;
+  return Array.isArray(v) && v.length ? v : [lvByCourt(c).code] };
+// the club's standard court setup for a session's day and time (saved by the organiser), if there is one
+const stdOf = s => s?.date ? S.cfg?.std?.[slotKey(s)] || null : null;
 const courtName = (s,c) => s?.courts?.[c]?.label || lvByCourt(c).name;
 const courtChips = (s,c) => courtLevels(s,c).map(lvChip).join(" ");
 // a player only ever goes on a court that includes their level: the first one with space, else the first one (waiting list)
@@ -693,7 +696,7 @@ const pickChips = list => list.length ? `<div class="pchips">${list.map(x=>`<spa
 const picksTotal = list => list.reduce((a,x)=>a+(feeNum(x)||0),0);
 /* ----- book: pick sessions, we assign the court ----- */
 // sessions that welcome beginners (Train & Play, coaching) need no level check; level-wise sessions (Thursdays) do
-const needsCheck = s => !courtsOf(s).some(c=>courtLevels(s,c).some(l=>BEGINNER.includes(l)));
+const needsCheck = s => courtsOf(s).some(c=>!courtLevels(s,c).some(l=>BEGINNER.includes(l)));
 const savePicks = () => ls.set("dsf:picks",[...S.picks]);
 const pickedSessions = () => [...S.picks].map(id=>S.sessions.find(x=>x.id===id)).filter(Boolean);
 // before signing in: everyone sees the sessions first, ticks what they want, then makes an account
@@ -1071,18 +1074,6 @@ function orgParts(){
 }
 const notOrg = `<section class="panel"><div class="empty">Only the organiser can see this.</div></section>`;
 // Sessions running all four courts whose setup doesn't match the standard one-level-per-court layout
-function setupWarnings(){
-  const std={1:"D-",2:"D+",3:"C-",4:"C+"};
-  return upcoming().filter(s=>courtsOf(s).length===4).map(s=>{
-    const off=[1,2,3,4].filter(c=>courtLevels(s,c).join()!==std[c]);
-    const wrong=S.bookings.filter(b=>b.sessionId===s.id && ACTIVE.includes(b.status) && std[b.court]!==b.level && Object.values(std).includes(b.level));
-    return off.length ? {s, off, wrong} : null }).filter(Boolean);
-}
-function setupBanner(){
-  return setupWarnings().map(({s,off,wrong})=>`<div class="banner warn"><div class="grow"><b>${fmtLong(s.date)}: court setup isn't standard.</b>
-    ${off.map(c=>`Court ${c} takes ${courtLevels(s,c).join(" + ")||"no levels"}`).join(" · ")}.${wrong.length?` ${wrong.length} player${wrong.length>1?"s are":" is"} on the wrong court (${wrong.map(b=>`${esc(b.name)} ${esc(b.level)} on Court ${esc(b.court)}`).join(", ")}).`:""}</div>
-    <button class="btn small primary" data-stdcourts="${esc(s.id)}">Fix now</button></div>`).join("");
-}
 /* ----- organiser: find bursts of fake sign-ups (e.g. an automated test run) and remove them with their bookings ----- */
 // a "burst" is a day when 15+ brand-new players appeared and made 4+ bookings each on average; the organiser reviews the list before anything is removed
 function spamBursts(){
@@ -1118,7 +1109,7 @@ async function spamRemove(day){
   }catch(e){ console.error(e); toast(`Stopped after ${done} of ${refs.length}. Press Remove again to finish.`) }
   render();
 }
-const orgSessions = () => S.isAdmin ? spamPanel() + setupBanner() + orgParts().sessions : notOrg;
+const orgSessions = () => S.isAdmin ? spamPanel() + orgParts().sessions : notOrg;
 function junkPlayersPanel(){
   const junk=S.players.filter(p=>window.DSFThrowaway?.(p.email)); if(!junk.length) return "";
   return `<section class="panel" style="border-color:var(--bad)"><h2>🚩 ${junk.length} player${junk.length>1?"s":""} signed up with a throwaway email</h2>
@@ -1144,10 +1135,10 @@ async function moveToLevelCourt(pid, level){
   }
   return n;
 }
-// Standard setup: one level per court (D- 1, D+ 2, C- 3, C+ 4). Moves booked players onto their level's court.
+// Standard setup: the club's saved standard for this day and time (else one level per court: D- 1, D+ 2, C- 3, C+ 4). Moves booked players onto a court for their level.
 async function standardCourts(sid){
   const s0=S.sessions.find(x=>x.id===sid); if(!s0) return;
-  const {id,courts,...body}=s0, s1={...body, id};
+  const st=stdOf(s0), {id,courts,...b0}=s0, body=st?{...b0, courts:st.courts, capacity:st.capacity}:b0, s1={...body, id};
   if(!await save("sessions",id,body)) return;
   let moved=0; const stuck=[];
   for(const b of S.bookings.filter(b=>b.sessionId===sid && b.status!=="cancelled")){
@@ -1161,7 +1152,7 @@ const orgClub = () => S.isAdmin ? orgParts().club : notOrg;
 function orgOverview(){
   if(!S.isAdmin) return notOrg;
   if(!S.loaded) return `<section class="panel"><div class="empty loading">Loading…</div></section>`;
-  const ups = upcoming(), s = ups.find(x=>rotInfo(x).live) || ups[0], warn = setupBanner();
+  const ups = upcoming(), s = ups.find(x=>rotInfo(x).live) || ups[0], warn = "";
   const toCheck = S.bookings.filter(b=>b.status==="paid" && ups.some(x=>x.id===b.sessionId));
   const reqs = S.players.filter(p=>p.levelRequest);
   const missing = ["price","accountNumber","orgPhone"].filter(k=>!S.cfg[k]);
@@ -1304,8 +1295,8 @@ function adminSession(s){
           <span class="lbl">Levels on this court</span><div class="row">${LEVELS.map(l=>`<label class="row" style="gap:4px;font-size:.85rem"><input type="checkbox" style="width:auto" id="es-lv${n}${l.key}-${s.id}" ${courtLevels(s,n).includes(l.code)?"checked":""}>${lvChip(l.code)}</label>`).join("")}</div>
           <label class="f">Places<input id="es-cap${n}-${s.id}" type="number" min="0" max="30" value="${cap(s,n)}"></label></div>`).join("")}
         <p class="muted" style="grid-column:1/-1;font-size:.85rem">Set places to 0 if a court isn't running. Players go to the first running court that includes their level.</p>
-        <label class="row" style="grid-column:1/-1;gap:6px"><input type="checkbox" style="width:auto" id="es-all-${s.id}"> Use this court setup for every upcoming ${esc(slotLabel(s))} session</label>
-        <div class="row" style="grid-column:1/-1"><button class="btn small primary" data-savesess="${esc(s.id)}">Save session</button><button class="btn small" data-stdcourts="${esc(s.id)}">Use standard courts</button><span class="muted" style="font-size:.82rem">D- Court 1 · D+ Court 2 · C- Court 3 · C+ Court 4, and moves booked players to match.</span></div>
+        <label class="row" style="grid-column:1/-1;gap:6px"><input type="checkbox" style="width:auto" id="es-all-${s.id}"> Make this the standard court setup for ${esc(slotLabel(s))} (copies it to every upcoming one, and new ones start with it)</label>
+        <div class="row" style="grid-column:1/-1"><button class="btn small primary" data-savesess="${esc(s.id)}">Save session</button><button class="btn small" data-stdcourts="${esc(s.id)}">Use standard courts</button><span class="muted" style="font-size:.82rem">${stdOf(s)?`Your standard: ${[1,2,3,4].filter(n=>Number(stdOf(s).capacity?.[n])>0).map(n=>`Court ${n} ${courtLevels({courts:stdOf(s).courts},n).join("/")}`).join(" · ")}`:"D- Court 1 · D+ Court 2 · C- Court 3 · C+ Court 4"}, and moves booked players to match.</span></div>
       </div>`,
         hc:`<div class="row code-row">${S.secrets[s.id]?`<b class="code">${esc(S.secrets[s.id])}</b><button class="btn small" data-copy="${esc(S.secrets[s.id])}">Copy</button><button class="btn small ghost" data-newcode="${esc(s.id)}">New code</button>`:`<button class="btn small primary" data-newcode="${esc(s.id)}">Create code</button>`}</div><p class="muted" style="font-size:.82rem">Give it to whoever runs the court-side device. A new code locks out devices using the old one.</p>`,
         set:`<div class="row">${v.address?`<span class="muted" style="flex-basis:100%">📍 ${esc(v.address)}</span>`:""}<button class="btn small" data-toggle="${s.id}">${s.open===false?"🔓 Open booking":"🔒 Close booking"}</button>${s.cancelled?`<span class="chip st-cancelled">Cancelled</span>`:`<button class="btn small ghost danger" data-cancsess="${s.id}">Cancel session</button>`}<button class="btn small ghost danger" data-delsess="${s.id}">Delete session</button></div><p class="muted" style="font-size:.85rem">Close booking stops new bookings. Cancel keeps the session but tells everyone booked. Delete removes it.</p>`
@@ -1770,7 +1761,9 @@ document.addEventListener("click", async e=>{
     if($(`#es-all-${sid}`)?.checked){
       const same=upcoming().filter(x=>x.id!==sid && slotKey(x)===slotKey(s));
       for(const x of same){ const {id:xid,...xb}=x; await save("sessions",xid,{...xb, capacity, courts}) }
-      toast(`Court setup copied to ${same.length} more session${same.length===1?"":"s"}`);
+      // and it becomes the club standard for this day and time: new sessions start with it
+      await save("config","main",{...S.cfg, std:{...(S.cfg.std||{}), [slotKey(s)]:{courts, capacity}}});
+      toast(`Saved as your standard ${slotLabel(s)} setup, and copied to ${same.length} more session${same.length===1?"":"s"}`);
     }
     return }
   if(ds.qnext||ds.qback||ds.qredo){ const k=ds.qnext||ds.qback||ds.qredo, ans=k==="rq"?S.reg.ans:k==="gq"?S.gq:S.quiz;
@@ -1932,7 +1925,8 @@ document.addEventListener("submit", async e=>{
     for(let w=0; w<weeks; w++){
       const d=new Date(date+"T12:00:00"); d.setDate(d.getDate()+7*w);
       const day=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-      if(!await save("sessions",`s${day}-${start.replace(":","")}`,{...base,date:day})) return;
+      const st=!$("#s-alllv").checked && stdOf({date:day,start});
+      if(!await save("sessions",`s${day}-${start.replace(":","")}`,{...base,date:day,...(st?{courts:st.courts,capacity:st.capacity}:{})})) return;
     }
     toast(weeks>1?`${weeks} sessions added`:"Session added");
   }

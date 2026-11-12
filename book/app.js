@@ -501,7 +501,7 @@ function render(){
     + (Store.mode==="db" && S.uid ? ` <button class="btn small" id="signOut" type="button">Sign out</button>` : "");
   const views = {court:viewCourt, book:viewBook, live:viewLive, mine:viewMine, partners:viewPartners, level:viewLevel, venue:viewVenue,
     "o-overview":orgOverview, "o-sessions":orgSessions, "o-players":orgPlayers, "o-club":orgClub};
-  const head = view==="organiser" ? modeBanner() : reminderBanner() + modeBanner();
+  const head = view==="organiser" ? modeBanner() : selfCheckin() + reminderBanner() + modeBanner();
   $("#main").innerHTML = (Store.mode!=="db" && !LOCAL) ? setupPanel() : head + (views[tab]||viewBook)();
   if(S.lastTab!==tab){ const m=$("#main"); m.classList.remove("swap"); void m.offsetWidth; m.classList.add("swap"); S.lastTab=tab }
   const nc=$("#nextup"); if(nc){ const h=S.loaded?nextChip():""; nc.innerHTML=h; nc.hidden=!h }
@@ -899,6 +899,28 @@ function viewMine(){
   html += viewPartners();   // choose friends to play with (no separate tab)
   if(past.length) html += `<section class="panel"><details id="pastBox"><summary><b>Past sessions (${past.length})</b></summary><div style="display:grid;gap:10px;margin-top:10px">${past.map(({b,s})=>bookingCard(b,s)).join("")}</div></details></section>`;
   return html;
+}
+/* ---------- self check-in: on the day, players tap "I'm here" themselves and see their court ---------- */
+const CI_OPEN_MINS = 60;   // check-in opens this long before the session starts
+const ciOpen = s => Date.now() >= sessStart(s).getTime()-CI_OPEN_MINS*60e3 && Date.now() < sessEnd(s).getTime();
+function selfCheckin(){
+  if(!S.loaded || !meP()) return "";
+  const today = new Date().toDateString();
+  const mine = myBookings().filter(b=>ACTIVE.includes(b.status)).map(b=>({b,s:S.sessions.find(x=>x.id===b.sessionId)}))
+    .filter(({s})=>s && !s.cancelled && new Date(s.date+"T12:00:00").toDateString()===today && Date.now()<sessEnd(s).getTime())
+    .sort((a,b)=>(a.b.hostId?1:0)-(b.b.hostId?1:0));
+  if(!mine.length) return "";
+  const s = mine[0].s, v = venueOf(s), open = ciOpen(s), tm = iso => iso ? esc(hhmm(new Date(iso))) : "";
+  const row = ({b}) => { const who = b.hostId ? `${esc(b.name)} (your guest)` : "You";
+    if(b.checkedIn && b.outAt) return `<div class="ci-me"><span>👋 <b>${who}</b> checked out at ${tm(b.outAt)}. Thanks for playing!</span><button class="btn small" data-selfci="${esc(b.id)}|back">I'm back</button></div>`;
+    if(b.checkedIn) return `<div class="ci-me in"><div class="ci-court"><span class="lbl">${b.hostId?esc(b.name)+"'s court":"Your court"}</span><b>Court ${esc(b.court)}</b><span>${esc(courtName(s,b.court))} ${courtChips(s,b.court)}</span></div>
+      <div class="grow"><p>✅ <b>${who}</b> checked in at ${tm(b.inAt)}.</p><p class="muted" style="font-size:.88rem">Head to Court ${esc(b.court)}. Watch <a href="#" data-golive="${esc(s.id)}">Live courts</a> to see when you're on.</p></div>
+      <button class="btn small ghost" data-selfci="${esc(b.id)}|leave">Leaving? Check out</button></div>`;
+    return `<div class="ci-me"><span><b>${who}</b> · Court ${esc(b.court)}</span>${open?`<button class="btn primary ci-go" data-selfci="${esc(b.id)}|in">📍 I'm here · check in</button>`:`<span class="chip st-waitlist">Check-in opens ${esc(hhmm(new Date(sessStart(s).getTime()-CI_OPEN_MINS*60e3)))}</span>`}</div>`; };
+  return `<section class="panel ci-banner"><div><span class="lbl">Today · ${esc(s.start)}–${esc(s.end)}${v.venue?` · ${esc(v.venue)}`:""}</span>
+    <h2>${mine.every(x=>x.b.checkedIn)?"You're checked in 🏸":"Your session is today 🏸"}</h2>
+    ${mine.some(x=>!x.b.checkedIn)?`<p class="muted">${open?"When you arrive at the venue, tap <b>I'm here</b> to check in. You'll see which court you're on.":`You can check in from ${esc(hhmm(new Date(sessStart(s).getTime()-CI_OPEN_MINS*60e3)))}, when you arrive.`}</p>`:""}</div>
+    ${mine.map(row).join("")}</section>`;
 }
 function bookingCard(b,s){
   const c = S.cfg, past = sessEnd(s) < new Date(), v = venueOf(s), isGuest = !!b.hostId;
@@ -1796,6 +1818,15 @@ document.addEventListener("click", async e=>{
   if(ds.newcode){ const sid=ds.newcode, code=newCode();
     if(Store.mode==="db"){ try{ await Store.db.collection("secrets").doc(sid).set({code}); toast(`Code ${code} ready`) }catch{ toast("Couldn't save the code") } }
     else { S.secrets[sid]=code; render() }
+    return }
+  if(ds.selfci){ const [id,v]=ds.selfci.split("|"), b=S.bookings.find(x=>x.id===id); if(!b) return; const s=S.sessions.find(x=>x.id===b.sessionId);
+    if(b.playerId!==S.me && b.hostId!==S.me) return;
+    if(!s || !ciOpen(s)){ toast(`Check-in opens ${CI_OPEN_MINS} minutes before the session`); return }
+    const now=nowIso(), at=hhmm(new Date());
+    const patch = v==="in" ? {checkedIn:true, absent:false, inAt:now, outAt:""} : v==="leave" ? {absent:true, outAt:now} : {absent:false, outAt:""};
+    if(v==="leave" && !confirm("Check out now? You'll be taken out of the rotation.")) return;
+    if(await setBooking(id, patch, v==="in"?`Checked in at ${at} (self).`:v==="leave"?`Checked out at ${at} (self).`:`Back at ${at} (self).`, null)){
+      toast(v==="in"?`Checked in! You're on Court ${b.court} 🏸`:v==="leave"?"Checked out. Thanks for playing!":"Welcome back!"); if(v==="in") sfx?.("power") }
     return }
   if(ds.checkin){ const b=S.bookings.find(x=>x.id===ds.checkin); if(!b) return; const s=S.sessions.find(x=>x.id===b.sessionId);
     if(!canRun(s)){ toast("Open host view to check people in"); return }

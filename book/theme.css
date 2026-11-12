@@ -142,3 +142,15 @@ nav.tabs button[aria-selected="true"]{background:#7A1E2C;color:#fff}
 .act-panel{border:2px solid var(--stk);border-radius:18px;padding:14px;background:var(--surface);box-shadow:3px 3px 0 var(--stk);display:grid;gap:10px;animation:popIn .3s ease-out backwards}
 .act-panel > .grid2.sub-body{padding:0}
 @media (prefers-reduced-motion: reduce){.act.ping .act-ic,.act-panel{animation:none}}
+/* self check-in on the day: a bold banner, and the player's court in big type once they're in */
+.ci-banner{background:color-mix(in srgb,var(--gold) 28%,var(--surface))}
+.ci-me{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:2px solid var(--stk);border-radius:18px;padding:12px 14px;background:var(--surface);box-shadow:3px 3px 0 var(--stk)}
+.ci-me > span{flex:1 1 auto}
+.ci-me.in{background:color-mix(in srgb,var(--pop-lime) 35%,var(--surface))}
+.ci-court{display:grid;justify-items:center;text-align:center;background:var(--accent);color:var(--accent-ink);border:2px solid var(--stk);border-radius:16px;padding:10px 16px;min-width:9.5rem;box-shadow:3px 3px 0 var(--stk)}
+.ci-court b{font-family:var(--display);font-size:2.1rem;line-height:1.05}
+.ci-court .lbl{color:inherit;opacity:.85;font-size:.7rem}
+.ci-court span:last-child{font-size:.8rem}
+.ci-go{font-size:1.08rem;padding:12px 18px}
+@media (prefers-reduced-motion:no-preference){.ci-go{animation:ciNudge 2.2s ease-in-out infinite}@keyframes ciNudge{0%,70%,100%{transform:none}80%{transform:translateY(-3px) rotate(-1deg)}90%{transform:translateY(0) rotate(1deg)}}
+  .ci-court{animation:ciPop .5s cubic-bezier(.2,1.6,.4,1)}@keyframes ciPop{from{transform:scale(.6);opacity:0}}}

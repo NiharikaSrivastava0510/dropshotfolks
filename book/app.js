@@ -519,9 +519,8 @@ function viewCourt(){
     <div class="row" style="max-width:440px;flex-wrap:nowrap"><input id="k-code" placeholder="Session code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" style="text-transform:uppercase;letter-spacing:.2em;font-family:var(--mono)"><button class="btn primary" data-kopen="1">Open</button></div></section>`;
   const r=rotInfo(s), v=venueOf(s);
   return `<section class="panel"><div class="row" style="justify-content:space-between;align-items:flex-start"><div><span class="lbl">Host view · you're hosting</span><h2>${fmtLong(s.date)} · ${esc(s.start)}–${esc(s.end)}</h2><p class="muted">${esc(v.venue||"")}${r.done?" · finished":r.live?" · live now":` · starts ${esc(s.start)}`}</p></div><span class="row" style="gap:6px"><button class="btn small primary" data-rcopen="${esc(s.id)}">🛎️ Open reception screen</button><button class="btn small ghost" data-kexit="1">Close host view</button></span></div>
-    <p class="muted" style="font-size:.88rem">Check people in and enter each game's score to keep the courts moving. When you save a score, the next four players pop up on screen and everyone's phone with the booking page open tells them they're on or up next.</p>
+    <p class="muted" style="font-size:.88rem">Players check themselves in on the reception screen at the door. Enter each game's score below to keep the courts moving. When you save a score, the next four players pop up on screen and everyone's phone with the booking page open tells them they're on or up next.</p>
 </section>
-  <section class="panel"><details id="ci-k-${s.id}" open><summary><b>Check-in</b></summary><div style="display:grid;gap:10px;margin-top:10px">${checkinList(s)}</div></details></section>
   <div class="court-grid">${courtsOf(s).map(c=>courtLive(s,c)).join("")}</div>`;
 }
 

@@ -444,12 +444,17 @@ function nextChip(){
 function checkinList(s){
   const list=S.bookings.filter(b=>b.sessionId===s.id && ACTIVE.includes(b.status)).sort((a,b)=>a.court-b.court || String(a.name).localeCompare(b.name));
   if(!list.length) return `<div class="empty">No one booked yet.</div>`;
-  const here=list.filter(b=>b.checkedIn).length, away=list.filter(b=>b.absent).length, org=S.isAdmin && S.view==="organiser";
-  return `<p><b>${here} of ${list.length} here</b>${away?` · ${away} not here`:""}</p>
-  <div class="ci">${list.map(b=>`<div class="ci-row ${b.checkedIn?"in":""} ${b.absent?"out":""}">
-    <span class="pl">${avatar(b.playerId,b.name,"sm")}<span>${esc(b.name)}</span></span>
+  const left=b=>b.checkedIn && b.outAt, onCourt=list.filter(b=>b.checkedIn && !b.outAt).length, gone=list.filter(left).length, away=list.filter(b=>b.absent && !b.checkedIn).length, org=S.isAdmin && S.view==="organiser";
+  const tm=iso=>iso?esc(hhmm(new Date(iso))):"";
+  return `<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><p><b>${onCourt} of ${list.length} here</b>${gone?` · ${gone} left`:""}${away?` · ${away} not coming`:""}</p>${org&&list.some(b=>b.inAt)?`<button class="btn small ghost" data-cicsv="${esc(s.id)}">⬇️ Arrival &amp; leaving times (CSV)</button>`:""}</div>
+  <p class="muted" style="font-size:.85rem">Tap <b>Here</b> when someone arrives and <b>Leaving</b> when they go: the times are saved automatically, and people who leave drop out of the rotation.</p>
+  <div class="ci">${list.map(b=>`<div class="ci-row ${b.checkedIn&&!b.outAt?"in":""} ${b.absent?"out":""}">
+    <span class="pl">${avatar(b.playerId,b.name,"sm")}<span>${esc(b.name)}${b.inAt?`<br><span class="muted" style="font-size:.8rem">In ${tm(b.inAt)}${b.outAt?` · Out ${tm(b.outAt)}`:""}</span>`:""}</span></span>
     <span class="muted" style="font-size:.82rem">Court ${esc(b.court)}${org?" "+stChip(b.status):""}</span>
-    <span class="row" style="gap:6px;margin-left:auto"><button class="btn small ${b.checkedIn?"primary":""}" data-checkin="${esc(b.id)}" data-v="${b.checkedIn?"reset":"in"}" aria-pressed="${!!b.checkedIn}">${b.checkedIn?"✓ Here":"Here"}</button><button class="btn small ${b.absent?"out-on":"ghost"}" data-checkin="${esc(b.id)}" data-v="${b.absent?"reset":"out"}" aria-pressed="${!!b.absent}">Not here</button></span>
+    <span class="row" style="gap:6px;margin-left:auto">${
+      !b.checkedIn ? `<button class="btn small" data-checkin="${esc(b.id)}" data-v="in">Here</button><button class="btn small ${b.absent?"out-on":"ghost"}" data-checkin="${esc(b.id)}" data-v="${b.absent?"reset":"out"}" aria-pressed="${!!b.absent}">Not here</button>`
+      : b.outAt ? `<span class="chip st-cancelled">Left ${tm(b.outAt)}</span><button class="btn small" data-checkin="${esc(b.id)}" data-v="back">Back</button>`
+      : `<button class="btn small primary" data-checkin="${esc(b.id)}" data-v="reset" aria-pressed="true" title="Tap twice to undo the check-in">✓ In ${tm(b.inAt)||"here"}</button><button class="btn small ghost" data-checkin="${esc(b.id)}" data-v="leave">Leaving</button>`}</span>
   </div>`).join("")}</div>`;
 }
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -1795,8 +1800,22 @@ document.addEventListener("click", async e=>{
     return }
   if(ds.checkin){ const b=S.bookings.find(x=>x.id===ds.checkin); if(!b) return; const s=S.sessions.find(x=>x.id===b.sessionId);
     if(!canRun(s)){ toast("Open host view to check people in"); return }
-    const v=ds.v, patch = v==="in" ? {checkedIn:true, absent:false} : v==="out" ? {checkedIn:false, absent:true} : {checkedIn:false, absent:false};
-    setBooking(b.id, patch, v==="in"?"Checked in.":v==="out"?"Marked not here.":"Check-in cleared.", v==="in"?`${b.name} is here`:v==="out"?`${b.name} marked not here`:"Cleared"); return }
+    // arrival and leaving times are recorded automatically
+    const v=ds.v, now=nowIso(), at=hhmm(new Date());
+    const go=()=>{ const patch = v==="in" ? {checkedIn:true, absent:false, inAt:now, outAt:""}
+      : v==="leave" ? {absent:true, outAt:now}
+      : v==="back" ? {absent:false, outAt:""}
+      : v==="out" ? {checkedIn:false, absent:true, inAt:"", outAt:""}
+      : {checkedIn:false, absent:false, inAt:"", outAt:""};
+      setBooking(b.id, patch, v==="in"?`Checked in at ${at}.`:v==="leave"?`Left at ${at}.`:v==="back"?`Back at ${at}.`:v==="out"?"Marked not here.":"Check-in cleared.",
+        v==="in"?`${b.name} in at ${at}`:v==="leave"?`${b.name} left at ${at}`:v==="back"?`${b.name} is back`:v==="out"?`${b.name} marked not here`:"Check-in cleared") };
+    if(v==="reset" && b.checkedIn) arm(t,"Tap again to undo", go); else go();
+    return }
+  if(ds.cicsv){ const s=S.sessions.find(x=>x.id===ds.cicsv); if(!s) return;
+    const t2=iso=>iso?hhmm(new Date(iso)):"", mins=b=>b.inAt&&b.outAt?Math.round((new Date(b.outAt)-new Date(b.inAt))/60000):"";
+    const rows=[["Name","Court","In","Out","Minutes"], ...S.bookings.filter(b=>b.sessionId===s.id && ACTIVE.includes(b.status)).sort((a,b)=>String(a.inAt||"~").localeCompare(String(b.inAt||"~"))).map(b=>[b.name,b.court,t2(b.inAt),t2(b.outAt),mins(b)])];
+    const cell=x=>{ const v=String(x??""); return /[",\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v };
+    const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["\ufeff"+rows.map(r=>r.map(cell).join(",")).join("\n")],{type:"text/csv"})); a.download=`checkin-${s.date}.csv`; document.body.appendChild(a); a.click(); a.remove(); return }
   if(ds.stdcourts){ const sid=ds.stdcourts; arm(t,"Tap again to reset courts",()=>standardCourts(sid)); return }
   if(ds.score){ const s=S.sessions.find(x=>x.id===ds.score), gi=Number(ds.gi), box=t.closest(".scorein"); if(!s||!box) return;
     const [ia,ib]=box.querySelectorAll("input"), sa=Number(ia.value), sb=Number(ib.value);

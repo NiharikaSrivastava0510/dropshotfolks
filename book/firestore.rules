@@ -136,9 +136,10 @@ service cloud.firestore {
              && levelFitsCourt(request.resource.data))));
       // session view devices: check-in only
       allow update: if unlockOk(resource.data.sessionId)
-        && onlyChanges(['absent', 'checkedIn', 'log'])
+        && onlyChanges(['absent', 'checkedIn', 'inAt', 'outAt', 'log'])
         && request.resource.data.get('absent', false) is bool
         && request.resource.data.get('checkedIn', false) is bool
+        && shortText(request.resource.data.get('inAt', ''), 40) && shortText(request.resource.data.get('outAt', ''), 40)
         && request.resource.data.get('log', []) is list && request.resource.data.get('log', []).size() <= 60;
       allow delete: if isAdmin();
     }

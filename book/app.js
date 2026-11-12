@@ -488,9 +488,11 @@ function viewReception(s){
       <p class="rc-sub">Checked in at ${tm(done.inAt)}${pos>0?` · you're <b>#${pos}</b> to arrive on Court ${esc(done.court)}`:""}${pos>0&&pos<=4?" · you're in the first game!":""}</p>`}
       <button class="btn primary" data-rcok="1">Done</button></section>`; }
   const pick=S.rcPick && all.find(b=>b.id===S.rcPick);
+  if(pick && pick.outAt) return `<section class="rc rc-done"><p class="rc-hi">${esc(pick.name)} left at ${tm(pick.outAt)}</p>
+      <div class="row" style="justify-content:center;gap:12px;flex-wrap:wrap"><button class="btn primary rc-big" data-rcgo="${esc(pick.id)}|in">✅ Check in again</button><button class="btn rc-big" data-rcundo="${esc(pick.id)}" title="Organiser only: needs the PIN">↺ Undo check-in</button><button class="btn rc-big" data-rcok="1">Cancel</button></div></section>`;
   if(pick) return `<section class="rc rc-done"><p class="rc-hi">${pick.checkedIn&&!pick.outAt?`${esc(pick.name)} is checked in`:`Are you ${esc(pick.name)}?`}</p>
       <p class="rc-sub">${pick.checkedIn&&!pick.outAt?`Court ${esc(pick.court)} · arrived ${tm(pick.inAt)}. Leaving now?`:`Court ${esc(pick.court)} · ${esc(courtName(s,pick.court))}`}</p>
-      <div class="row" style="justify-content:center;gap:12px">${pick.checkedIn&&!pick.outAt?`<button class="btn primary rc-big" data-rcgo="${esc(pick.id)}|out">👋 Check out</button>`:`<button class="btn primary rc-big" data-rcgo="${esc(pick.id)}|in">✅ Yes, check me in</button>`}<button class="btn rc-big" data-rcok="1">${pick.checkedIn&&!pick.outAt?"Cancel":"No, go back"}</button></div></section>`;
+      <div class="row" style="justify-content:center;gap:12px;flex-wrap:wrap">${pick.checkedIn&&!pick.outAt?`<button class="btn primary rc-big" data-rcgo="${esc(pick.id)}|out">👋 Check out</button><button class="btn rc-big" data-rcundo="${esc(pick.id)}" title="Organiser only: needs the PIN">↺ Undo check-in</button>`:`<button class="btn primary rc-big" data-rcgo="${esc(pick.id)}|in">✅ Yes, check me in</button>`}<button class="btn rc-big" data-rcok="1">${pick.checkedIn&&!pick.outAt?"Cancel":"No, go back"}</button></div></section>`;
   return `<section class="rc"><div class="rc-head"><div><span class="lbl">${esc(fmtLong(s.date))} · ${esc(s.start)}–${esc(s.end)}${v.venue?` · ${esc(v.venue)}`:""}</span>
       <h2>Welcome to Dropshot Folks 🏸</h2><p class="rc-sub" style="text-align:left">Find your name and tap it to check in.</p></div><span class="chip st-confirmed">${here} of ${all.length} here</span></div>
     <input id="rc-q" class="rc-q" type="search" placeholder="🔎 Type your name…" autocomplete="off" autocapitalize="words" spellcheck="false" aria-label="Find your name">
@@ -1918,6 +1920,10 @@ document.addEventListener("click", async e=>{
     S.reception=null; ls.set("dsf:reception",null); ls.set("dsf:rcpin",null); document.fullscreenElement && document.exitFullscreen?.().catch(()=>{}); render(); return }
   if(ds.rcpick){ S.rcPick=ds.rcpick; render(); window.scrollTo({top:0}); return }
   if(ds.rcok){ S.rcPick=null; S.rcDone=null; render(); window.scrollTo({top:0}); return }
+  if(ds.rcundo){ const b=S.bookings.find(x=>x.id===ds.rcundo); if(!b) return; const want=ls.get("dsf:rcpin",null);
+    if(want){ const pin=prompt(`Organiser only: enter the PIN to undo ${b.name}'s check-in`); if(pin==null) return; if(pin.trim()!==want){ toast("Wrong PIN"); return } }
+    if(!await setBooking(b.id,{checkedIn:false, absent:false, inAt:"", outAt:""},"Check-in undone by the organiser.",null)) return;
+    S.rcPick=null; S.rcDone=null; render(); toast(`${b.name}'s check-in undone`); return }
   if(ds.rcgo){ const [id,v]=ds.rcgo.split("|"), b=S.bookings.find(x=>x.id===id); if(!b) return; const now=nowIso(), at=hhmm(new Date());
     const patch = v==="in" ? {checkedIn:true, absent:false, inAt:now, outAt:""} : {absent:true, outAt:now};
     t.disabled=true;

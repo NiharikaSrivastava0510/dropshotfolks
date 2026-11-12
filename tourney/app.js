@@ -925,7 +925,7 @@ function regSignIn(t){
 }
 const tLinkUrl = () => location.origin+location.pathname+"?t="+encodeURIComponent(T()?.id||"")+"&tab=reg";
 // tournaments that have been cancelled: registration is closed and everyone sees why
-const CANCELLED = { t20261121: "Net Play has moved from Saturday 21 November to Saturday 20 February 2027. Registered teams keep their place, and registration reopens soon. Can't make the new date? You'll get a full refund." };
+const CANCELLED = { t20261121: "Net Play is now on Saturday 20 February 2027. Registration opens soon. Already registered? Your team keeps its place." };
 // matches "t20261121" and "t20261121-awtk"
 const cancelledMsg = t => t?.id ? (CANCELLED[t.id] || CANCELLED[String(t.id).split("-")[0]] || "") : "";
 const cancelBanner = t => cancelledMsg(t) ? `<section class="panel" style="border:3px solid #E3A82B;background:#FBF1DC;color:#4A3410"><h2 style="color:#7A1E2C">📅 New date</h2><p style="margin:0">${esc(cancelledMsg(t))}</p></section>` : "";

@@ -613,6 +613,7 @@ async function setClubPin(code){
   if(Store.mode==="db"){ const ref=Store.db.collection("secrets").doc(CLUB_PIN_ID); if(code) await ref.set({code}); else await ref.delete() }
   else { if(code) S.secrets[CLUB_PIN_ID]=code; else delete S.secrets[CLUB_PIN_ID] }
 }
+const PIN_HELP = "Wrong PIN. Use your Club details PIN, the PIN chosen when this screen was opened, or the session's host code.";
 // the PIN a locked screen accepts: the organiser's PIN, this device's own PIN, or the session's host code
 function pinOk(pin, sid){
   const p=String(pin||"").trim();
@@ -2085,7 +2086,7 @@ document.addEventListener("click", async e=>{
     S.reception=ds.rcopen; ls.set("dsf:reception",ds.rcopen); S.rcPick=null; S.rcDone=null; render(); window.scrollTo({top:0});
     document.documentElement.requestFullscreen?.().catch(()=>{}); return }
   if(ds.rcexit){ const pin=prompt("Enter the PIN to leave display mode"); if(pin==null) return;
-    if(!pinOk(pin,S.reception)){ toast("Wrong PIN"); return }
+    if(!pinOk(pin,S.reception)){ toast(PIN_HELP); return }
     S.reception=null; ls.set("dsf:reception",null); ls.set("dsf:rcpin",null); document.fullscreenElement && document.exitFullscreen?.().catch(()=>{}); render(); return }
   if(ds.rcpick){ S.rcPick=ds.rcpick; render(); window.scrollTo({top:0}); return }
   if(ds.rcok){ S.rcPick=null; S.rcDone=null; render(); window.scrollTo({top:0}); return }
@@ -2095,7 +2096,7 @@ document.addEventListener("click", async e=>{
     S.cdTab=courtsOf(S.sessions.find(x=>x.id===ds.cdopen))[0]||1; ls.set("dsf:cdtab",S.cdTab); render(); window.scrollTo({top:0});
     document.documentElement.requestFullscreen?.().catch(()=>{}); return }
   if(ds.cdexit){ const pin=prompt("Enter the PIN to leave display mode"); if(pin==null) return;
-    if(!pinOk(pin,S.cdisplay)){ toast("Wrong PIN"); return }
+    if(!pinOk(pin,S.cdisplay)){ toast(PIN_HELP); return }
     S.cdisplay=null; ls.set("dsf:cdisplay",null); ls.set("dsf:rcpin",null); document.fullscreenElement && document.exitFullscreen?.().catch(()=>{}); render(); return }
   if(ds.cdtab){ const v=ds.cdtab==="all"?"all":Number(ds.cdtab), s=S.sessions.find(x=>x.id===S.cdisplay), tabs=s?[...courtsOf(s),"all"]:[]; const dir=tabs.indexOf(v)>=tabs.indexOf(S.cdTab)?1:-1;
     S.cdTab=v; ls.set("dsf:cdtab",v); render(); const st=$("#cdStage"); if(st){ st.classList.add(dir>0?"slide-l":"slide-r") } return }
@@ -2105,7 +2106,7 @@ document.addEventListener("click", async e=>{
   if(ds.pinshow){ S.pinShown=!S.pinShown; render(); return }
   if(ds.pinclear && S.isAdmin){ arm(t,"Tap again to remove",async()=>{ try{ await setClubPin(null); toast("PIN removed"); render() }catch{ toast("Couldn't remove the PIN") } }); return }
   if(ds.rcall){ if(ds.rcall==="0"){ S.rcAll=null; render(); return }
-    const pin=prompt("Receptionist: enter the PIN to show everyone's names"); if(pin==null) return; if(!pinOk(pin,S.reception)){ toast("Wrong PIN"); return }
+    const pin=prompt("Receptionist: enter the PIN to show everyone's names"); if(pin==null) return; if(!pinOk(pin,S.reception)){ toast(PIN_HELP); return }
     S.rcAll=Date.now()+3*60e3; render(); toast("Names shown for 3 minutes"); clearTimeout(S.rcAllT); S.rcAllT=setTimeout(()=>{ S.rcAll=null; render() },3*60e3+500); return }
   if(ds.rcundo){ const b=S.bookings.find(x=>x.id===ds.rcundo); if(!b) return; const want=ls.get("dsf:rcpin",null);
     { const pin=prompt(`Organiser only: enter the PIN to undo ${b.name}'s check-in`); if(pin==null) return; if(!pinOk(pin,b.sessionId)){ toast("Wrong PIN"); return } }

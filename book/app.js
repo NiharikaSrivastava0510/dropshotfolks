@@ -21,7 +21,7 @@ const BEGINNER = ["E-","E"];
 const lvByCourt = n => LEVELS.find(l=>l.court===n);
 const CLR = {1:"var(--d1)",2:"var(--d2)",3:"var(--c1)",4:"var(--c2)"};
 const COACHING = "https://dropshotfolks.co.uk/#coaching";
-const PER_COURT = 7, GAME_MINS = 10;
+const PER_COURT = 8, GAME_MINS = 10;
 // Level quiz: 12 questions on what you can actually do on court, doubles rotation and tournaments.
 // On-court answers run from 0 to 4: 0 only hits the shuttle back and forth (E-), 1 beginner playing games (E),
 // 2 lower intermediate (D-), 3 intermediate to mid (D+/C-), 4 upper (C+).

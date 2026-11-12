@@ -310,18 +310,72 @@ function smartSchedule(ids, total, opt={}){
   }
   return out;
 }
+/* The rotation planner. Each next game is chosen, in order of importance, so that:
+   1. everyone gets the same number of games;
+   2. nobody plays back to back while someone else could play instead, never three in a row, and nobody sits out long;
+   3. nobody partners the same person again until they've partnered everyone else on the court (fixed partners excepted);
+   4. opponents are mixed up too; and the court's game style (mixed, women's, fair) is followed where genders are known.
+   Games that already have a score (or that the organiser edited) are kept exactly as played, and the rest of the
+   night is planned from there, so late arrivals and people leaving are handled. Deterministic: every phone agrees. */
+function rotate(ids, total, opt={}){
+  const n=ids.length; if(n<4) return [];
+  const G=opt.gender||{}, style=opt.style||"any", pairs=opt.pairs||[], fixed=opt.fixed||{};
+  const key=(a,b)=>a<b?a+"|"+b:b+"|"+a, played={}, last={}, prev={}, pc={}, oc={};
+  ids.forEach(i=>{played[i]=0;last[i]=-9;prev[i]=-9});
+  const quads=[]; for(let a=0;a<n;a++) for(let b=a+1;b<n;b++) for(let c=b+1;c<n;c++) for(let d=c+1;d<n;d++) quads.push([ids[a],ids[b],ids[c],ids[d]]);
+  const teamG = t => { const g=t.map(i=>G[i]); return g.some(x=>!x) ? "?" : g.slice().sort().join("") };
+  const stylePen = (t1,t2) => { const a=teamG(t1), b=teamG(t2); if(style==="any"||a==="?"||b==="?") return 0; const same=a===b;
+    // the organiser's chosen style outranks partner variety (but not equal games)
+    if(style==="fair") return same?0:600; if(style==="mixed") return (a==="FM"?0:250)+(b==="FM"?0:250)+(same?0:600);
+    if(style==="womens") return [...t1,...t2].filter(i=>G[i]==="M").length*160+(same?0:600); return 0 };
+  const record=(teams,g)=>{ teams.forEach(t=>pc[key(...t)]=(pc[key(...t)]||0)+1);
+    teams[0].forEach(x=>teams[1].forEach(y=>oc[key(x,y)]=(oc[key(x,y)]||0)+1));
+    teams.flat().forEach(i=>{ if(i in played){ played[i]++; prev[i]=last[i]; last[i]=g } }) };
+  const out=[];
+  for(let g=0; g<total; g++){
+    const f=fixed[g];
+    if(f){ record(f.teams,g); out.push({teams:f.teams, sit:ids.filter(i=>!f.teams.flat().includes(i)), ...(f.edited?{edited:true}:{})}); continue }
+    const gn=g+1, partnerOf={};
+    pairs.filter(p=>ids.includes(p.a)&&ids.includes(p.b)&&(!p.from||gn>=p.from)&&(!p.to||gn<=p.to)).forEach(p=>{ if(!partnerOf[p.a]&&!partnerOf[p.b]){ partnerOf[p.a]=p.b; partnerOf[p.b]=p.a } });
+    const minP=Math.min(...ids.map(i=>played[i]));
+    // a pair "still has someone new to partner" if either player hasn't partnered someone else on the court as often
+    const fresh=(a,b)=>{ const k=pc[key(a,b)]||0; return ids.some(x=>x!==a&&x!==b&&!partnerOf[a]&&(pc[key(a,x)]||0)<k) || ids.some(x=>x!==a&&x!==b&&!partnerOf[b]&&(pc[key(b,x)]||0)<k) };
+    let best=null, bs=Infinity;
+    for(const q of quads){
+      if(q.some(i=>partnerOf[i] && !q.includes(partnerOf[i]))) continue;
+      let sc=0;
+      q.forEach(i=>{ sc += (played[i]-minP)*400;                 // equal games
+        if(last[i]===g-1) sc += 150;                               // back to back
+        if(last[i]===g-1 && prev[i]===g-2) sc += 600 });           // three in a row
+      ids.forEach(i=>{ if(!q.includes(i)){ const rest=g-1-last[i]; if(rest>=2) sc += 200*(rest-1) } });   // sitting out too long
+      const [a,b,c,d]=q;
+      for(const o of [[[a,b],[c,d]],[[a,c],[b,d]],[[a,d],[b,c]]]){
+        if(o.some(t=>partnerOf[t[0]] && partnerOf[t[0]]!==t[1])) continue;
+        let t=sc;
+        o.forEach(tm=>{ if(partnerOf[tm[0]]===tm[1]) return; const k=pc[key(...tm)]||0; if(k) t += 60*k + (fresh(...tm)?300:0) });   // repeat partners
+        o[0].forEach(x=>o[1].forEach(y=>{ t += 8*(oc[key(x,y)]||0) }));                                                               // repeat opponents
+        t += stylePen(o[0],o[1]);
+        if(t<bs){ bs=t; best=o }
+      }
+    }
+    if(!best){ const f4=[...ids].sort((x,y)=>played[x]-played[y]||last[x]-last[y]).slice(0,4); best=[[f4[0],f4[1]],[f4[2],f4[3]]] }
+    record(best,g); out.push({teams:best, sit:ids.filter(i=>!best.flat().includes(i))});
+  }
+  return out;
+}
 function courtPlan(s,c){
   const roster=courtRoster(s,c), r=rotInfo(s), ids=roster.map(b=>b.playerId), ov=s.rot?.[c]||{};
-  // fixed partners and the court's game style; without either, the original rotation is used unchanged
-  const style=s.style?.[c]||"any", pairs=(s.pairs||[]).filter(p=>ids.includes(p.a)&&ids.includes(p.b));
-  const gender=Object.fromEntries(roster.map(b=>[b.playerId,b.gender||""]));
-  const ck=JSON.stringify([ids,r.total,style,pairs,gender]);
-  const base = (style==="any" && !pairs.length) ? schedule(ids, r.total)
-    : (planCache.get(ck) || (planCache.size>200 && planCache.clear(), planCache.set(ck, smartSchedule(ids, r.total, {gender, style, pairs})).get(ck)));
-  // organiser edits replace a game while all four players are still in the rotation
-  const games=base.map((g,i)=>{ const o=ov[i];
-    if(!Array.isArray(o) || o.length!==4 || new Set(o).size!==4 || o.some(id=>!ids.includes(id))) return g;
-    return {teams:[[o[0],o[1]],[o[2],o[3]]], sit:ids.filter(x=>!o.includes(x)), edited:true} });
+  const style=s.style?.[c]||"any", gender=Object.fromEntries(roster.map(b=>[b.playerId,b.gender||""]));
+  // partners: the organiser's pairs, then friends who picked each other
+  const pairs=(s.pairs||[]).filter(p=>ids.includes(p.a)&&ids.includes(p.b));
+  ids.forEach((a,i)=>ids.slice(i+1).forEach(b=>{ if(mates(a,b) && !pairs.some(p=>[p.a,p.b].includes(a)||[p.a,p.b].includes(b))) pairs.push({a,b}) }));
+  // games already played (scored) or edited by the organiser stay as they are
+  const fixed={};
+  for(let i=0;i<r.total;i++){ const sc=scoreOf(s,c,i), o=ov[i];
+    if(sc) fixed[i]={teams:[sc.a,sc.b]};
+    else if(Array.isArray(o) && o.length===4 && new Set(o).size===4 && o.every(id=>ids.includes(id))) fixed[i]={teams:[[o[0],o[1]],[o[2],o[3]]], edited:true} }
+  const ck=JSON.stringify([ids,r.total,style,pairs,gender,fixed]);
+  const games = planCache.get(ck) || (planCache.size>200 && planCache.clear(), planCache.set(ck, rotate(ids, r.total, {gender, style, pairs, fixed})).get(ck));
   return {roster, r, games, names:Object.fromEntries(roster.map(b=>[b.playerId,b.name]))} }
 
 /* ---------- Court 4 points ---------- */

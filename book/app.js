@@ -170,7 +170,7 @@ async function save(coll,id,data,okMsg){
 /* ---------- state ---------- */
 const TABS = {
   player:[["book","Book a session"],["live","Live courts"],["mine","My bookings"],["court","Host view"],["level","Level guide"],["venue","Venue & contact"]],
-  organiser:[["o-overview","Overview"],["o-sessions","Sessions & bookings"],["live","Live courts"],["o-players","Players"],["o-club","Club details"]]
+  organiser:[["o-overview","Overview"],["o-sessions","Sessions & bookings"],["o-reception","Reception"],["live","Live courts"],["o-players","Players"],["o-club","Club details"]]
 };
 const S = {
   view: ls.get("dsf:view","player"),
@@ -498,6 +498,20 @@ function viewReception(s){
       return `<button type="button" class="rc-name ${st}" data-rcpick="${esc(b.id)}"><b>${esc(b.name)}</b><span>${st==="in"?`✓ Court ${esc(b.court)} · ${tm(b.inAt)}`:st==="left"?`Left ${tm(b.outAt)}`:"Tap to check in"}</span></button>` }).join("") || `<div class="empty">No one called “${esc(q)}” is booked. Ask the host.</div>`}</div>
     <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><p class="muted" style="font-size:.85rem">Not on the list? Ask the host to add you.</p><button class="btn small ghost" data-rcexit="1">Exit reception</button></div></section>`;
 }
+// organiser's Reception tab: pick a session and turn this device into the check-in screen at the door
+function orgReception(){
+  if(!S.isAdmin) return notOrg;
+  if(!S.loaded) return `<section class="panel"><div class="empty loading">Loading…</div></section>`;
+  const ups=upcoming().slice(0,6);
+  if(!ups.length) return `<section class="panel"><h2>🛎️ Reception</h2><div class="empty">No sessions coming up.</div></section>`;
+  const today=new Date().toDateString();
+  return `<section class="panel"><div><h2>🛎️ Reception</h2><p class="muted">Turn this tablet or phone into the check-in screen at the door. People find their name, tap it, and see their court. Their arrival time is saved, and each court's rotation follows the order people arrive.</p></div>
+    <div style="display:grid;gap:12px">${ups.map(s=>{ const all=S.bookings.filter(b=>b.sessionId===s.id && ACTIVE.includes(b.status)), here=all.filter(b=>b.checkedIn&&!b.outAt).length, isToday=new Date(s.date+"T12:00:00").toDateString()===today;
+      return `<div class="bk" style="flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;${isToday?"background:color-mix(in srgb,var(--gold) 25%,var(--surface))":""}">
+        <div><b>${isToday?"Today · ":""}${esc(fmtLong(s.date))}</b><br><span class="muted">${esc(s.title||"Session")} · ${esc(s.start)}–${esc(s.end)} · ${here} of ${all.length} checked in</span></div>
+        <button class="btn ${isToday?"primary":""}" data-rcopen="${esc(s.id)}">🛎️ Open reception</button></div>` }).join("")}</div>
+    <p class="muted" style="font-size:.85rem">To leave the reception screen, tap <b>Exit reception</b> twice. For a host's own device, they open Host view with the session code and tap Open reception screen there.</p></section>`;
+}
 function viewCourt(){
   if(!S.loaded) return `<section class="panel"><div class="empty loading">Loading…</div></section>`;
   const s = S.kiosk && S.sessions.find(x=>x.id===S.kiosk);
@@ -529,7 +543,7 @@ function render(){
   $("#who").innerHTML = (view==="organiser" ? `<span class="org-flag">Organiser</span>` : p ? `${avatar(p.id,p.name,"sm")}<span>${esc(p.name)}</span> ${lvChip(p.level)}` : "")
     + (Store.mode==="db" && S.uid ? ` <button class="btn small" id="signOut" type="button">Sign out</button>` : "");
   const views = {court:viewCourt, book:viewBook, live:viewLive, mine:viewMine, partners:viewPartners, level:viewLevel, venue:viewVenue,
-    "o-overview":orgOverview, "o-sessions":orgSessions, "o-players":orgPlayers, "o-club":orgClub};
+    "o-overview":orgOverview, "o-sessions":orgSessions, "o-players":orgPlayers, "o-club":orgClub, "o-reception":orgReception};
   const head = view==="organiser" ? modeBanner() : reminderBanner() + modeBanner();
   const rs = S.reception && S.sessions.find(x=>x.id===S.reception), rcOn = !!(rs && canRun(rs));
   document.body.classList.toggle("reception-on", rcOn);
@@ -1289,7 +1303,7 @@ function adminSession(s){
     ${(()=>{ const cs=courtsOf(s).filter(c=>freeOn(s,c)>0 && waitersOn(s,c).length); if(!cs.length) return "";
       return `<div class="banner info"><div class="grow"><b>A place is free and people are waiting:</b> ${cs.map(c=>`Court ${c}: ${freeOn(s,c)} free, ${waitersOn(s,c).length} waiting`).join(" · ")}. Waiting players can tap <b>Take the place</b> in My bookings.</div><button class="btn small primary" data-mailwait="${s.id}">📧 Email the waiting list</button></div>` })()}
     ${(()=>{ const want=S.players.filter(p=>(p.remind||[]).includes(slotKey(s)) && p.email && !S.bookings.some(b=>b.sessionId===s.id && b.playerId===p.id && b.status!=="cancelled")).length;
-      const tiles=[["bkl","👥","Bookings",`${booked}/${places}${cnt("waitlist")?` · ${cnt("waitlist")} waiting`:""}`],["wl","⏳","Waiting list",cnt("waitlist")?`${cnt("waitlist")} waiting`:"nobody waiting"],["addp","➕","Add a player","registered or walk-in"],["ci","✅","Check-in",`${here} of ${booked} here`],
+      const tiles=[["bkl","👥","Bookings",`${booked}/${places}${cnt("waitlist")?` · ${cnt("waitlist")} waiting`:""}`],["wl","⏳","Waiting list",cnt("waitlist")?`${cnt("waitlist")} waiting`:"nobody waiting"],["addp","➕","Add a player","registered or walk-in"],["ci","✅","Check-in",`${here} of ${booked} here`],["rc","🛎️","Reception","check-in screen at the door"],
         ["mail","📧","Emails",want?`${want} want a reminder`:s.remindedAt?"reminder sent ✓":"reminder, rules"],["rot","🔄","Rotation",`${Number(s.gameMins)||GAME_MINS} min games · ${s.rotMode==="clock"?"timer":"by score"}`],["pr","🤝","Partners",`${(s.pairs||[]).length} pair${(s.pairs||[]).length===1?"":"s"}`],
         ["es","✏️","Edit session","time, venue, courts, fee"],["hc","🔑","Host code",S.secrets[s.id]?"set":"not set"],["set","⚙️","Close or cancel",s.open===false?"booking closed":"booking open"]];
       const cur=sactOf(s);
@@ -1912,6 +1926,7 @@ document.addEventListener("click", async e=>{
     for(const b of ls2) await setBooking(b.id,{status:"cancelled"},"Not paid within 24 hours, so the place was released.",null);
     if(s) wlPing("freed", s.id); toast(`Released ${ls2.length} place${ls2.length>1?"s":""} ✓`); return }
   if(ds.spamrm && S.isAdmin){ await spamRemove(ds.spamrm); return }
+  if(ds.sact && ds.sact.endsWith("|rc")){ const sid=ds.sact.split("|")[0]; S.reception=sid; ls.set("dsf:reception",sid); S.rcPick=null; S.rcDone=null; render(); window.scrollTo({top:0}); return }
   if(ds.sact){ const [sid,k]=ds.sact.split("|"); S.sact={...(S.sact||{}), [sid]:k}; if(k!=="pr") S.pairPick=null; render(); return }
   if(ds.cancsess){ await cancelSessions([ds.cancsess]); return }
   if(ds.selcanc){ if(S.sel?.size) await cancelSessions([...S.sel]); return }

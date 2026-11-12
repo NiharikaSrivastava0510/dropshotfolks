@@ -1,7 +1,7 @@
 /* ---------- Club rules ---------- */
 const LEVELS = [
-  {code:"E-", key:"Em", name:"New Beginner", court:null, desc:"Can hit the shuttle back and forth from one spot to another, but not yet the different shots, a full game or any pace. Not for Thursday sessions: start with coaching or a beginners' session."},
-  {code:"E", key:"E", name:"Beginner", court:null, desc:"Plays proper games, but clears don't reach the back yet, there's no real smash or drop, and fast shuttles get past. Not for Thursday sessions: start with coaching or a beginners' session."},
+  {code:"E-", key:"Em", name:"New Beginner", court:null, desc:"Can hit the shuttle back and forth from one spot to another, but not yet the different shots, a full game or any pace."},
+  {code:"E", key:"E", name:"Beginner", court:null, desc:"Plays proper games, but clears don't reach the back yet, there's no real smash or drop, and fast shuttles get past."},
   {code:"D-", key:"Dm", name:"Lower Intermediate", court:1, desc:"Social player. Clears from one end to the other, smashes from the front, tries drops, knows the basic serves and how doubles works, but medium-paced games are still a stretch."},
   {code:"D+", key:"Dp", name:"Intermediate", court:2, desc:"Rallies of 6–10 shots, knows doubles rotation, plays clears, smashes and net shots, and enjoys fast-paced badminton."},
   {code:"C-", key:"Cm", name:"Mid Intermediate", court:3, desc:"Fast-paced player. Hits smashes, keeps rallies of 10–15 shots, kills at the net, clears and smashes with only a few mistakes."},
@@ -1094,13 +1094,36 @@ function viewPartners(){
 async function setPartners(ids){
   if(await save("partners", S.me, {ids:[...new Set(ids)].slice(0,MAX_PARTNERS), updatedAt:nowIso()})) toast("Partners updated");
 }
+// level guide: one card per level, a skill meter, what you can do, and where each level plays at the next sessions
+const LV_VIBE = {
+  "E-":{e:"🌱",tag:"Just starting out",can:["Hits it back and forth","Learning the shots","Building up pace"]},
+  "E": {e:"🐣",tag:"Getting into games",can:["Plays proper games","Working on deep clears","Smash and drop coming"]},
+  "D-":{e:"🙂",tag:"Social player",can:["End-to-end clears","Smash from the front","Basic serves and doubles"]},
+  "D+":{e:"😎",tag:"Rally lover",can:["6–10 shot rallies","Knows doubles rotation","Loves a fast game"]},
+  "C-":{e:"🔥",tag:"Fast and sharp",can:["10–15 shot rallies","Kills at the net","Only a few mistakes"]},
+  "C+":{e:"🏆",tag:"Tournament ready",can:["Plays tournaments","Every shot in the bag","Hardly any mistakes"]}
+};
 function viewLevel(){
-  const res = levelFrom(S.quiz), p = meP();
-  return `<section class="panel"><div><h2>Level guide</h2><p class="muted">Each court is for one level. You book a session and we put you on the court for your level. Beginners (E- and E) can book sessions that have a beginners' court, but not Thursday sessions.</p></div>
-    <div class="levels">${LEVELS.map(l=>`<div class="lvrow"><span class="lv lv-${l.key}">${l.code}</span><div><b>${l.name}</b>${l.court?` · Court ${l.court}`:" · court set per session"}<p class="muted">${l.desc}</p></div></div>`).join("")}</div></section>
-  <section class="panel"><div><h2>Think you've moved up?</h2><p class="muted">Take the questions again. If the answer changes, ask the organiser to move you.</p></div>
+  const res = levelFrom(S.quiz), p = meP(), mine = p?.level;
+  const sl = slots().slice(0,3);
+  const where = code => sl.map(({s})=>{ const cs=courtsOf(s).filter(c=>courtLevels(s,c).includes(code)); const day=new Date(s.date+"T12:00:00").toLocaleDateString("en-GB",{weekday:"short"});
+    return `<span class="lg-where ${cs.length?"":"no"}">${esc(day)} ${esc(s.start)} · ${cs.length?cs.map(c=>`Court ${c}`).join(" or "):"not this session"}</span>` }).join("");
+  const card = (l,i) => { const v=LV_VIBE[l.code]||{e:"🏸",tag:"",can:[]};
+    return `<article class="lg-card ${l.code===mine?"me":""}" style="--lc:var(--lvc-${l.key})">
+      ${l.code===mine?`<span class="lg-you">That's you! 🙌</span>`:""}
+      <div class="lg-top"><span class="lg-badge">${esc(l.code)}</span><div><b class="lg-name">${esc(l.name)} ${v.e}</b><span class="lg-tag">${esc(v.tag)}</span></div></div>
+      <div class="lg-meter" aria-label="Level ${i+1} of ${LEVELS.length}">${LEVELS.map((_,k)=>`<i class="${k<=i?"on":""}"></i>`).join("")}</div>
+      <div class="lg-can">${v.can.map(c=>`<span>✓ ${esc(c)}</span>`).join("")}</div>
+      <details class="lg-more"><summary>More detail</summary><p>${esc(l.desc)}</p></details>
+      ${sl.length?`<div class="lg-wheres"><span class="lbl">Where you'll play</span>${where(l.code)}</div>`:""}
+    </article>` };
+  return `<section class="panel lg-hero"><div><span class="lbl">Level guide</span><h2>Find your level 🏸</h2>
+      <p class="muted">Everyone plays on a court with people at their level, so every game is a good one. Your court depends on the session: the organiser sets which levels play on each court.</p></div>
+      ${mine?`<div class="lg-mine"><span class="lg-badge" style="--lc:var(--lvc-${lvByCode(mine)?.key})">${esc(mine)}</span><div><span class="lbl">Your level</span><b>${esc(lvByCode(mine)?.name||"")}</b></div></div>`:""}</section>
+    <div class="lg-grid">${LEVELS.map(card).join("")}</div>
+  <section class="panel"><div><h2>Levelled up? 🚀</h2><p class="muted">Take the questions again. If the answer changes, ask the organiser to move you.</p></div>
     <form class="quiz" id="quiz">${quizFields("q", S.quiz)}</form>
-    ${res ? `<div class="banner ok"><div class="grow">Suggested level: ${lvChip(res)} <b>${lvByCode(res).name}</b>.</div>${p?(p.level!==res?`<button class="btn small" id="quizReq" data-lv="${res}">Ask organiser to change my level</button>`:`<span>That's your current level.</span>`):`<button class="btn small primary" data-go="book">Register</button>`}</div>` : levelVerdict(res)}
+${res ? `<div class="banner ok"><div class="grow">Suggested level: ${lvChip(res)} <b>${lvByCode(res).name}</b>.</div>${p?(p.level!==res?`<button class="btn small" id="quizReq" data-lv="${res}">Ask organiser to change my level</button>`:`<span>That's your current level.</span>`):`<button class="btn small primary" data-go="book">Register</button>`}</div>` : levelVerdict(res)}
     <p class="muted">Still unsure? <a href="#" data-go="venue">Message the organiser</a>.</p>
   </section>`;
 }

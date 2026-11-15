@@ -525,10 +525,10 @@ function nagNext(){
   el.hidden=false; try{ navigator.vibrate?.([200,100,200]) }catch{} sfx("power",true);
   clearTimeout(showAlerts.t); showAlerts.t=setTimeout(()=>{ el.hidden=true }, 20000);
 }
-function cdPopNext(){
+function cdPopNext(force){
   if(!document.body.classList.contains("display-on") || !S.cdisplay) return;
   const s=S.sessions.find(x=>x.id===S.cdisplay); if(!s || !rotInfo(s).live) return;
-  if(document.activeElement?.closest?.(".scorein")) return;   // someone is typing a score: don't cover it
+  if(!force && document.activeElement?.closest?.(".scorein")) return;   // someone is typing a score: don't cover it
   // only the court on screen (or every court on the All courts tab): who's on now and who's next
   const tab=S.cdTab, courts=courtsOf(s).filter(c=>tab==="all"||tab===c||!courtsOf(s).includes(tab));
   const nm=(names,id)=>esc(names[id]||"Player"), pair=(t,names)=>t.map(id=>nm(names,id)).join(" &amp; ");
@@ -651,6 +651,8 @@ function cdCelebrate(c,gi,sa,sb){
   burst(["🏸","🎉","🔥","⭐","🏆","✨"]); sfx("match",true);
   const el=document.createElement("div"); el.className="cd-flash"; el.setAttribute("role","status");
   el.innerHTML=`<div><b>Game ${gi+1} done!</b><span>Court ${c} · ${sa}–${sb}</span></div>`; document.body.append(el); setTimeout(()=>el.remove(),2200);
+  // straight after: who's on now and who's next
+  document.activeElement?.blur?.(); setTimeout(()=>cdPopNext(true), 2000);
 }
 function cdMove(dir){ const s=S.sessions.find(x=>x.id===S.cdisplay); if(!s) return; const tabs=[...courtsOf(s),"all"], i=Math.max(0,tabs.indexOf(S.cdTab));
   S.cdTab=tabs[(i+dir+tabs.length)%tabs.length]; ls.set("dsf:cdtab",S.cdTab); render();

@@ -536,8 +536,8 @@ function cdPopNext(force){
   if(!rows.length) return;
   let el=$("#cdPop"); if(!el){ el=document.createElement("div"); el.id="cdPop"; el.className="cd-pop"; el.setAttribute("role","status"); el.setAttribute("aria-live","polite"); document.body.append(el) }
   el.innerHTML=`<div class="cd-pop-card"><button type="button" class="cd-pop-x" data-cdpopx="1" aria-label="Close and go back to the scores">✕ Close</button><p class="cd-pop-hd">${rows.length===1?`Court ${rows[0].c}`:"All courts"}</p><div class="cd-pop-grid">${rows.map(({c,g,nx,names})=>`<div class="cd-pop-court" style="--cc:${CLR[c]}">${rows.length>1?`<b>Court ${c}</b>`:""}
-    <div class="cd-pop-row now"><span class="cd-pop-lbl">🏸 Now on</span><div class="cd-pop-m"><span>${pair(g.teams[0],names)}</span><i>vs</i><span>${pair(g.teams[1],names)}</span></div></div>
-    ${nx?`<div class="cd-pop-row next"><span class="cd-pop-lbl">🔔 Next up · get ready</span><div class="cd-pop-m"><span>${pair(nx.teams[0],names)}</span><i>vs</i><span>${pair(nx.teams[1],names)}</span></div></div>`:""}</div>`).join("")}</div></div>`;
+    <div class="cd-pop-row now"><span class="cd-pop-lbl">🏸 Now on · go to court ${c}</span><div class="cd-pop-m"><span>${pair(g.teams[0],names)}</span><i>vs</i><span>${pair(g.teams[1],names)}</span></div></div>
+</div>`).join("")}</div></div>`;
   el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); sfx("power",true);
   clearTimeout(cdPopNext.t); cdPopNext.t=setTimeout(()=>el.classList.remove("show"), CD_POP_FOR);
 }

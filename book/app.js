@@ -751,7 +751,8 @@ function seedPractice(force){
   ls.set("dsf:players",players); ls.set("dsf:bookings",bookings); ls.set("dsf:reception",null); ls.set("dsf:cdisplay",null);
 }
 function modeBanner(){
-  if(PRACTICE && S.loaded) return `<div class="banner warn"><div class="grow"><b>🧪 Practice mode.</b> A pretend session with 16 pretend players, happening now. Nothing here is real or saved to the club: try reception, the court display, scores and the rotation.</div><span class="row"><button class="btn small" data-practicereset="1">↺ Start again</button><a class="btn small ghost" href="./">Leave practice</a></span></div>`;
+  if(PRACTICE && S.loaded) return `<div class="banner warn"><div class="grow"><b>🧪 Practice mode.</b> A pretend session with 16 pretend players, happening now. Nothing here is real or saved to the club: try reception, the court display, scores and the rotation.
+    <br><span style="font-size:.88rem"><b>Court 1:</b> Alex Green, Bea Khan, Chris Doe, Dina Patel, Eli Brown, Fay Ahmed, Gus Lee, Hana Okoro · <b>Court 2:</b> Ivan Silva, Jade Wu, Kofi Mensah, Lena Novak, Max Rossi, Nia Clarke, Omar Aziz, Priya Shah. On the reception screen, type 2 letters of a name (e.g. "al") to find it.</span></div><span class="row"><button class="btn small" data-practicereset="1">↺ Start again</button><a class="btn small ghost" href="./">Leave practice</a></span></div>`;
   if(Store.mode==="db" || !S.loaded) return "";
   return `<div class="banner warn"><div class="grow"><b>Preview mode.</b> Bookings are saved in this browser only. Add the Firebase settings to firebase-config.js to share bookings between players.</div></div>`;
 }

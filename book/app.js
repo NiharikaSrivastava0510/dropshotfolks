@@ -700,27 +700,32 @@ function cdMove(dir){ const s=S.sessions.find(x=>x.id===S.cdisplay); if(!s) retu
 // the organiser's PIN for the locked screens (reception and court display), kept with the host codes where only the organiser can read it
 const CLUB_PIN_ID = "displaypin";
 const clubPin = () => S.secrets?.[CLUB_PIN_ID] || null;
-const RC_PIN_ID = "receptionpin";
-const rcPin = () => S.secrets?.[RC_PIN_ID] || null;
+// Reception PIN: a new 4-digit PIN for each session, set by the organiser (like the host code).
+// The organiser's copy sits with the host codes (secrets/rc-<session>); the session keeps only a salted hash so reception screens on any device can check it.
+const rcKey = sid => "rc-"+sid;
+const rcPin = sid => S.secrets?.[rcKey(sid)] || null;
 async function sha(t){ const b=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("") }
-const rcHash = pin => sha("dropshotfolks-reception:"+String(pin).trim());
-// the reception screen accepts the Reception PIN (or the organiser's own PIN); never a host code
-async function rcPinOk(pin, sid){
-  const p=String(pin||"").trim();
-  if(!S.cfg.rcPinHash) return pinOk(p, sid);                 // no Reception PIN set yet: as before
-  if(clubPin() && p===String(clubPin())) return true;
-  return !!p && await rcHash(p)===S.cfg.rcPinHash;
+const rcHash = (sid,pin) => sha("dropshotfolks-reception:"+sid+":"+String(pin).trim());
+const newRcPin = sid => { let p; do { p=String(crypto.getRandomValues(new Uint32Array(1))[0]%10000).padStart(4,"0") } while(p===String(clubPin()||"") || p===String(S.secrets?.[sid]||"")); return p };
+async function setRcPin(sid, pin){
+  const s=S.sessions.find(x=>x.id===sid); if(!s) return false;
+  if(Store.mode==="db") await Store.db.collection("secrets").doc(rcKey(sid)).set({code:pin}); else S.secrets[rcKey(sid)]=pin;
+  const {id,...body}=s; return save("sessions",id,{...body, rcPinHash:await rcHash(sid,pin)});
 }
-function rcPinPanel(){
-  const pin=rcPin(), set=!!S.cfg.rcPinHash;
-  return `<section class="panel"><div><h2>🛎️ Reception PIN</h2><p class="muted">A separate PIN just for the reception screen at the door: leaving it, Show all names and Undo check-in. Host codes don't work there. Give it only to whoever runs reception.</p></div>
-    <div class="row" style="flex-wrap:wrap;gap:8px;align-items:end"><label class="f" style="max-width:220px">${set?"Change Reception PIN":"Set a Reception PIN (4–6 numbers)"}<input id="c-rcpin" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="••••" style="letter-spacing:.4em;font-family:var(--mono)"></label>
-      <button class="btn small primary" data-rcpinsave="1">${set?"Change PIN":"Save PIN"}</button>${set?`${pin?`<button class="btn small ghost" data-rcpinshow="1">${S.rcPinShown?`PIN: <b class="mono">${esc(pin)}</b>`:"Show PIN"}</button>`:""}<button class="btn small ghost danger" data-rcpinclear="1">Remove PIN</button>`:""}</div>
-    <p class="muted" style="font-size:.85rem">${set?"✅ Reception PIN set. It must be different from your display PIN and the host codes.":"Not set yet: reception uses your display PIN above (or a host code)."}</p></section>`;
+// the reception screen accepts this session's Reception PIN (or the organiser's own PIN); never a host code. 5 wrong tries lock it for a minute.
+async function rcPinOk(pin, sid){
+  if(S.rcLockUntil && Date.now()<S.rcLockUntil){ toast(`Too many wrong tries. Wait ${Math.ceil((S.rcLockUntil-Date.now())/1000)} seconds.`); return false }
+  const p=String(pin||"").trim(), s=S.sessions.find(x=>x.id===sid);
+  let ok;
+  if(!s?.rcPinHash) ok = pinOk(p, sid);                                   // no Reception PIN for this session yet: as before
+  else ok = (clubPin() && p===String(clubPin())) || (rcPin(sid) ? p===String(rcPin(sid)) : (!!p && await rcHash(sid,p)===s.rcPinHash));
+  if(ok){ S.rcBad=0; return true }
+  S.rcBad=(S.rcBad||0)+1; if(S.rcBad>=5){ S.rcBad=0; S.rcLockUntil=Date.now()+60000 }
+  return false;
 }
 function pinPanel(){
   const pin=clubPin();
-  return `<section class="panel"><div><h2>🔒 Display screens PIN</h2><p class="muted">The PIN for the court display (and the reception screen, until you set a separate Reception PIN below). Opening either one locks the device; this PIN unlocks it and lets you undo a check-in. Only you can see it here.</p></div>
+  return `<section class="panel"><div><h2>🔒 Display screens PIN</h2><p class="muted">The PIN for the court display. (Each session gets its own Reception PIN on its session card.) Opening either one locks the device; this PIN unlocks it and lets you undo a check-in. Only you can see it here.</p></div>
     <div class="row" style="flex-wrap:wrap;gap:8px;align-items:end"><label class="f" style="max-width:220px">${pin?"Change PIN":"Set a 4-digit PIN"}<input id="c-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="••••" style="letter-spacing:.4em;font-family:var(--mono)"></label>
       <button class="btn small primary" data-pinsave="1">${pin?"Change PIN":"Save PIN"}</button>${pin?`<button class="btn small ghost" data-pinshow="1">${S.pinShown?`PIN: <b class="mono">${esc(pin)}</b>`:"Show PIN"}</button><button class="btn small ghost danger" data-pinclear="1">Remove PIN</button>`:""}</div>
     <p class="muted" style="font-size:.85rem">${pin?"✅ PIN set. Screens you open on any of your devices use it.":"No PIN yet: you'll be asked to choose one each time you open a screen."} Hosts opening a screen from Host view can also unlock it with that session's host code.</p></section>`;
@@ -1429,7 +1434,7 @@ function orgParts(){
       <li>Copy the <b>Web app URL</b> and paste it here:
         <div class="row"><input id="bm-url" placeholder="https://script.google.com/macros/s/…/exec" style="flex:1;min-width:220px"><button class="btn small primary" data-bmsave="1">Save &amp; send test email</button></div></li>`}
     </ol></details></section>`;
-  return {requests, sessions, players, club:pinPanel()+rcPinPanel()+club+mail};
+  return {requests, sessions, players, club:pinPanel()+club+mail};
 }
 const notOrg = `<section class="panel"><div class="empty">Only the organiser can see this.</div></section>`;
 // Sessions running all four courts whose setup doesn't match the standard one-level-per-court layout
@@ -1614,7 +1619,7 @@ function adminSession(s){
     ${(()=>{ const want=S.players.filter(p=>(p.remind||[]).includes(slotKey(s)) && p.email && !S.bookings.some(b=>b.sessionId===s.id && b.playerId===p.id && b.status!=="cancelled")).length;
       const tiles=[["bkl","👥","Bookings",`${booked}/${places}${cnt("waitlist")?` · ${cnt("waitlist")} waiting`:""}`],["wl","⏳","Waiting list",cnt("waitlist")?`${cnt("waitlist")} waiting`:"nobody waiting"],["addp","➕","Add a player","registered or walk-in"],["ci","✅","Check-in",`${here} of ${booked} here`],["rc","🛎️","Reception","check-in screen at the door"],
         ["mail","📧","Emails",want?`${want} want a reminder`:s.remindedAt?"reminder sent ✓":"reminder, rules"],["rot","🔄","Rotation",`${Number(s.gameMins)||GAME_MINS} min games · ${s.rotMode==="clock"?"timer":"by score"}`],["pr","🤝","Partners",`${(s.pairs||[]).length} pair${(s.pairs||[]).length===1?"":"s"}`],
-        ["es","✏️","Edit session","time, venue, courts, fee"],["hc","🔑","Host code",S.secrets[s.id]?"set":"not set"],["set","⚙️","Close or cancel",s.open===false?"booking closed":"booking open"]];
+        ["es","✏️","Edit session","time, venue, courts, fee"],["hc","🔑","Host code",S.secrets[s.id]?"set":"not set"],["rp","🛎️","Reception PIN",s.rcPinHash?"set":"not set"],["set","⚙️","Close or cancel",s.open===false?"booking closed":"booking open"]];
       const cur=sactOf(s);
       return `<div class="acts">${tiles.map(([k,ic,t,sub])=>`<button type="button" class="act ${k===cur?"on":""} ${(k==="mail"&&want)||(k==="wl"&&courtsOf(s).some(c=>freeOn(s,c)>0&&waitersOn(s,c).length))?"ping":""}" data-sact="${esc(s.id)}|${k}" aria-pressed="${k===cur}"><span class="act-ic">${ic}</span><b>${t}</b><span>${esc(sub)}</span></button>`).join("")}</div>
       <div class="act-panel">${{
@@ -1662,6 +1667,9 @@ function adminSession(s){
         <label class="row" style="grid-column:1/-1;gap:6px"><input type="checkbox" style="width:auto" id="es-all-${s.id}"> Make this the standard for ${esc(slotLabel(s))}: courts, places and rotation times (copies it to every upcoming one, and new ones start with it)</label>
         <div class="row" style="grid-column:1/-1"><button class="btn small primary" data-savesess="${esc(s.id)}">Save session</button><button class="btn small" data-stdcourts="${esc(s.id)}">Use standard courts</button><span class="muted" style="font-size:.82rem">${stdOf(s)?`Your standard: ${[1,2,3,4].filter(n=>Number(stdOf(s).capacity?.[n])>0).map(n=>`Court ${n} ${courtLevels({courts:stdOf(s).courts},n).join("/")}`).join(" · ")}`:"D- Court 1 · D+ Court 2 · C- Court 3 · C+ Court 4"}, and moves booked players to match.</span></div>
       </div>`,
+        rp:`<div style="display:grid;gap:10px"><p class="muted" style="margin:0;font-size:.9rem">A new 4-digit PIN for this session's reception screen: leaving it, Show all names and Undo check-in. Host codes don't work there. Give it only to whoever runs reception.</p>
+          <div class="row code-row">${rcPin(s.id)?`<b class="code">${esc(rcPin(s.id))}</b><button class="btn small" data-copy="${esc(rcPin(s.id))}">Copy</button>`:s.rcPinHash?`<span class="chip st-confirmed">Set</span>`:`<span class="chip st-waitlist">Not set yet</span>`}<button class="btn small ${s.rcPinHash?"ghost":"primary"}" data-rpnew="${esc(s.id)}">🎲 ${s.rcPinHash?"New PIN":"Make a PIN"}</button></div>
+          <div class="row" style="gap:8px;align-items:end"><label class="f" style="max-width:180px">Or type your own<input id="rp-${esc(s.id)}" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" placeholder="4 numbers" style="letter-spacing:.3em;font-family:var(--mono)"></label><button class="btn small" data-rpsave="${esc(s.id)}">Save</button></div></div>`,
         hc:`<div class="row code-row">${S.secrets[s.id]?`<b class="code">${esc(S.secrets[s.id])}</b><button class="btn small" data-copy="${esc(S.secrets[s.id])}">Copy</button><button class="btn small ghost" data-newcode="${esc(s.id)}">New code</button>`:`<button class="btn small primary" data-newcode="${esc(s.id)}">Create code</button>`}</div><p class="muted" style="font-size:.82rem">Give it to whoever runs the court-side device. A new code locks out devices using the old one.</p>`,
         set:`<div class="row">${v.address?`<span class="muted" style="flex-basis:100%">📍 ${esc(v.address)}</span>`:""}<button class="btn small" data-toggle="${s.id}">${s.open===false?"🔓 Open booking":"🔒 Close booking"}</button>${s.cancelled?`<span class="chip st-cancelled">Cancelled</span>`:`<button class="btn small ghost danger" data-cancsess="${s.id}">Cancel session</button>`}<button class="btn small ghost danger" data-delsess="${s.id}">Delete session</button></div><p class="muted" style="font-size:.85rem">Close booking stops new bookings. Cancel keeps the session but tells everyone booked. Delete removes it.</p>`
       }[cur]}</div>` })()}
@@ -2217,7 +2225,14 @@ document.addEventListener("click", async e=>{
     if(Store.mode==="db"){ try{ await Store.db.collection("secrets").doc(sid).set({code}); toast(`Code ${code} ready`) }catch{ toast("Couldn't save the code") } }
     else { S.secrets[sid]=code; render() }
     return }
-  if(ds.rcopen){ if(!S.cfg.rcPinHash && !choosePin("The reception screen")) return;
+  if(ds.rcopen){ const rs=S.sessions.find(x=>x.id===ds.rcopen);
+    if(!rs?.rcPinHash){
+      if(S.isAdmin){ const v=prompt(`Set a 4-digit Reception PIN for this session.\nYou'll need it to leave the reception screen. Leave it empty for a random one.`); if(v==null) return;
+        const pin=String(v).trim()||newRcPin(rs.id); if(!/^\d{4}$/.test(pin)){ toast("The Reception PIN must be exactly 4 numbers"); return }
+        if(clubPin() && pin===String(clubPin())){ toast("Use a different PIN from your display PIN"); return }
+        if(String(S.secrets?.[rs.id]||"")===pin){ toast("That's the same as the host code. Pick a different PIN"); return }
+        if(!await setRcPin(rs.id,pin)) return; toast(`Reception PIN for this session: ${pin}`) }
+      else if(!choosePin("The reception screen")) return; }
     S.reception=ds.rcopen; ls.set("dsf:reception",ds.rcopen); S.rcPick=null; S.rcDone=null; render(); window.scrollTo({top:0});
     document.documentElement.requestFullscreen?.().catch(()=>{}); return }
   if(ds.rcexit){ const pin=prompt("Enter the PIN to leave display mode"); if(pin==null) return;
@@ -2238,14 +2253,12 @@ document.addEventListener("click", async e=>{
   if(ds.cdauto){ S.cdAuto=!S.cdAuto; ls.set("dsf:cdauto",S.cdAuto); render(); toast(S.cdAuto?"Courts change every 12 seconds":"Auto-cycle off"); return }
   if(ds.pinsave && S.isAdmin){ const v=String($("#c-pin")?.value||"").trim(); if(!/^\d{4}$/.test(v)){ toast("The PIN must be 4 numbers"); return }
     try{ await setClubPin(v); $("#c-pin").value=""; toast("PIN saved ✓"); render() }catch(e){ console.error(e); toast("Couldn't save the PIN") } return }
-  if(ds.rcpinsave && S.isAdmin){ const v=String($("#c-rcpin")?.value||"").trim(); if(!/^\d{4,6}$/.test(v)){ toast("The Reception PIN must be 4 to 6 numbers"); return }
-    if(clubPin() && v===String(clubPin())){ toast("Use a different PIN from your display PIN"); return }
-    if(Object.entries(S.secrets||{}).some(([k,c])=>k!==CLUB_PIN_ID && k!==RC_PIN_ID && String(c).toUpperCase()===v)){ toast("That's the same as a host code. Pick a different PIN"); return }
-    try{ const hash=await rcHash(v); if(Store.mode==="db") await Store.db.collection("secrets").doc(RC_PIN_ID).set({code:v}); else S.secrets[RC_PIN_ID]=v;
-      await save("config","main",{...S.cfg, rcPinHash:hash}); $("#c-rcpin").value=""; toast("Reception PIN saved ✓"); render() }catch(e){ console.error(e); toast("Couldn't save the PIN") } return }
-  if(ds.rcpinshow){ S.rcPinShown=!S.rcPinShown; render(); return }
-  if(ds.rcpinclear && S.isAdmin){ arm(t,"Tap again to remove",async()=>{ try{ if(Store.mode==="db") await Store.db.collection("secrets").doc(RC_PIN_ID).delete(); else delete S.secrets[RC_PIN_ID];
-      const {rcPinHash,...cfg}=S.cfg; await save("config","main",cfg); toast("Reception PIN removed"); render() }catch{ toast("Couldn't remove it") } }); return }
+  if((ds.rpnew || ds.rpsave) && S.isAdmin){ const sid=ds.rpnew||ds.rpsave;
+    const pin = ds.rpnew ? newRcPin(sid) : String($(`#rp-${sid}`)?.value||"").trim();
+    if(!/^\d{4}$/.test(pin)){ toast("The Reception PIN must be exactly 4 numbers"); return }
+    if(clubPin() && pin===String(clubPin())){ toast("Use a different PIN from your display PIN"); return }
+    if(String(S.secrets?.[sid]||"")===pin){ toast("That's the same as the host code. Pick a different PIN"); return }
+    try{ if(await setRcPin(sid,pin)){ toast(`Reception PIN ${pin} set ✓`); render() } }catch(e){ console.error(e); toast("Couldn't save the PIN") } return }
   if(ds.pinshow){ S.pinShown=!S.pinShown; render(); return }
   if(ds.pinclear && S.isAdmin){ arm(t,"Tap again to remove",async()=>{ try{ await setClubPin(null); toast("PIN removed"); render() }catch{ toast("Couldn't remove the PIN") } }); return }
   if(ds.rcall){ if(ds.rcall==="0"){ S.rcAll=null; render(); return }

@@ -315,7 +315,8 @@ function smartSchedule(ids, total, opt={}){
 }
 /* The rotation planner. Each next game is chosen, in order of importance, so that:
    1. everyone gets the same number of games;
-   2. nobody plays back to back while someone else could play instead, never three in a row, and nobody sits out long;
+   2. nobody plays more than 2 games in a row, anyone who plays 2 in a row sits out the next 2, nobody plays back to back
+      while someone else could play instead, and nobody sits out long;
    3. nobody partners the same person again until they've partnered everyone else on the court (fixed partners excepted);
    4. every game is a new group of four, and opponents are mixed up too; and the court's game style (mixed, women's, fair) is followed where genders are known.
    Games that already have a score (or that the organiser edited) are kept exactly as played, and the rest of the
@@ -347,9 +348,10 @@ function rotate(ids, total, opt={}){
     for(const q of quads){
       if(q.some(i=>partnerOf[i] && !q.includes(partnerOf[i]))) continue;
       let sc=0;
-      q.forEach(i=>{ sc += (played[i]-minP)*6000;                // equal games always come first
+      q.forEach(i=>{ sc += (played[i]-minP)*12000;               // equal games always come first
         if(last[i]===g-1) sc += 150;                               // back to back
-        if(last[i]===g-1 && prev[i]===g-2) sc += 600 });           // three in a row
+        if(last[i]===g-1 && prev[i]===g-2) sc += 20000;            // never three in a row
+        if(last[i]===g-2 && prev[i]===g-3) sc += 9000 });          // after two in a row, sit out two games
       ids.forEach(i=>{ if(!q.includes(i)){ const rest=g-1-last[i]; if(rest>=2) sc += 200*(rest-1) } });   // sitting out too long
       sc += 1200*(qc[qk(q)]||0);                                   // always a new group of four
       const [a,b,c,d]=q;

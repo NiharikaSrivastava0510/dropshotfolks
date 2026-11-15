@@ -318,7 +318,8 @@ function smartSchedule(ids, total, opt={}){
    2. nobody plays more than 2 games in a row, anyone who plays 2 in a row sits out the next 2, nobody plays back to back
       while someone else could play instead, and nobody sits out long;
    3. nobody partners the same person again until they've partnered everyone else on the court (fixed partners excepted);
-   4. every game is a new group of four, and opponents are mixed up too; and the court's game style (mixed, women's, fair) is followed where genders are known.
+   4. every game is a new group of four, and opponents are mixed up too;
+   5. two women and two men always play as mixed partners (man and woman on each side), never two women v two men; and the court's game style (mixed, women's, fair) is followed where genders are known.
    Games that already have a score (or that the organiser edited) are kept exactly as played, and the rest of the
    night is planned from there, so late arrivals and people leaving are handled. Deterministic: every phone agrees. */
 function rotate(ids, total, opt={}){
@@ -363,6 +364,7 @@ function rotate(ids, total, opt={}){
         o.forEach(tm=>{ if(partnerOf[tm[0]]===tm[1]) return; const k=pc[key(...tm)]||0; if(k) t += 60*k + (fresh(...tm)?900:0) });   // repeat partners
         o[0].forEach(x=>o[1].forEach(y=>{ t += 25*(oc[key(x,y)]||0) }));                                                              // repeat opponents
         t += 600*(mc[mk(o)]||0);                                   // never the exact same match again
+        { const ga=teamG(o[0]), gb=teamG(o[1]); if((ga==="FF"&&gb==="MM")||(ga==="MM"&&gb==="FF")) t += 50000 }   // two women and two men: always mixed partners, never women v men
         t += stylePen(o[0],o[1]);
         if(t<bs){ bs=t; best=o }
       }

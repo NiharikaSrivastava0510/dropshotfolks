@@ -107,7 +107,10 @@ const stChip = st => `<span class="chip ${STATUS[st]?.cls||""}">${esc(STATUS[st]
 const payRef = (name, s) => (`DSF ${String(name||"").split(/\s+/)[0].toUpperCase().replace(/[^A-Z]/g,"").slice(0,8)} ${s.date.slice(8,10)}${s.date.slice(5,7)}`).slice(0,18);
 const venueOf = s => ({venue: s?.venue || S.cfg.venue, address: s?.address || S.cfg.address});
 const mapsFor = v => "https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(v.address||v.venue);
-const ls = { get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch{return d}}, set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}} };
+// practice mode (book/?practice): a pretend session in this browser only; nothing touches the club's real data
+const PRACTICE = /[?&]practice\b/.test(location.search);
+const lsKey = k => PRACTICE ? "practice:"+k : k;
+const ls = { get(k,d){try{const v=localStorage.getItem(lsKey(k));return v==null?d:JSON.parse(v)}catch{return d}}, set(k,v){try{localStorage.setItem(lsKey(k),JSON.stringify(v))}catch{}} };
 function toast(msg){const t=$("#toast");t.textContent=msg;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>t.hidden=true,3000)}
 async function copyText(text, fallbackEl){
   try{await navigator.clipboard.writeText(text);toast("Copied")}
@@ -134,7 +137,7 @@ function toThumb(file){
 const Store = {
   mode:"local", db:null, listeners:{},
   async init(){
-    if(!window.FIREBASE_CONFIG?.apiKey) return;
+    if(!window.FIREBASE_CONFIG?.apiKey || PRACTICE) return;
     try{ firebase.initializeApp(window.FIREBASE_CONFIG); this.db=firebase.firestore(); this.mode="db"
       // local testing only: point at the Firebase emulators
       if(window.FIREBASE_EMULATOR){ firebase.auth().useEmulator("http://127.0.0.1:9099"); this.db.useEmulator("127.0.0.1",8080) } }catch(e){ console.error(e) }
@@ -722,7 +725,7 @@ function render(){
   const ds_ = !rcOn && S.cdisplay && S.sessions.find(x=>x.id===S.cdisplay), cdOn = !!(ds_ && canRun(ds_));
   document.body.classList.toggle("reception-on", rcOn || cdOn);
   document.body.classList.toggle("display-on", cdOn);
-  $("#main").innerHTML = (Store.mode!=="db" && !LOCAL) ? setupPanel() : rcOn ? viewReception(rs) : cdOn ? viewCourtDisplay(ds_) : head + (views[tab]||viewBook)();
+  $("#main").innerHTML = (Store.mode!=="db" && !LOCAL && !PRACTICE) ? setupPanel() : rcOn ? viewReception(rs) : cdOn ? viewCourtDisplay(ds_) : head + (views[tab]||viewBook)();
   if(S.lastTab!==tab){ const m=$("#main"); m.classList.remove("swap"); void m.offsetWidth; m.classList.add("swap"); S.lastTab=tab }
   const nc=$("#nextup"); if(nc){ const h=S.loaded?nextChip():""; nc.innerHTML=h; nc.hidden=!h }
   tickCountdowns();
@@ -733,7 +736,22 @@ function render(){
   S.liveKey = liveKey();
   checkAlerts();
 }
+// a pretend session happening now: 2 courts, 16 pretend players, nobody checked in yet
+function seedPractice(force){
+  const d=new Date(), pad=n=>String(n).padStart(2,"0"), today=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  if(!force && ls.get("dsf:sessions",{}).practice?.date===today) return;
+  const st=new Date(d.getTime()-10*60e3), en=new Date(Math.min(d.getTime()+150*60e3, new Date(today+"T23:59:00").getTime()));
+  ls.set("dsf:sessions",{practice:{date:today,start:`${pad(st.getHours())}:${pad(st.getMinutes())}`,end:`${pad(en.getHours())}:${pad(en.getMinutes())}`,title:"Practice night",venue:"Practice hall",
+    gameMins:10,rotMode:"score",open:true,courts:{1:{label:"Court 1",levels:["D-","D+"]},2:{label:"Court 2",levels:["C-","C+"]}},capacity:{1:8,2:8,3:0,4:0}}});
+  const names=["Alex Green","Bea Khan","Chris Doe","Dina Patel","Eli Brown","Fay Ahmed","Gus Lee","Hana Okoro","Ivan Silva","Jade Wu","Kofi Mensah","Lena Novak","Max Rossi","Nia Clarke","Omar Aziz","Priya Shah"];
+  const players={}, bookings={};
+  names.forEach((n,i)=>{ const id="pp"+(i+1), court=i<8?1:2, level=court===1?(i%2?"D+":"D-"):(i%2?"C+":"C-");
+    players[id]={name:n,email:"",level,gender:i%2?"F":"M"};
+    bookings["pb"+(i+1)]={sessionId:"practice",playerId:id,name:n,level,court,status:"confirmed",gender:i%2?"F":"M",ref:"PRACTICE",createdAt:new Date(d.getTime()-(20-i)*60e3).toISOString(),log:[]} });
+  ls.set("dsf:players",players); ls.set("dsf:bookings",bookings); ls.set("dsf:reception",null); ls.set("dsf:cdisplay",null);
+}
 function modeBanner(){
+  if(PRACTICE && S.loaded) return `<div class="banner warn"><div class="grow"><b>🧪 Practice mode.</b> A pretend session with 16 pretend players, happening now. Nothing here is real or saved to the club: try reception, the court display, scores and the rotation.</div><span class="row"><button class="btn small" data-practicereset="1">↺ Start again</button><a class="btn small ghost" href="./">Leave practice</a></span></div>`;
   if(Store.mode==="db" || !S.loaded) return "";
   return `<div class="banner warn"><div class="grow"><b>Preview mode.</b> Bookings are saved in this browser only. Add the Firebase settings to firebase-config.js to share bookings between players.</div></div>`;
 }
@@ -2150,6 +2168,7 @@ document.addEventListener("click", async e=>{
   if(ds.rcall){ if(ds.rcall==="0"){ S.rcAll=null; render(); return }
     const pin=prompt("Receptionist: enter the PIN to show everyone's names"); if(pin==null) return; if(!pinOk(pin,S.reception)){ toast(PIN_HELP); return }
     S.rcAll=Date.now()+3*60e3; render(); toast("Names shown for 3 minutes"); clearTimeout(S.rcAllT); S.rcAllT=setTimeout(()=>{ S.rcAll=null; render() },3*60e3+500); return }
+  if(ds.practicereset && PRACTICE){ arm(t,"Tap again to start again",()=>{ seedPractice(true); location.reload() }); return }
   if(ds.rcundo){ const b=S.bookings.find(x=>x.id===ds.rcundo); if(!b) return; const want=ls.get("dsf:rcpin",null);
     { const pin=prompt(`Organiser only: enter the PIN to undo ${b.name}'s check-in`); if(pin==null) return; if(!pinOk(pin,b.sessionId)){ toast("Wrong PIN"); return } }
     if(!await setBooking(b.id,{checkedIn:false, absent:false, inAt:"", outAt:""},"Check-in undone by the organiser.",null)) return;
@@ -2373,8 +2392,9 @@ render();
       first=false; S.uid=u?.uid||null; S.me=S.uid; S.email=u?.email||""; S.verified=!!u?.emailVerified;
       S.isAdmin = !!u && u.emailVerified && ADMINS.includes(S.email.toLowerCase()); res() }) });
   } else {
-    S.isAdmin = LOCAL; // preview: let the organiser try everything
+    S.isAdmin = LOCAL || PRACTICE; // preview and practice: the organiser can try everything
     S.me = ls.get("dsf:me", null);
+    if(PRACTICE) seedPractice();
   }
   const first={sessions:1,bookings:1,players:1,config:1,photos:1};
   const once=k=>{ if(first[k]){ delete first[k]; if(!Object.keys(first).length){ S.loaded=true;

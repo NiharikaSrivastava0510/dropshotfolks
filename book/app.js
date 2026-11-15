@@ -330,8 +330,8 @@ function rotate(ids, total, opt={}){
   const teamG = t => { const g=t.map(i=>G[i]); return g.some(x=>!x) ? "?" : g.slice().sort().join("") };
   const stylePen = (t1,t2) => { const a=teamG(t1), b=teamG(t2); if(style==="any"||a==="?"||b==="?") return 0; const same=a===b;
     // the organiser's chosen style outranks partner variety (but not equal games)
-    if(style==="fair") return same?0:600; if(style==="mixed") return (a==="FM"?0:250)+(b==="FM"?0:250)+(same?0:600);
-    if(style==="womens") return [...t1,...t2].filter(i=>G[i]==="M").length*160+(same?0:600); return 0 };
+    if(style==="fair") return same?0:2000; if(style==="mixed") return (a==="FM"?0:800)+(b==="FM"?0:800)+(same?0:2000);
+    if(style==="womens") return [...t1,...t2].filter(i=>G[i]==="M").length*500+(same?0:2000); return 0 };
   const record=(teams,g)=>{ teams.forEach(t=>pc[key(...t)]=(pc[key(...t)]||0)+1); qc[qk(teams.flat())]=(qc[qk(teams.flat())]||0)+1; mc[mk(teams)]=(mc[mk(teams)]||0)+1;
     teams[0].forEach(x=>teams[1].forEach(y=>oc[key(x,y)]=(oc[key(x,y)]||0)+1));
     teams.flat().forEach(i=>{ if(i in played){ played[i]++; prev[i]=last[i]; last[i]=g } }) };
@@ -351,14 +351,14 @@ function rotate(ids, total, opt={}){
       q.forEach(i=>{ sc += (played[i]-minP)*12000;               // equal games always come first
         if(last[i]===g-1) sc += 150;                               // back to back
         if(last[i]===g-1 && prev[i]===g-2) sc += 20000;            // never three in a row
-        if(last[i]===g-2 && prev[i]===g-3) sc += 9000 });          // after two in a row, sit out two games
+        if(last[i]===g-2 && prev[i]===g-3) sc += 3000 });          // after two in a row, sit out two games
       ids.forEach(i=>{ if(!q.includes(i)){ const rest=g-1-last[i]; if(rest>=2) sc += 200*(rest-1) } });   // sitting out too long
-      sc += 1200*(qc[qk(q)]||0);                                   // always a new group of four
+      sc += 2500*(qc[qk(q)]||0);                                   // always a new group of four
       const [a,b,c,d]=q;
       for(const o of [[[a,b],[c,d]],[[a,c],[b,d]],[[a,d],[b,c]]]){
         if(o.some(t=>partnerOf[t[0]] && partnerOf[t[0]]!==t[1])) continue;
         let t=sc;
-        o.forEach(tm=>{ if(partnerOf[tm[0]]===tm[1]) return; const k=pc[key(...tm)]||0; if(k) t += 60*k + (fresh(...tm)?300:0) });   // repeat partners
+        o.forEach(tm=>{ if(partnerOf[tm[0]]===tm[1]) return; const k=pc[key(...tm)]||0; if(k) t += 60*k + (fresh(...tm)?900:0) });   // repeat partners
         o[0].forEach(x=>o[1].forEach(y=>{ t += 25*(oc[key(x,y)]||0) }));                                                              // repeat opponents
         t += 600*(mc[mk(o)]||0);                                   // never the exact same match again
         t += stylePen(o[0],o[1]);

@@ -381,3 +381,4 @@ body.reception-on .who, body.reception-on .toprow{display:none!important}
 .cd-pg{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:8px}
 .cd-pg > span:first-of-type{flex:1 1 260px}
 .cd-pg .sc{font-family:var(--display);margin:0 6px}
+.cd-tools{opacity:.55;font-size:.8rem}.cd-tools:hover{opacity:1}

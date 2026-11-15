@@ -650,8 +650,10 @@ function viewCourtDisplay(s){
       <span class="cd-live ${r.live?"on":""}"><i aria-hidden="true"></i>${r.live?"Live":"First up"} · Game ${gi+1}</span>
       <div class="cd-match">${team(teams[0],names,0)}${vs(sc)}${team(teams[1],names,1)}</div>
       ${S.cdScores && canRun(s) && big ? scoreForm(s,c,gi,sc,"d") : ""}
-      ${big && canRun(s) ? cdPlayed(s,c,names) : ""}
-      ${big && canRun(s) ? `<details class="cd-played cd-edit" id="cde-${esc(s.id)}-${c}"><summary data-cdsum="1">✏️ Change players for a game</summary>${rotEditor(s,c,games,roster,r,true)}<p class="muted" style="font-size:.85rem;margin:6px 0 0">Organiser or host only: saving asks for the PIN or host code. The games after it are re-planned automatically.</p></details>` : ""}
+      ${big && canRun(s) && !cdUnlocked() ? `<div class="row" style="justify-content:flex-end"><button type="button" class="btn small ghost cd-tools" data-cdadmin="1">🔒 Organiser tools</button></div>` : ""}
+      ${big && canRun(s) && cdUnlocked() ? `<div class="row" style="justify-content:space-between;align-items:center"><span class="chip st-awaiting">🔓 Organiser tools open · hidden again in a few minutes</span><button type="button" class="btn small" data-cdlock="1">Done · hide</button></div>` : ""}
+      ${big && canRun(s) && cdUnlocked() ? cdPlayed(s,c,names) : ""}
+      ${big && canRun(s) && cdUnlocked() ? `<details class="cd-played cd-edit" id="cde-${esc(s.id)}-${c}"><summary data-cdsum="1">✏️ Change players for a game</summary>${rotEditor(s,c,games,roster,r,true)}<p class="muted" style="font-size:.85rem;margin:6px 0 0">The games after it are re-planned automatically.</p></details>` : ""}
       ${nx?`<div class="cd-next"><span class="cd-next-pill"><span class="bell" aria-hidden="true">🔔</span> Next up · get ready</span><div class="cd-match sm">${team(nx.teams[0],names,0)}<span class="cd-vs sm"><b>VS</b></span>${team(nx.teams[1],names,1)}</div></div>`:""}
       ${g.sit.length?`<div class="cd-rest"><span class="lbl">Resting · grab water &amp; make friends 💛</span><div class="cd-rest-list">${g.sit.map(id=>`<span>💧 ${nm(names,id)}</span>`).join("")}</div></div>`:""}
     </div></div>` };
@@ -663,6 +665,9 @@ function viewCourtDisplay(s){
     <p class="cd-hint">Swipe left or right${matchMedia("(hover:hover)").matches?", or use the ← → keys,":""} to see the other courts.</p>
   </section>`;
 }
+// organiser tools on the court display stay hidden until the PIN or host code is entered (3 minutes)
+const CD_ADMIN_MS = 180000;
+const cdUnlocked = () => !!S.cdAdminUntil && Date.now() < S.cdAdminUntil;
 // games already played on this court, with Edit and Delete for the organiser or host (needs the PIN or host code)
 function cdPlayed(s,c,names){
   const done=Object.keys(s.scores?.[c]||{}).map(Number).filter(i=>scoreOf(s,c,i)).sort((a,b)=>b-a);
@@ -671,7 +676,7 @@ function cdPlayed(s,c,names){
   return `<details class="cd-played" id="cdh-${esc(s.id)}-${c}"><summary data-cdsum="1">🕑 Played games (${done.length}) · edit or delete a score</summary><div class="cd-played-list">
     ${done.map(i=>{ const x=scoreOf(s,c,i); return `<div class="cd-pg"><b>Game ${i+1}</b><span>${pair(x.a)} <b class="sc">${x.sa}–${x.sb}</b> ${pair(x.b)}</span>
       <span class="row" style="gap:6px"><button type="button" class="btn small" data-cdedit="${esc(s.id)}|${c}|${i}">✏️ Edit</button><button type="button" class="btn small ghost danger" data-cddel="${esc(s.id)}|${c}|${i}">🗑 Delete</button></span></div>` }).join("")}
-    <p class="muted" style="font-size:.85rem;margin:0">Organiser or host only: you'll be asked for the PIN or the session's host code. Deleting a score puts that game back on court.</p></div></details>`;
+    <p class="muted" style="font-size:.85rem;margin:0">Deleting a score puts that game back on court.</p></div></details>`;
 }
 // a saved score on the court display: confetti and a quick "game done" flash
 function cdCelebrate(c,gi,sa,sb){
@@ -2220,10 +2225,13 @@ document.addEventListener("click", async e=>{
     const pin=prompt("Receptionist: enter the PIN to show everyone's names"); if(pin==null) return; if(!pinOk(pin,S.reception)){ toast(PIN_HELP); return }
     S.rcAll=Date.now()+3*60e3; render(); toast("Names shown for 3 minutes"); clearTimeout(S.rcAllT); S.rcAllT=setTimeout(()=>{ S.rcAll=null; render() },3*60e3+500); return }
   if(ds.practicereset && PRACTICE){ arm(t,"Tap again to start again",()=>{ seedPractice(true); location.reload() }); return }
+  if(ds.cdadmin){ const pin=prompt("Organiser or host: enter the PIN or host code"); if(pin==null) return; if(!pinOk(pin,S.cdisplay)){ toast(PIN_HELP); return }
+    S.cdAdminUntil=Date.now()+CD_ADMIN_MS; render(); clearTimeout(S.cdAdminT); S.cdAdminT=setTimeout(()=>{ S.cdAdminUntil=0; render() }, CD_ADMIN_MS+500); return }
+  if(ds.cdlock){ S.cdAdminUntil=0; clearTimeout(S.cdAdminT); render(); return }
   if(ds.cdedit || ds.cddel){ const [sid,cs,gs]=(ds.cdedit||ds.cddel).split("|"), c=Number(cs), gi=Number(gs), s=S.sessions.find(x=>x.id===sid); if(!s) return;
     const x=scoreOf(s,c,gi); if(!x) return;
-    const pin=prompt(`Organiser or host: enter the PIN or host code to ${ds.cdedit?"edit":"delete"} Game ${gi+1}'s score`); if(pin==null) return;
-    if(!pinOk(pin,sid)){ toast(PIN_HELP); return }
+    if(!cdUnlocked()){ const pin=prompt(`Organiser or host: enter the PIN or host code to ${ds.cdedit?"edit":"delete"} Game ${gi+1}'s score`); if(pin==null) return;
+      if(!pinOk(pin,sid)){ toast(PIN_HELP); return } }
     const {id,...body}=s, scores={...(s.scores||{})}, cs2={...(scores[c]||{})};
     if(ds.cddel){ if(!confirm(`Delete Game ${gi+1}'s score (${x.sa}–${x.sb})?`)) return; delete cs2[gi]; scores[c]=cs2; save("sessions",id,{...body,scores},`Game ${gi+1} score deleted`); return }
     const v=prompt(`New score for Game ${gi+1} (e.g. 21-15)`, `${x.sa}-${x.sb}`); if(v==null) return;
@@ -2276,7 +2284,7 @@ document.addEventListener("click", async e=>{
   if(ds.unscore){ const s=S.sessions.find(x=>x.id===ds.unscore), gi=String(ds.gi); if(!s) return;
     arm(t,"Tap again to clear",()=>{ const {id,...body}=s, scores={...(s.scores||{})}, c=Number(ds.c), cs={...(scores[c]||{})}; delete cs[gi]; scores[c]=cs;
       save("sessions",id,{...body, scores},`Game ${Number(gi)+1} score cleared`) }); return }
-  if((ds.resave||ds.rereset||ds.reall) && document.body.classList.contains("display-on")){ const sid=ds.sid||ds.reall; if(!S.rotPinOk || Date.now()-S.rotPinOk>120000){ const pin=prompt("Organiser or host: enter the PIN or host code to change players"); if(pin==null) return; if(!pinOk(pin,sid)){ toast(PIN_HELP); return } S.rotPinOk=Date.now() } }
+  if((ds.resave||ds.rereset||ds.reall) && document.body.classList.contains("display-on")){ const sid=ds.sid||ds.reall; if(!cdUnlocked() && (!S.rotPinOk || Date.now()-S.rotPinOk>120000)){ const pin=prompt("Organiser or host: enter the PIN or host code to change players"); if(pin==null) return; if(!pinOk(pin,sid)){ toast(PIN_HELP); return } S.rotPinOk=Date.now() } }
   if(ds.resave){ const s=S.sessions.find(x=>x.id===ds.sid), k=ds.resave, gi=Number(ds.gi), c=ds.c;
     const ids=[0,1,2,3].map(i=>$(`#re-${k}-${gi}-${i}`).value);
     if(new Set(ids).size!==4){ toast("Pick four different players"); return }

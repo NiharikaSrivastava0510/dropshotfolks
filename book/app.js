@@ -470,7 +470,8 @@ function checkAlerts(){
     if(prevNow && k in prevNow && prevNow[k]!==cur) changed.push({s,c,cur,games,names});
   }));
   const first=!prevNow; prevNow=now;
-  if(!first && changed.length) showAlerts(changed);
+  // no "you're on" pop-ups on phones: the court display shows who's on and who's next
+  void first; void changed;
 }
 function showAlerts(list){
   const team=(t,names)=>t.map(id=>`<span class="pl ${id===S.me?"me":""}">${avatar(id,names[id],"sm")}<span>${esc(names[id]||"Player")}</span></span>`).join("");
@@ -523,7 +524,7 @@ function cdPopNext(){
   el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); sfx("power",true);
   clearTimeout(cdPopNext.t); cdPopNext.t=setTimeout(()=>el.classList.remove("show"), CD_POP_FOR);
 }
-setInterval(nagNext, 15000);
+// the organiser wants "next up" on the court display only, not on people's phones
 setInterval(cdPopNext, CD_POP_EVERY);
 
 /* ---------- little celebrations ---------- */

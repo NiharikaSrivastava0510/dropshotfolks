@@ -307,3 +307,8 @@ body.reception-on .who, body.reception-on .toprow{display:none!important}
 .cd-pop-m i{font-style:normal;font-weight:800;color:var(--cc)}
 /* "next up" on the court display nudges every few seconds */
 @media (prefers-reduced-motion:no-preference){.cd-next:not(.later){animation:cdNudge 6s ease-in-out infinite}@keyframes cdNudge{0%,80%,100%{transform:none}85%{transform:scale(1.03)}90%{transform:scale(.99)}95%{transform:scale(1.02)}}}
+.cd-pop-row{display:grid;gap:4px;padding:12px 16px}
+.cd-pop-row.next{border-top:3px dashed var(--stk);background:color-mix(in srgb,var(--gold) 22%,var(--surface))}
+.cd-pop-lbl{font-weight:800;font-size:.95rem;letter-spacing:.06em;text-transform:uppercase}
+.cd-pop-row .cd-pop-m{padding:0}
+.cd-pop-hd{color:var(--ink)}

@@ -523,10 +523,15 @@ function cdPopNext(){
   if(!document.body.classList.contains("display-on") || !S.cdisplay) return;
   const s=S.sessions.find(x=>x.id===S.cdisplay); if(!s || !rotInfo(s).live) return;
   if(document.activeElement?.closest?.(".scorein")) return;   // someone is typing a score: don't cover it
-  const ups=nextUps(false).filter(u=>u.s.id===s.id); if(!ups.length) return;
-  const nm=(names,id)=>esc(names[id]||"Player");
+  // only the court on screen (or every court on the All courts tab): who's on now and who's next
+  const tab=S.cdTab, courts=courtsOf(s).filter(c=>tab==="all"||tab===c||!courtsOf(s).includes(tab));
+  const nm=(names,id)=>esc(names[id]||"Player"), pair=(t,names)=>t.map(id=>nm(names,id)).join(" &amp; ");
+  const rows=courts.map(c=>{ const {games,names,r}=courtPlan(s,c); if(!games.length) return null; const {cur}=courtNow(s,c,games,r), g=games[cur], nx=games[cur+1]; return g?{c,g,nx,names}:null }).filter(Boolean);
+  if(!rows.length) return;
   let el=$("#cdPop"); if(!el){ el=document.createElement("div"); el.id="cdPop"; el.className="cd-pop"; el.setAttribute("role","status"); el.setAttribute("aria-live","polite"); document.body.append(el) }
-  el.innerHTML=`<div class="cd-pop-card"><button type="button" class="cd-pop-x" data-cdpopx="1" aria-label="Close and go back to the scores">✕ Close</button><p class="cd-pop-hd">🔔 Next up · get ready!</p><div class="cd-pop-grid">${ups.map(({c,nx,names})=>`<div class="cd-pop-court" style="--cc:${CLR[c]}"><b>Court ${c}</b><div class="cd-pop-m"><span>${nx.teams[0].map(id=>nm(names,id)).join(" &amp; ")}</span><i>vs</i><span>${nx.teams[1].map(id=>nm(names,id)).join(" &amp; ")}</span></div></div>`).join("")}</div></div>`;
+  el.innerHTML=`<div class="cd-pop-card"><button type="button" class="cd-pop-x" data-cdpopx="1" aria-label="Close and go back to the scores">✕ Close</button><p class="cd-pop-hd">${rows.length===1?`Court ${rows[0].c}`:"All courts"}</p><div class="cd-pop-grid">${rows.map(({c,g,nx,names})=>`<div class="cd-pop-court" style="--cc:${CLR[c]}">${rows.length>1?`<b>Court ${c}</b>`:""}
+    <div class="cd-pop-row now"><span class="cd-pop-lbl">🏸 Now on</span><div class="cd-pop-m"><span>${pair(g.teams[0],names)}</span><i>vs</i><span>${pair(g.teams[1],names)}</span></div></div>
+    ${nx?`<div class="cd-pop-row next"><span class="cd-pop-lbl">🔔 Next up · get ready</span><div class="cd-pop-m"><span>${pair(nx.teams[0],names)}</span><i>vs</i><span>${pair(nx.teams[1],names)}</span></div></div>`:""}</div>`).join("")}</div></div>`;
   el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); sfx("power",true);
   clearTimeout(cdPopNext.t); cdPopNext.t=setTimeout(()=>el.classList.remove("show"), CD_POP_FOR);
 }

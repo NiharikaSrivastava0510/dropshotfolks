@@ -312,3 +312,52 @@ body.reception-on .who, body.reception-on .toprow{display:none!important}
 .cd-pop-lbl{font-weight:800;font-size:.95rem;letter-spacing:.06em;text-transform:uppercase}
 .cd-pop-row .cd-pop-m{padding:0}
 .cd-pop-hd{color:var(--ink)}
+/* ---------- court display: scoreboard look ---------- */
+.cd-hd{background:linear-gradient(110deg,var(--cc) 0%,color-mix(in srgb,var(--cc) 70%,#fff) 45%,var(--cc) 60%,var(--cc) 100%);background-size:250% 100%}
+@media (prefers-reduced-motion:no-preference){.cd-hd{animation:cdShine 6s linear infinite}@keyframes cdShine{from{background-position:120% 0}to{background-position:-120% 0}}}
+.cd-hd b{font-size:2.4rem;text-shadow:2px 2px 0 rgba(0,0,0,.25)}
+.cd-body{position:relative;overflow:hidden;
+  background:
+    linear-gradient(90deg,transparent calc(50% - 1px),color-mix(in srgb,var(--cc) 16%,transparent) calc(50% - 1px),color-mix(in srgb,var(--cc) 16%,transparent) calc(50% + 1px),transparent calc(50% + 1px)),
+    linear-gradient(0deg,transparent 30%,color-mix(in srgb,var(--cc) 10%,transparent) 30%,color-mix(in srgb,var(--cc) 10%,transparent) calc(30% + 2px),transparent calc(30% + 2px)),
+    color-mix(in srgb,var(--cc) 7%,var(--surface))}
+.cd-live{justify-self:start;display:inline-flex;align-items:center;gap:8px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;font-size:.95rem;background:var(--ink);color:#fff;border:2.5px solid var(--stk);border-radius:999px;padding:6px 14px 6px 10px;box-shadow:3px 3px 0 var(--stk)}
+.cd-live i{width:12px;height:12px;border-radius:50%;background:#9AA0A6}
+.cd-live.on i{background:#FF3B3B;box-shadow:0 0 0 0 rgba(255,59,59,.7)}
+@media (prefers-reduced-motion:no-preference){.cd-live.on i{animation:cdRec 1.4s ease-out infinite}@keyframes cdRec{0%{box-shadow:0 0 0 0 rgba(255,59,59,.7)}100%{box-shadow:0 0 0 12px rgba(255,59,59,0)}}}
+.cd-match{gap:18px}
+.cd-team{gap:10px;padding:16px 18px;border-radius:22px;box-shadow:5px 5px 0 var(--stk)}
+.cd-team.side0{background:color-mix(in srgb,var(--cc) 22%,#fff);transform:rotate(-.6deg)}
+.cd-team.side1{background:color-mix(in srgb,var(--gold) 30%,#fff);transform:rotate(.6deg)}
+.cd-pl{display:flex;align-items:center;gap:12px;min-width:0}
+.cd-pl > span:last-child{font-family:var(--display);font-weight:800;font-size:clamp(1.3rem,3vw,2.2rem);line-height:1.1;overflow-wrap:anywhere}
+.cd-av{width:clamp(2.4rem,4.5vw,3.4rem);height:clamp(2.4rem,4.5vw,3.4rem);border-radius:50%;flex:none;border:2.5px solid var(--stk);display:grid;place-items:center;color:#fff;font-weight:800;font-size:1.05rem;object-fit:cover}
+.cd-vs{display:grid;place-items:center;gap:2px;width:clamp(4rem,7vw,5.6rem);height:clamp(4rem,7vw,5.6rem);border-radius:50%;background:var(--ink);color:#fff;border:3px solid var(--stk);box-shadow:4px 4px 0 color-mix(in srgb,var(--cc) 70%,#000);text-align:center;line-height:1}
+.cd-vs b{font-family:var(--display);font-weight:800;font-size:clamp(1.1rem,2.2vw,1.6rem)}
+.cd-vs em{font-style:normal;font-size:1.3rem}
+@media (prefers-reduced-motion:no-preference){.cd-vs em{animation:cdShuttle 2.4s ease-in-out infinite}@keyframes cdShuttle{0%,100%{transform:translateY(0) rotate(-20deg)}50%{transform:translateY(-6px) rotate(20deg)}}}
+.cd-vs.sm{width:3rem;height:3rem;box-shadow:none;border-width:2px}
+.cd-vs.sm b{font-size:.95rem}
+.cd-match.sm .cd-team{box-shadow:3px 3px 0 var(--stk);transform:none;padding:10px 12px}
+.cd-match.sm .cd-pl > span:last-child{font-size:clamp(1rem,2vw,1.4rem)}
+.cd-match.sm .cd-av{width:2.2rem;height:2.2rem;font-size:.85rem}
+.cd-next{border:3px solid var(--stk)!important;border-radius:22px;padding:14px!important;background:color-mix(in srgb,var(--gold) 28%,var(--surface));box-shadow:5px 5px 0 var(--stk);opacity:1!important}
+@media (prefers-reduced-motion:no-preference){.cd-next:not(.later){animation:cdGlow 2.8s ease-in-out infinite}@keyframes cdGlow{0%,100%{box-shadow:5px 5px 0 var(--stk),0 0 0 0 color-mix(in srgb,var(--gold) 60%,transparent)}50%{box-shadow:5px 5px 0 var(--stk),0 0 0 8px color-mix(in srgb,var(--gold) 0%,transparent)}}}
+.cd-next-pill{justify-self:start;display:inline-flex;align-items:center;gap:8px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:.9rem;background:var(--gold);color:#2B2B2B;border:2.5px solid var(--stk);border-radius:999px;padding:5px 14px}
+@media (prefers-reduced-motion:no-preference){.cd-next-pill .bell{display:inline-block;animation:cdBell 2.5s ease-in-out infinite;transform-origin:50% 10%}@keyframes cdBell{0%,60%,100%{transform:none}65%{transform:rotate(18deg)}75%{transform:rotate(-16deg)}85%{transform:rotate(10deg)}95%{transform:rotate(-6deg)}}}
+.cd-rest{display:grid;gap:6px}
+.cd-rest-list{display:flex;flex-wrap:wrap;gap:8px}
+.cd-rest-list span{background:color-mix(in srgb,#5FB3F0 20%,var(--surface));border:2px solid var(--stk);border-radius:999px;padding:5px 12px;font-weight:700}
+.cd-grid .cd-pl > span:last-child{font-size:clamp(1rem,1.7vw,1.35rem)}
+.cd-grid .cd-av{width:2.2rem;height:2.2rem;font-size:.8rem}
+.cd-grid .cd-vs{width:3.4rem;height:3.4rem}
+.cd-grid .cd-team.side0,.cd-grid .cd-team.side1{transform:none}
+/* "game done" flash */
+.cd-flash{position:fixed;inset:0;z-index:70;display:grid;place-items:center;pointer-events:none}
+.cd-flash div{display:grid;justify-items:center;gap:6px;background:var(--ink);color:#fff;border:3px solid var(--stk);border-radius:26px;padding:22px 36px;box-shadow:8px 8px 0 var(--gold);animation:cdFlash 2.2s ease forwards}
+.cd-flash b{font-family:var(--display);font-size:clamp(2rem,5vw,3.4rem)}
+.cd-flash span{font-size:1.3rem;font-weight:700;color:var(--gold)}
+@keyframes cdFlash{0%{opacity:0;transform:scale(.6) rotate(-4deg)}15%{opacity:1;transform:scale(1.05) rotate(1deg)}25%{transform:scale(1) rotate(0)}80%{opacity:1}100%{opacity:0;transform:scale(.95)}}
+@media (max-width:640px){.cd-match{grid-template-columns:1fr;justify-items:stretch}.cd-vs{justify-self:center}.cd-team.side0,.cd-team.side1{transform:none}}
+.cd-team .cd-av{font-family:var(--body)!important;font-size:clamp(.8rem,1.3vw,1rem)!important;line-height:1;letter-spacing:-.02em}
+.cd-match.sm .cd-team .cd-av,.cd-grid .cd-team .cd-av{font-size:.78rem!important}

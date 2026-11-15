@@ -622,7 +622,8 @@ function viewReception(s){
 function viewCourtDisplay(s){
   const r=rotInfo(s), courts=courtsOf(s), tabs=[...courts,"all"], cur=tabs.includes(S.cdTab)?S.cdTab:courts[0];
   const nm=(names,id)=>esc(names[id]||S.players.find(p=>p.id===id)?.name||"Player");
-  const team=(t,names)=>`<div class="cd-team">${t.map(id=>`<span>${nm(names,id)}</span>`).join("")}</div>`;
+  const team=(t,names,side=0)=>`<div class="cd-team side${side}">${t.map(id=>`<span class="cd-pl">${avatar(id,names[id]||"Player","cd-av")}<span>${nm(names,id)}</span></span>`).join("")}</div>`;
+  const vs=sc=>`<span class="cd-vs">${sc?`<b>${sc.sa}–${sc.sb}</b>`:`<em aria-hidden="true">🏸</em><b>VS</b>`}</span>`;
   const status = r.live ? (s.rotMode==="clock"?`<span class="dot pulse"></span>Live · next game in <span class="cd" data-at="${r.at(r.idx+1).toISOString()}">–</span>`:`<span class="dot pulse"></span>Live · courts move on when the score is saved`)
     : r.free ? `🏸 Rotation finished · free play until ${esc(s.end)}` : r.done ? "Session finished" : `First game at ${hhmm(r.startT)} · starts in <span class="cd" data-at="${r.startT.toISOString()}">–</span>`;
   const court=(c,big)=>{ const {roster,games,names}=courtPlan(s,c), {cur:gi}=courtNow(s,c,games,r), g=games[gi], nx=games[gi+1], sc=scoreOf(s,c,gi);
@@ -631,11 +632,11 @@ function viewCourtDisplay(s){
       <div class="cl-names" style="justify-content:center">${courtBooked(s,c).map(b=>{ const st=b.checkedIn&&!b.outAt?"in":b.outAt?"left":""; return `<span class="cl-nm ${st}"><span>${esc(b.name)}</span>${st==="in"?" ✓":""}</span>` }).join("")}</div></div></div>`;
     const teams=sc?[sc.a,sc.b]:g.teams;
     return `<div class="cd-court ${big?"big":""}" style="--cc:${CLR[c]}">${head}<div class="cd-body">
-      <span class="lbl">${r.live?"On court now":"First up"} · Game ${gi+1}</span>
-      <div class="cd-match">${team(teams[0],names)}<i>${sc?`${sc.sa}–${sc.sb}`:"vs"}</i>${team(teams[1],names)}</div>
+      <span class="cd-live ${r.live?"on":""}"><i aria-hidden="true"></i>${r.live?"Live":"First up"} · Game ${gi+1}</span>
+      <div class="cd-match">${team(teams[0],names,0)}${vs(sc)}${team(teams[1],names,1)}</div>
       ${S.cdScores && canRun(s) && big ? scoreForm(s,c,gi,sc,"d") : ""}
-      ${nx?`<div class="cd-next"><span class="lbl">Next up · get ready</span><div class="cd-match sm">${team(nx.teams[0],names)}<i>vs</i>${team(nx.teams[1],names)}</div></div>`:""}
-      ${g.sit.length?`<p class="cd-rest"><b>Resting:</b> ${g.sit.map(id=>nm(names,id)).join(", ")}</p>`:""}
+      ${nx?`<div class="cd-next"><span class="cd-next-pill"><span class="bell" aria-hidden="true">🔔</span> Next up · get ready</span><div class="cd-match sm">${team(nx.teams[0],names,0)}<span class="cd-vs sm"><b>VS</b></span>${team(nx.teams[1],names,1)}</div></div>`:""}
+      ${g.sit.length?`<div class="cd-rest"><span class="lbl">Resting · grab some water</span><div class="cd-rest-list">${g.sit.map(id=>`<span>💧 ${nm(names,id)}</span>`).join("")}</div></div>`:""}
     </div></div>` };
   return `<section class="cdisp">
     <div class="cd-top"><div><span class="lbl">${esc(fmtLong(s.date))} · ${esc(s.start)}–${esc(s.end)}${venueOf(s).venue?` · ${esc(venueOf(s).venue)}`:""}</span><p class="cd-status">${status}</p></div>
@@ -644,6 +645,12 @@ function viewCourtDisplay(s){
     <div class="cd-stage" id="cdStage">${cur==="all"?`<div class="cd-grid">${courts.map(c=>court(c,false)).join("")}</div>`:court(cur,true)}</div>
     <p class="cd-hint">Swipe left or right${matchMedia("(hover:hover)").matches?", or use the ← → keys,":""} to see the other courts.</p>
   </section>`;
+}
+// a saved score on the court display: confetti and a quick "game done" flash
+function cdCelebrate(c,gi,sa,sb){
+  burst(["🏸","🎉","🔥","⭐","🏆","✨"]); sfx("match",true);
+  const el=document.createElement("div"); el.className="cd-flash"; el.setAttribute("role","status");
+  el.innerHTML=`<div><b>Game ${gi+1} done!</b><span>Court ${c} · ${sa}–${sb}</span></div>`; document.body.append(el); setTimeout(()=>el.remove(),2200);
 }
 function cdMove(dir){ const s=S.sessions.find(x=>x.id===S.cdisplay); if(!s) return; const tabs=[...courtsOf(s),"all"], i=Math.max(0,tabs.indexOf(S.cdTab));
   S.cdTab=tabs[(i+dir+tabs.length)%tabs.length]; ls.set("dsf:cdtab",S.cdTab); render();
@@ -2224,7 +2231,7 @@ document.addEventListener("click", async e=>{
     const g=courtPlan(s,c).games[gi], prev=scoreOf(s,c,gi); if(!g && !prev) return;
     const teams = prev ? [prev.a,prev.b] : g.teams;
     const {id,...body}=s, scores={...(s.scores||{})}; scores[c]={...(scores[c]||{}), [gi]:{a:teams[0], b:teams[1], sa, sb, at:nowIso()}};
-    save("sessions",id,{...body, scores},`Court ${c} game ${gi+1}: ${sa}–${sb} saved`); return }
+    save("sessions",id,{...body, scores},`Court ${c} game ${gi+1}: ${sa}–${sb} saved`).then(ok=>{ if(ok && document.body.classList.contains("display-on")) cdCelebrate(c,gi,sa,sb) }); return }
   if(ds.unscore){ const s=S.sessions.find(x=>x.id===ds.unscore), gi=String(ds.gi); if(!s) return;
     arm(t,"Tap again to clear",()=>{ const {id,...body}=s, scores={...(s.scores||{})}, c=Number(ds.c), cs={...(scores[c]||{})}; delete cs[gi]; scores[c]=cs;
       save("sessions",id,{...body, scores},`Game ${Number(gi)+1} score cleared`) }); return }

@@ -525,24 +525,38 @@ function nagNext(){
   el.hidden=false; try{ navigator.vibrate?.([200,100,200]) }catch{} sfx("power",true);
   clearTimeout(showAlerts.t); showAlerts.t=setTimeout(()=>{ el.hidden=true }, 20000);
 }
-function cdPopNext(force){
+// court display pop-ups: "now on" straight after a score is saved; "next up" (with a bell) halfway through each game, then every 2 minutes
+function cdPopNext(force, mode="now", only){
   if(!document.body.classList.contains("display-on") || !S.cdisplay) return;
   const s=S.sessions.find(x=>x.id===S.cdisplay); if(!s || !rotInfo(s).live) return;
   if(!force && document.activeElement?.closest?.(".scorein")) return;   // someone is typing a score: don't cover it
-  // only the court on screen (or every court on the All courts tab): who's on now and who's next
-  const tab=S.cdTab, courts=courtsOf(s).filter(c=>tab==="all"||tab===c||!courtsOf(s).includes(tab));
+  const tab=S.cdTab, courts=(only||courtsOf(s).filter(c=>tab==="all"||tab===c||!courtsOf(s).includes(tab)));
   const nm=(names,id)=>esc(names[id]||"Player"), pair=(t,names)=>t.map(id=>nm(names,id)).join(" &amp; ");
-  const rows=courts.map(c=>{ const {games,names,r}=courtPlan(s,c); if(!games.length) return null; const {cur}=courtNow(s,c,games,r), g=games[cur], nx=games[cur+1]; return g?{c,g,nx,names}:null }).filter(Boolean);
+  const rows=courts.map(c=>{ const {games,names,r}=courtPlan(s,c); if(!games.length) return null; const {cur}=courtNow(s,c,games,r), g=games[cur], nx=games[cur+1]; return (mode==="next"?nx:g)?{c,g,nx,names}:null }).filter(Boolean);
   if(!rows.length) return;
   let el=$("#cdPop"); if(!el){ el=document.createElement("div"); el.id="cdPop"; el.className="cd-pop"; el.setAttribute("role","status"); el.setAttribute("aria-live","polite"); document.body.append(el) }
-  el.innerHTML=`<div class="cd-pop-card"><button type="button" class="cd-pop-x" data-cdpopx="1" aria-label="Close and go back to the scores">✕ Close</button><p class="cd-pop-hd">${rows.length===1?`Court ${rows[0].c}`:"All courts"}</p><div class="cd-pop-grid">${rows.map(({c,g,nx,names})=>`<div class="cd-pop-court" style="--cc:${CLR[c]}">${rows.length>1?`<b>Court ${c}</b>`:""}
-    <div class="cd-pop-row now"><span class="cd-pop-lbl">🏸 Now on · go to court ${c}</span><div class="cd-pop-m"><span>${pair(g.teams[0],names)}</span><i>vs</i><span>${pair(g.teams[1],names)}</span></div></div>
-</div>`).join("")}</div></div>`;
-  el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); sfx("power",true);
-  clearTimeout(cdPopNext.t); cdPopNext.t=setTimeout(()=>el.classList.remove("show"), CD_POP_FOR);
+  const next=mode==="next";
+  el.className="cd-pop"+(next?" is-next":"");
+  el.innerHTML=`<div class="cd-pop-card"><button type="button" class="cd-pop-x" data-cdpopx="1" aria-label="Close and go back to the scores">✕ Close</button><p class="cd-pop-hd">${next?`<span class="bell" aria-hidden="true">🔔</span> Next up · get ready!`:(rows.length===1?`Court ${rows[0].c}`:"All courts")}</p><div class="cd-pop-grid">${rows.map(({c,g,nx,names})=>{ const m=next?nx:g;
+    return `<div class="cd-pop-court" style="--cc:${CLR[c]}">${rows.length>1||next?`<b>Court ${c}</b>`:""}<div class="cd-pop-row ${next?"next":"now"}"><span class="cd-pop-lbl">${next?"🔔 Next up on court "+c:"🏸 Now on · go to court "+c}</span><div class="cd-pop-m"><span>${pair(m.teams[0],names)}</span><i>vs</i><span>${pair(m.teams[1],names)}</span></div></div></div>` }).join("")}</div></div>`;
+  el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); sfx(next?"bell":"power",true);
+  clearTimeout(cdPopNext.t); cdPopNext.t=setTimeout(()=>el.classList.remove("show"), next?20000:CD_POP_FOR);
 }
-// the organiser wants "next up" on the court display only, not on people's phones
-setInterval(cdPopNext, CD_POP_EVERY);
+// when did this court's current game start? the previous game's score, else the start of the rotation
+function cdGameStart(s,c,cur,r){ if(cur>0){ const p=s.scores?.[c]?.[cur-1]; if(p?.at) return new Date(p.at).getTime() } return r.startT.getTime() }
+const NEXT_REPEAT = 120000;
+function cdNextCheck(){
+  if(!document.body.classList.contains("display-on") || !S.cdisplay) return;
+  const s=S.sessions.find(x=>x.id===S.cdisplay); if(!s || !rotInfo(s).live) return;
+  if(document.activeElement?.closest?.(".scorein") || $("#cdPop.show")) return;
+  const tab=S.cdTab, half=(Number(s.gameMins)||GAME_MINS)*60e3/2, now=Date.now(), due=[];
+  courtsOf(s).filter(c=>tab==="all"||tab===c||!courtsOf(s).includes(tab)).forEach(c=>{
+    const {games,r}=courtPlan(s,c); if(!games.length) return; const {cur}=courtNow(s,c,games,r); if(!games[cur+1]) return;
+    const start=cdGameStart(s,c,cur,r), k=s.id+"|"+c+"|"+cur, last=(S.nextPopAt ||= {})[k];
+    if(now-start>=half && (!last || now-last>=NEXT_REPEAT)){ S.nextPopAt[k]=now; due.push(c) } });
+  if(due.length) cdPopNext(false,"next",due);
+}
+setInterval(cdNextCheck, 10000);
 document.addEventListener("click", e=>{ const pop=e.target.closest?.("#cdPop.show"); if(!pop) return; e.preventDefault(); e.stopImmediatePropagation(); pop.classList.remove("show"); clearTimeout(cdPopNext.t) }, true);
 
 /* ---------- little celebrations ---------- */
@@ -652,7 +666,7 @@ function cdCelebrate(c,gi,sa,sb){
   const el=document.createElement("div"); el.className="cd-flash"; el.setAttribute("role","status");
   el.innerHTML=`<div><b>Game ${gi+1} done!</b><span>Court ${c} · ${sa}–${sb}</span></div>`; document.body.append(el); setTimeout(()=>el.remove(),2200);
   // straight after: who's on now and who's next
-  document.activeElement?.blur?.(); setTimeout(()=>cdPopNext(true), 2000);
+  document.activeElement?.blur?.(); setTimeout(()=>cdPopNext(true,"now",[c]), 2000);
 }
 function cdMove(dir){ const s=S.sessions.find(x=>x.id===S.cdisplay); if(!s) return; const tabs=[...courtsOf(s),"all"], i=Math.max(0,tabs.indexOf(S.cdTab));
   S.cdTab=tabs[(i+dir+tabs.length)%tabs.length]; ls.set("dsf:cdtab",S.cdTab); render();
@@ -840,6 +854,7 @@ function sfx(kind, force=false){
     if(kind==="win"){ tone(660,.08,.18); tone(880,.22,.3) }
     if(kind==="lose"){ tone(330,.08,.2,"triangle"); tone(220,.24,.3,"triangle") }
     if(kind==="power"){ tone(520,.06,.12,"triangle",.12); tone(700,.16,.16,"triangle",.12) }
+    if(kind==="bell"){ [0,.5].forEach(at=>{ tone(1046,at,.9,"sine",.28); tone(1568,at+.02,.7,"sine",.14); tone(2093,at+.04,.5,"triangle",.06) }) }
     if(kind==="error"){ tone(240,0,.16,"square",.13); tone(170,.19,.32,"square",.13) }
     if(kind==="match"){ [523,659,784,1046].forEach((f,k)=>tone(f,.1+k*.14,.35)) }
   }catch{}

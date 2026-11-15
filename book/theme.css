@@ -361,3 +361,16 @@ body.reception-on .who, body.reception-on .toprow{display:none!important}
 @media (max-width:640px){.cd-match{grid-template-columns:1fr;justify-items:stretch}.cd-vs{justify-self:center}.cd-team.side0,.cd-team.side1{transform:none}}
 .cd-team .cd-av{font-family:var(--body)!important;font-size:clamp(.8rem,1.3vw,1rem)!important;line-height:1;letter-spacing:-.02em}
 .cd-match.sm .cd-team .cd-av,.cd-grid .cd-team .cd-av{font-size:.78rem!important}
+/* "next up" pop-up: big, gold, bell ringing */
+.cd-pop.is-next{background:rgba(43,43,43,.7)}
+.cd-pop.is-next .cd-pop-card{background:var(--gold);box-shadow:10px 10px 0 var(--stk)}
+.cd-pop.is-next .cd-pop-hd{font-size:clamp(2.4rem,6vw,4.2rem);color:#2B2B2B}
+.cd-pop.is-next .cd-pop-court{background:var(--surface)}
+.cd-pop.is-next .cd-pop-court b{font-size:2rem}
+.cd-pop.is-next .cd-pop-row.next{background:var(--surface);border-top:0}
+.cd-pop.is-next .cd-pop-m span{font-size:clamp(1.6rem,4vw,3rem)}
+.cd-pop.is-next .cd-pop-m i{font-size:1.6rem}
+@media (prefers-reduced-motion:no-preference){
+  .cd-pop.is-next.show .cd-pop-card{animation:cdNextIn .6s cubic-bezier(.2,1.6,.4,1)}
+  @keyframes cdNextIn{0%{transform:scale(.6) rotate(-3deg)}60%{transform:scale(1.04) rotate(1deg)}100%{transform:none}}
+  .cd-pop.is-next .bell{display:inline-block;transform-origin:50% 10%;animation:cdBell 1.2s ease-in-out infinite}}

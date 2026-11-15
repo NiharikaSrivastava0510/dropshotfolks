@@ -324,9 +324,9 @@ function smartSchedule(ids, total, opt={}){
    night is planned from there, so late arrivals and people leaving are handled. Deterministic: every phone agrees. */
 function rotate(ids, total, opt={}){
   const n=ids.length; if(n<4) return [];
-  const G=opt.gender||{}, style=opt.style||"any", pairs=opt.pairs||[], fixed=opt.fixed||{};
+  const G=opt.gender||{}, style=opt.style||"any", pairs=opt.pairs||[], fixed=opt.fixed||{}, prior=opt.prior||{};
   const key=(a,b)=>a<b?a+"|"+b:b+"|"+a, played={}, last={}, prev={}, pc={}, oc={}, tc={}, pl={}, qc={}, mc={}, qk=q=>[...q].sort().join("|"), mk=o=>o.map(t=>[...t].sort().join("+")).sort().join("v");
-  ids.forEach(i=>{played[i]=0;last[i]=-9;prev[i]=-9});
+  ids.forEach(i=>{played[i]=prior[i]||0;last[i]=-9;prev[i]=-9});   // games already played on another court count too
   const quads=[]; for(let a=0;a<n;a++) for(let b=a+1;b<n;b++) for(let c=b+1;c<n;c++) for(let d=c+1;d<n;d++) quads.push([ids[a],ids[b],ids[c],ids[d]]);
   const teamG = t => { const g=t.map(i=>G[i]); return g.some(x=>!x) ? "?" : g.slice().sort().join("") };
   const stylePen = (t1,t2) => { const a=teamG(t1), b=teamG(t2); if(style==="any"||a==="?"||b==="?") return 0; const same=a===b;
@@ -387,8 +387,9 @@ function courtPlan(s,c){
   for(let i=0;i<total;i++){ const sc=scoreOf(s,c,i), o=ov[i];
     if(sc) fixed[i]={teams:[sc.a,sc.b]};
     else if(Array.isArray(o) && o.length===4 && new Set(o).size===4 && o.every(id=>ids.includes(id))) fixed[i]={teams:[[o[0],o[1]],[o[2],o[3]]], edited:true} }
-  const ck=JSON.stringify([ids,total,style,pairs,gender,fixed]);
-  const games = planCache.get(ck) || (planCache.size>200 && planCache.clear(), planCache.set(ck, rotate(ids, total, {gender, style, pairs, fixed})).get(ck));
+  const prior={}; Object.entries(s.scores||{}).forEach(([cc,gs])=>{ if(Number(cc)===c) return; Object.keys(gs||{}).forEach(i=>{ const x=scoreOf(s,Number(cc),Number(i)); if(x) [...x.a,...x.b].forEach(id=>{ if(ids.includes(id)) prior[id]=(prior[id]||0)+1 }) }) });
+  const ck=JSON.stringify([ids,total,style,pairs,gender,fixed,prior]);
+  const games = planCache.get(ck) || (planCache.size>200 && planCache.clear(), planCache.set(ck, rotate(ids, total, {gender, style, pairs, fixed, prior})).get(ck));
   return {roster, r, games, names:Object.fromEntries(roster.map(b=>[b.playerId,b.name]))} }
 
 /* ---------- Court 4 points ---------- */
@@ -650,6 +651,7 @@ function viewCourtDisplay(s){
       <div class="cd-match">${team(teams[0],names,0)}${vs(sc)}${team(teams[1],names,1)}</div>
       ${S.cdScores && canRun(s) && big ? scoreForm(s,c,gi,sc,"d") : ""}
       ${big && canRun(s) ? cdPlayed(s,c,names) : ""}
+      ${big && canRun(s) ? `<details class="cd-played cd-edit" id="cde-${esc(s.id)}-${c}"><summary data-cdsum="1">✏️ Change players for a game</summary>${rotEditor(s,c,games,roster,r,true)}<p class="muted" style="font-size:.85rem;margin:6px 0 0">Organiser or host only: saving asks for the PIN or host code. The games after it are re-planned automatically.</p></details>` : ""}
       ${nx?`<div class="cd-next"><span class="cd-next-pill"><span class="bell" aria-hidden="true">🔔</span> Next up · get ready</span><div class="cd-match sm">${team(nx.teams[0],names,0)}<span class="cd-vs sm"><b>VS</b></span>${team(nx.teams[1],names,1)}</div></div>`:""}
       ${g.sit.length?`<div class="cd-rest"><span class="lbl">Resting · grab water &amp; make friends 💛</span><div class="cd-rest-list">${g.sit.map(id=>`<span>💧 ${nm(names,id)}</span>`).join("")}</div></div>`:""}
     </div></div>` };
@@ -1152,18 +1154,19 @@ function courtLive(s,c){
   </div>`;
 }
 
-function rotEditor(s,c,games,roster,r){
+function rotEditor(s,c,games,roster,r,inner){
   if(!games.length) return "";
   const k=`${s.id}-${c}`, gi=Math.min(S.rotEdit[k] ?? courtNow(s,c,games,r).cur, games.length-1), g=games[gi], cur=g.teams.flat();
   const pick=(slot)=>`<select id="re-${k}-${gi}-${slot}" aria-label="Player ${slot+1}">${roster.map(b=>`<option value="${esc(b.playerId)}" ${b.playerId===cur[slot]?"selected":""}>${esc(b.name)}</option>`).join("")}</select>`;
   const anyEdits = Object.keys(s.rot?.[c]||{}).length>0;
-  return `<details id="red-${k}"><summary>Edit rotation</summary><div style="display:grid;gap:10px;margin-top:8px">
+  const body=`<div style="display:grid;gap:10px;margin-top:8px">
     <label class="f">Game<select data-regame="${k}">${games.map((x,i)=>`<option value="${i}" ${i===gi?"selected":""}>Game ${i+1}${scoreOf(s,c,i)?" (played)":""}${x.edited?" (edited)":""}</option>`).join("")}</select></label>
     <div class="grid2"><div style="display:grid;gap:6px"><span class="lbl">Team A</span>${pick(0)}${pick(1)}</div><div style="display:grid;gap:6px"><span class="lbl">Team B</span>${pick(2)}${pick(3)}</div></div>
     <div class="row"><button class="btn small primary" data-resave="${k}" data-sid="${esc(s.id)}" data-c="${c}" data-gi="${gi}">Save game ${gi+1}</button>
       ${g.edited?`<button class="btn small" data-rereset="${k}" data-sid="${esc(s.id)}" data-c="${c}" data-gi="${gi}">Undo edit</button>`:""}
       ${anyEdits?`<button class="btn small ghost danger" data-reall="${esc(s.id)}" data-c="${c}">Reset all edits</button>`:""}</div>
-  </div></details>`;
+  </div>`;
+  return inner ? body : `<details id="red-${k}"><summary>Edit rotation</summary>${body}</details>`;
 }
 
 /* ----- my bookings ----- */
@@ -1700,7 +1703,7 @@ async function saveSessionPatch(sid, patch, msg){ const s=S.sessions.find(x=>x.i
 document.addEventListener("click", e=>{
   if(!document.body.classList.contains("reception-on")) return;
   const el=e.target.closest("button,a,input,summary,label"); if(!el) return;
-  if(el.id==="rc-q" || Object.keys(el.dataset||{}).some(k=>/^(rc|cd)/.test(k))) return;
+  if(el.id==="rc-q" || Object.keys(el.dataset||{}).some(k=>/^(rc|cd)/.test(k)) || el.closest(".cd-edit")) return;
   if(S.cdScores && document.body.classList.contains("display-on") && (el.closest(".scorein"))) return;
   e.preventDefault(); e.stopImmediatePropagation();
 }, true);
@@ -2273,6 +2276,7 @@ document.addEventListener("click", async e=>{
   if(ds.unscore){ const s=S.sessions.find(x=>x.id===ds.unscore), gi=String(ds.gi); if(!s) return;
     arm(t,"Tap again to clear",()=>{ const {id,...body}=s, scores={...(s.scores||{})}, c=Number(ds.c), cs={...(scores[c]||{})}; delete cs[gi]; scores[c]=cs;
       save("sessions",id,{...body, scores},`Game ${Number(gi)+1} score cleared`) }); return }
+  if((ds.resave||ds.rereset||ds.reall) && document.body.classList.contains("display-on")){ const sid=ds.sid||ds.reall; if(!S.rotPinOk || Date.now()-S.rotPinOk>120000){ const pin=prompt("Organiser or host: enter the PIN or host code to change players"); if(pin==null) return; if(!pinOk(pin,sid)){ toast(PIN_HELP); return } S.rotPinOk=Date.now() } }
   if(ds.resave){ const s=S.sessions.find(x=>x.id===ds.sid), k=ds.resave, gi=Number(ds.gi), c=ds.c;
     const ids=[0,1,2,3].map(i=>$(`#re-${k}-${gi}-${i}`).value);
     if(new Set(ids).size!==4){ toast("Pick four different players"); return }

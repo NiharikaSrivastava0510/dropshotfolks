@@ -291,7 +291,11 @@ body.reception-on .who, body.reception-on .toprow{display:none!important}
 .vn-band .vn-ic{font-size:2rem}
 /* "next up" pop-up on the court display */
 .cd-pop{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:20px;background:rgba(43,43,43,.55);opacity:0;pointer-events:none;transition:opacity .3s}
-.cd-pop.show{opacity:1}
+.cd-pop.show{opacity:1;pointer-events:auto;cursor:pointer}
+.cd-pop-card{position:relative}
+.cd-pop-x{all:unset;cursor:pointer;position:absolute;top:14px;right:14px;background:var(--ink);color:var(--surface);font-weight:800;font-size:1.1rem;padding:10px 18px;border-radius:999px;border:2.5px solid var(--stk);box-shadow:3px 3px 0 var(--stk)}
+.cd-pop-x:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+@media (max-width:600px){.cd-pop-hd{padding-top:44px}}
 .cd-pop-card{width:min(1100px,100%);background:var(--surface);border:3px solid var(--stk);border-radius:28px;box-shadow:8px 8px 0 var(--stk);padding:24px;display:grid;gap:16px;transform:scale(.85);transition:transform .35s cubic-bezier(.2,1.6,.4,1)}
 .cd-pop.show .cd-pop-card{transform:none}
 .cd-pop-hd{font-family:var(--display);font-weight:800;font-size:clamp(1.8rem,4.5vw,3rem);text-align:center;margin:0}

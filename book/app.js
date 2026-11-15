@@ -522,15 +522,17 @@ function nagNext(){
 function cdPopNext(){
   if(!document.body.classList.contains("display-on") || !S.cdisplay) return;
   const s=S.sessions.find(x=>x.id===S.cdisplay); if(!s || !rotInfo(s).live) return;
+  if(document.activeElement?.closest?.(".scorein")) return;   // someone is typing a score: don't cover it
   const ups=nextUps(false).filter(u=>u.s.id===s.id); if(!ups.length) return;
   const nm=(names,id)=>esc(names[id]||"Player");
   let el=$("#cdPop"); if(!el){ el=document.createElement("div"); el.id="cdPop"; el.className="cd-pop"; el.setAttribute("role","status"); el.setAttribute("aria-live","polite"); document.body.append(el) }
-  el.innerHTML=`<div class="cd-pop-card"><p class="cd-pop-hd">🔔 Next up · get ready!</p><div class="cd-pop-grid">${ups.map(({c,nx,names})=>`<div class="cd-pop-court" style="--cc:${CLR[c]}"><b>Court ${c}</b><div class="cd-pop-m"><span>${nx.teams[0].map(id=>nm(names,id)).join(" &amp; ")}</span><i>vs</i><span>${nx.teams[1].map(id=>nm(names,id)).join(" &amp; ")}</span></div></div>`).join("")}</div></div>`;
+  el.innerHTML=`<div class="cd-pop-card"><button type="button" class="cd-pop-x" data-cdpopx="1" aria-label="Close and go back to the scores">✕ Close</button><p class="cd-pop-hd">🔔 Next up · get ready!</p><div class="cd-pop-grid">${ups.map(({c,nx,names})=>`<div class="cd-pop-court" style="--cc:${CLR[c]}"><b>Court ${c}</b><div class="cd-pop-m"><span>${nx.teams[0].map(id=>nm(names,id)).join(" &amp; ")}</span><i>vs</i><span>${nx.teams[1].map(id=>nm(names,id)).join(" &amp; ")}</span></div></div>`).join("")}</div></div>`;
   el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); sfx("power",true);
   clearTimeout(cdPopNext.t); cdPopNext.t=setTimeout(()=>el.classList.remove("show"), CD_POP_FOR);
 }
 // the organiser wants "next up" on the court display only, not on people's phones
 setInterval(cdPopNext, CD_POP_EVERY);
+document.addEventListener("click", e=>{ const pop=e.target.closest?.("#cdPop.show"); if(!pop) return; e.preventDefault(); e.stopImmediatePropagation(); pop.classList.remove("show"); clearTimeout(cdPopNext.t) }, true);
 
 /* ---------- little celebrations ---------- */
 function burst(icons=["🏸","🎉","✨","🪶","🎊","🏆"]){

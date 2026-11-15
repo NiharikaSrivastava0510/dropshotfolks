@@ -324,16 +324,17 @@ function smartSchedule(ids, total, opt={}){
 function rotate(ids, total, opt={}){
   const n=ids.length; if(n<4) return [];
   const G=opt.gender||{}, style=opt.style||"any", pairs=opt.pairs||[], fixed=opt.fixed||{};
-  const key=(a,b)=>a<b?a+"|"+b:b+"|"+a, played={}, last={}, prev={}, pc={}, oc={}, qc={}, mc={}, qk=q=>[...q].sort().join("|"), mk=o=>o.map(t=>[...t].sort().join("+")).sort().join("v");
+  const key=(a,b)=>a<b?a+"|"+b:b+"|"+a, played={}, last={}, prev={}, pc={}, oc={}, tc={}, qc={}, mc={}, qk=q=>[...q].sort().join("|"), mk=o=>o.map(t=>[...t].sort().join("+")).sort().join("v");
   ids.forEach(i=>{played[i]=0;last[i]=-9;prev[i]=-9});
   const quads=[]; for(let a=0;a<n;a++) for(let b=a+1;b<n;b++) for(let c=b+1;c<n;c++) for(let d=c+1;d<n;d++) quads.push([ids[a],ids[b],ids[c],ids[d]]);
   const teamG = t => { const g=t.map(i=>G[i]); return g.some(x=>!x) ? "?" : g.slice().sort().join("") };
   const stylePen = (t1,t2) => { const a=teamG(t1), b=teamG(t2); if(style==="any"||a==="?"||b==="?") return 0; const same=a===b;
     // the organiser's chosen style outranks partner variety (but not equal games)
-    if(style==="fair") return same?0:2000; if(style==="mixed") return (a==="FM"?0:800)+(b==="FM"?0:800)+(same?0:2000);
-    if(style==="womens") return [...t1,...t2].filter(i=>G[i]==="M").length*500+(same?0:2000); return 0 };
+    if(style==="fair") return same?0:6000; if(style==="mixed") return (a==="FM"?0:3000)+(b==="FM"?0:3000)+(same?0:6000);
+    if(style==="womens") return [...t1,...t2].filter(i=>G[i]==="M").length*1500+(same?0:6000); return 0 };
   const record=(teams,g)=>{ teams.forEach(t=>pc[key(...t)]=(pc[key(...t)]||0)+1); qc[qk(teams.flat())]=(qc[qk(teams.flat())]||0)+1; mc[mk(teams)]=(mc[mk(teams)]||0)+1;
     teams[0].forEach(x=>teams[1].forEach(y=>oc[key(x,y)]=(oc[key(x,y)]||0)+1));
+    const f4=teams.flat(); f4.forEach((x,i)=>f4.slice(i+1).forEach(y=>tc[key(x,y)]=(tc[key(x,y)]||0)+1));   // on court together (partners or opponents)
     teams.flat().forEach(i=>{ if(i in played){ played[i]++; prev[i]=last[i]; last[i]=g } }) };
   const out=[];
   for(let g=0; g<total; g++){
@@ -348,12 +349,13 @@ function rotate(ids, total, opt={}){
     for(const q of quads){
       if(q.some(i=>partnerOf[i] && !q.includes(partnerOf[i]))) continue;
       let sc=0;
-      q.forEach(i=>{ sc += (played[i]-minP)*12000;               // equal games always come first
+      q.forEach(i=>{ sc += (played[i]-minP)*30000;               // equal games
         if(last[i]===g-1) sc += 150;                               // back to back
-        if(last[i]===g-1 && prev[i]===g-2) sc += 20000;            // never three in a row
+        if(last[i]===g-1 && prev[i]===g-2) sc += 100000;           // never three in a row (comes first of all)
         if(last[i]===g-2 && prev[i]===g-3) sc += 3000 });          // after two in a row, sit out two games
       ids.forEach(i=>{ if(!q.includes(i)){ const rest=g-1-last[i]; if(rest>=2) sc += 200*(rest-1) } });   // sitting out too long
       sc += 2500*(qc[qk(q)]||0);                                   // always a new group of four
+      { let sp=0; for(let x=0;x<4;x++) for(let y=x+1;y<4;y++){ const k=tc[key(q[x],q[y])]||0; sp += 400*k*k } sc += Math.min(sp, 25000) }   // spread people out: the same faces shouldn't keep sharing a court
       const [a,b,c,d]=q;
       for(const o of [[[a,b],[c,d]],[[a,c],[b,d]],[[a,d],[b,c]]]){
         if(o.some(t=>partnerOf[t[0]] && partnerOf[t[0]]!==t[1])) continue;

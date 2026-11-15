@@ -650,7 +650,7 @@ function viewCourtDisplay(s){
       <div class="cd-match">${team(teams[0],names,0)}${vs(sc)}${team(teams[1],names,1)}</div>
       ${S.cdScores && canRun(s) && big ? scoreForm(s,c,gi,sc,"d") : ""}
       ${nx?`<div class="cd-next"><span class="cd-next-pill"><span class="bell" aria-hidden="true">🔔</span> Next up · get ready</span><div class="cd-match sm">${team(nx.teams[0],names,0)}<span class="cd-vs sm"><b>VS</b></span>${team(nx.teams[1],names,1)}</div></div>`:""}
-      ${g.sit.length?`<div class="cd-rest"><span class="lbl">Resting · grab some water</span><div class="cd-rest-list">${g.sit.map(id=>`<span>💧 ${nm(names,id)}</span>`).join("")}</div></div>`:""}
+      ${g.sit.length?`<div class="cd-rest"><span class="lbl">Resting · grab water &amp; make friends 💛</span><div class="cd-rest-list">${g.sit.map(id=>`<span>💧 ${nm(names,id)}</span>`).join("")}</div></div>`:""}
     </div></div>` };
   return `<section class="cdisp">
     <div class="cd-top"><div><span class="lbl">${esc(fmtLong(s.date))} · ${esc(s.start)}–${esc(s.end)}${venueOf(s).venue?` · ${esc(venueOf(s).venue)}`:""}</span><p class="cd-status">${status}</p></div>

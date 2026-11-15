@@ -325,7 +325,7 @@ function smartSchedule(ids, total, opt={}){
 function rotate(ids, total, opt={}){
   const n=ids.length; if(n<4) return [];
   const G=opt.gender||{}, style=opt.style||"any", pairs=opt.pairs||[], fixed=opt.fixed||{};
-  const key=(a,b)=>a<b?a+"|"+b:b+"|"+a, played={}, last={}, prev={}, pc={}, oc={}, tc={}, qc={}, mc={}, qk=q=>[...q].sort().join("|"), mk=o=>o.map(t=>[...t].sort().join("+")).sort().join("v");
+  const key=(a,b)=>a<b?a+"|"+b:b+"|"+a, played={}, last={}, prev={}, pc={}, oc={}, tc={}, pl={}, qc={}, mc={}, qk=q=>[...q].sort().join("|"), mk=o=>o.map(t=>[...t].sort().join("+")).sort().join("v");
   ids.forEach(i=>{played[i]=0;last[i]=-9;prev[i]=-9});
   const quads=[]; for(let a=0;a<n;a++) for(let b=a+1;b<n;b++) for(let c=b+1;c<n;c++) for(let d=c+1;d<n;d++) quads.push([ids[a],ids[b],ids[c],ids[d]]);
   const teamG = t => { const g=t.map(i=>G[i]); return g.some(x=>!x) ? "?" : g.slice().sort().join("") };
@@ -333,7 +333,7 @@ function rotate(ids, total, opt={}){
     // the organiser's chosen style outranks partner variety (but not equal games)
     if(style==="fair") return same?0:6000; if(style==="mixed") return (a==="FM"?0:3000)+(b==="FM"?0:3000)+(same?0:6000);
     if(style==="womens") return [...t1,...t2].filter(i=>G[i]==="M").length*1500+(same?0:6000); return 0 };
-  const record=(teams,g)=>{ teams.forEach(t=>pc[key(...t)]=(pc[key(...t)]||0)+1); qc[qk(teams.flat())]=(qc[qk(teams.flat())]||0)+1; mc[mk(teams)]=(mc[mk(teams)]||0)+1;
+  const record=(teams,g)=>{ teams.forEach(t=>{ pc[key(...t)]=(pc[key(...t)]||0)+1; pl[key(...t)]=g }); qc[qk(teams.flat())]=(qc[qk(teams.flat())]||0)+1; mc[mk(teams)]=(mc[mk(teams)]||0)+1;
     teams[0].forEach(x=>teams[1].forEach(y=>oc[key(x,y)]=(oc[key(x,y)]||0)+1));
     const f4=teams.flat(); f4.forEach((x,i)=>f4.slice(i+1).forEach(y=>tc[key(x,y)]=(tc[key(x,y)]||0)+1));   // on court together (partners or opponents)
     teams.flat().forEach(i=>{ if(i in played){ played[i]++; prev[i]=last[i]; last[i]=g } }) };
@@ -361,7 +361,7 @@ function rotate(ids, total, opt={}){
       for(const o of [[[a,b],[c,d]],[[a,c],[b,d]],[[a,d],[b,c]]]){
         if(o.some(t=>partnerOf[t[0]] && partnerOf[t[0]]!==t[1])) continue;
         let t=sc;
-        o.forEach(tm=>{ if(partnerOf[tm[0]]===tm[1]) return; const k=pc[key(...tm)]||0; if(k) t += 60*k + (fresh(...tm)?900:0) });   // repeat partners
+        o.forEach(tm=>{ if(partnerOf[tm[0]]===tm[1]) return; const k=pc[key(...tm)]||0; if(k) t += 60*k + (fresh(...tm)?900:0) + (pl[key(...tm)]===g-1?4000:pl[key(...tm)]===g-2?1500:0) });   // if a partner must repeat, never the one from the last game   // repeat partners
         o[0].forEach(x=>o[1].forEach(y=>{ t += 25*(oc[key(x,y)]||0) }));                                                              // repeat opponents
         t += 600*(mc[mk(o)]||0);                                   // never the exact same match again
         { const ga=teamG(o[0]), gb=teamG(o[1]); if((ga==="FF"&&gb==="MM")||(ga==="MM"&&gb==="FF")) t += 50000 }   // two women and two men: always mixed partners, never women v men
@@ -649,6 +649,7 @@ function viewCourtDisplay(s){
       <span class="cd-live ${r.live?"on":""}"><i aria-hidden="true"></i>${r.live?"Live":"First up"} · Game ${gi+1}</span>
       <div class="cd-match">${team(teams[0],names,0)}${vs(sc)}${team(teams[1],names,1)}</div>
       ${S.cdScores && canRun(s) && big ? scoreForm(s,c,gi,sc,"d") : ""}
+      ${big && canRun(s) ? cdPlayed(s,c,names) : ""}
       ${nx?`<div class="cd-next"><span class="cd-next-pill"><span class="bell" aria-hidden="true">🔔</span> Next up · get ready</span><div class="cd-match sm">${team(nx.teams[0],names,0)}<span class="cd-vs sm"><b>VS</b></span>${team(nx.teams[1],names,1)}</div></div>`:""}
       ${g.sit.length?`<div class="cd-rest"><span class="lbl">Resting · grab water &amp; make friends 💛</span><div class="cd-rest-list">${g.sit.map(id=>`<span>💧 ${nm(names,id)}</span>`).join("")}</div></div>`:""}
     </div></div>` };
@@ -659,6 +660,16 @@ function viewCourtDisplay(s){
     <div class="cd-stage" id="cdStage">${cur==="all"?`<div class="cd-grid">${courts.map(c=>court(c,false)).join("")}</div>`:court(cur,true)}</div>
     <p class="cd-hint">Swipe left or right${matchMedia("(hover:hover)").matches?", or use the ← → keys,":""} to see the other courts.</p>
   </section>`;
+}
+// games already played on this court, with Edit and Delete for the organiser or host (needs the PIN or host code)
+function cdPlayed(s,c,names){
+  const done=Object.keys(s.scores?.[c]||{}).map(Number).filter(i=>scoreOf(s,c,i)).sort((a,b)=>b-a);
+  if(!done.length) return "";
+  const nm=id=>esc(names[id]||S.players.find(p=>p.id===id)?.name||"Player"), pair=t=>t.map(nm).join(" &amp; ");
+  return `<details class="cd-played" id="cdh-${esc(s.id)}-${c}"><summary data-cdsum="1">🕑 Played games (${done.length}) · edit or delete a score</summary><div class="cd-played-list">
+    ${done.map(i=>{ const x=scoreOf(s,c,i); return `<div class="cd-pg"><b>Game ${i+1}</b><span>${pair(x.a)} <b class="sc">${x.sa}–${x.sb}</b> ${pair(x.b)}</span>
+      <span class="row" style="gap:6px"><button type="button" class="btn small" data-cdedit="${esc(s.id)}|${c}|${i}">✏️ Edit</button><button type="button" class="btn small ghost danger" data-cddel="${esc(s.id)}|${c}|${i}">🗑 Delete</button></span></div>` }).join("")}
+    <p class="muted" style="font-size:.85rem;margin:0">Organiser or host only: you'll be asked for the PIN or the session's host code. Deleting a score puts that game back on court.</p></div></details>`;
 }
 // a saved score on the court display: confetti and a quick "game done" flash
 function cdCelebrate(c,gi,sa,sb){
@@ -2206,6 +2217,16 @@ document.addEventListener("click", async e=>{
     const pin=prompt("Receptionist: enter the PIN to show everyone's names"); if(pin==null) return; if(!pinOk(pin,S.reception)){ toast(PIN_HELP); return }
     S.rcAll=Date.now()+3*60e3; render(); toast("Names shown for 3 minutes"); clearTimeout(S.rcAllT); S.rcAllT=setTimeout(()=>{ S.rcAll=null; render() },3*60e3+500); return }
   if(ds.practicereset && PRACTICE){ arm(t,"Tap again to start again",()=>{ seedPractice(true); location.reload() }); return }
+  if(ds.cdedit || ds.cddel){ const [sid,cs,gs]=(ds.cdedit||ds.cddel).split("|"), c=Number(cs), gi=Number(gs), s=S.sessions.find(x=>x.id===sid); if(!s) return;
+    const x=scoreOf(s,c,gi); if(!x) return;
+    const pin=prompt(`Organiser or host: enter the PIN or host code to ${ds.cdedit?"edit":"delete"} Game ${gi+1}'s score`); if(pin==null) return;
+    if(!pinOk(pin,sid)){ toast(PIN_HELP); return }
+    const {id,...body}=s, scores={...(s.scores||{})}, cs2={...(scores[c]||{})};
+    if(ds.cddel){ if(!confirm(`Delete Game ${gi+1}'s score (${x.sa}–${x.sb})?`)) return; delete cs2[gi]; scores[c]=cs2; save("sessions",id,{...body,scores},`Game ${gi+1} score deleted`); return }
+    const v=prompt(`New score for Game ${gi+1} (e.g. 21-15)`, `${x.sa}-${x.sb}`); if(v==null) return;
+    const m=String(v).match(/(\d{1,2})\D+(\d{1,2})/); const sa=m?Number(m[1]):NaN, sb=m?Number(m[2]):NaN;
+    if(!m || sa>30 || sb>30 || sa===sb){ toast("Type two different scores from 0 to 30, like 21-15"); return }
+    cs2[gi]={...x, sa, sb, at:x.at||nowIso()}; scores[c]=cs2; save("sessions",id,{...body,scores},`Game ${gi+1} score changed to ${sa}–${sb}`); return }
   if(ds.rcundo){ const b=S.bookings.find(x=>x.id===ds.rcundo); if(!b) return; const want=ls.get("dsf:rcpin",null);
     { const pin=prompt(`Organiser only: enter the PIN to undo ${b.name}'s check-in`); if(pin==null) return; if(!pinOk(pin,b.sessionId)){ toast("Wrong PIN"); return } }
     if(!await setBooking(b.id,{checkedIn:false, absent:false, inAt:"", outAt:""},"Check-in undone by the organiser.",null)) return;

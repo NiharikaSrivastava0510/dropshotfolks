@@ -374,3 +374,10 @@ body.reception-on .who, body.reception-on .toprow{display:none!important}
   .cd-pop.is-next.show .cd-pop-card{animation:cdNextIn .6s cubic-bezier(.2,1.6,.4,1)}
   @keyframes cdNextIn{0%{transform:scale(.6) rotate(-3deg)}60%{transform:scale(1.04) rotate(1deg)}100%{transform:none}}
   .cd-pop.is-next .bell{display:inline-block;transform-origin:50% 10%;animation:cdBell 1.2s ease-in-out infinite}}
+/* played games on the court display, with edit and delete */
+.cd-played{border:2px dashed var(--stk);border-radius:16px;padding:8px 12px;background:var(--surface)}
+.cd-played summary{cursor:pointer;font-weight:700}
+.cd-played-list{display:grid;gap:8px;margin-top:8px}
+.cd-pg{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:8px}
+.cd-pg > span:first-of-type{flex:1 1 260px}
+.cd-pg .sc{font-family:var(--display);margin:0 6px}

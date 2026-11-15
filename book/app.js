@@ -314,13 +314,13 @@ function smartSchedule(ids, total, opt={}){
    1. everyone gets the same number of games;
    2. nobody plays back to back while someone else could play instead, never three in a row, and nobody sits out long;
    3. nobody partners the same person again until they've partnered everyone else on the court (fixed partners excepted);
-   4. opponents are mixed up too; and the court's game style (mixed, women's, fair) is followed where genders are known.
+   4. every game is a new group of four, and opponents are mixed up too; and the court's game style (mixed, women's, fair) is followed where genders are known.
    Games that already have a score (or that the organiser edited) are kept exactly as played, and the rest of the
    night is planned from there, so late arrivals and people leaving are handled. Deterministic: every phone agrees. */
 function rotate(ids, total, opt={}){
   const n=ids.length; if(n<4) return [];
   const G=opt.gender||{}, style=opt.style||"any", pairs=opt.pairs||[], fixed=opt.fixed||{};
-  const key=(a,b)=>a<b?a+"|"+b:b+"|"+a, played={}, last={}, prev={}, pc={}, oc={};
+  const key=(a,b)=>a<b?a+"|"+b:b+"|"+a, played={}, last={}, prev={}, pc={}, oc={}, qc={}, mc={}, qk=q=>[...q].sort().join("|"), mk=o=>o.map(t=>[...t].sort().join("+")).sort().join("v");
   ids.forEach(i=>{played[i]=0;last[i]=-9;prev[i]=-9});
   const quads=[]; for(let a=0;a<n;a++) for(let b=a+1;b<n;b++) for(let c=b+1;c<n;c++) for(let d=c+1;d<n;d++) quads.push([ids[a],ids[b],ids[c],ids[d]]);
   const teamG = t => { const g=t.map(i=>G[i]); return g.some(x=>!x) ? "?" : g.slice().sort().join("") };
@@ -328,7 +328,7 @@ function rotate(ids, total, opt={}){
     // the organiser's chosen style outranks partner variety (but not equal games)
     if(style==="fair") return same?0:600; if(style==="mixed") return (a==="FM"?0:250)+(b==="FM"?0:250)+(same?0:600);
     if(style==="womens") return [...t1,...t2].filter(i=>G[i]==="M").length*160+(same?0:600); return 0 };
-  const record=(teams,g)=>{ teams.forEach(t=>pc[key(...t)]=(pc[key(...t)]||0)+1);
+  const record=(teams,g)=>{ teams.forEach(t=>pc[key(...t)]=(pc[key(...t)]||0)+1); qc[qk(teams.flat())]=(qc[qk(teams.flat())]||0)+1; mc[mk(teams)]=(mc[mk(teams)]||0)+1;
     teams[0].forEach(x=>teams[1].forEach(y=>oc[key(x,y)]=(oc[key(x,y)]||0)+1));
     teams.flat().forEach(i=>{ if(i in played){ played[i]++; prev[i]=last[i]; last[i]=g } }) };
   const out=[];
@@ -344,16 +344,18 @@ function rotate(ids, total, opt={}){
     for(const q of quads){
       if(q.some(i=>partnerOf[i] && !q.includes(partnerOf[i]))) continue;
       let sc=0;
-      q.forEach(i=>{ sc += (played[i]-minP)*400;                 // equal games
+      q.forEach(i=>{ sc += (played[i]-minP)*6000;                // equal games always come first
         if(last[i]===g-1) sc += 150;                               // back to back
         if(last[i]===g-1 && prev[i]===g-2) sc += 600 });           // three in a row
       ids.forEach(i=>{ if(!q.includes(i)){ const rest=g-1-last[i]; if(rest>=2) sc += 200*(rest-1) } });   // sitting out too long
+      sc += 1200*(qc[qk(q)]||0);                                   // always a new group of four
       const [a,b,c,d]=q;
       for(const o of [[[a,b],[c,d]],[[a,c],[b,d]],[[a,d],[b,c]]]){
         if(o.some(t=>partnerOf[t[0]] && partnerOf[t[0]]!==t[1])) continue;
         let t=sc;
         o.forEach(tm=>{ if(partnerOf[tm[0]]===tm[1]) return; const k=pc[key(...tm)]||0; if(k) t += 60*k + (fresh(...tm)?300:0) });   // repeat partners
-        o[0].forEach(x=>o[1].forEach(y=>{ t += 8*(oc[key(x,y)]||0) }));                                                               // repeat opponents
+        o[0].forEach(x=>o[1].forEach(y=>{ t += 25*(oc[key(x,y)]||0) }));                                                              // repeat opponents
+        t += 600*(mc[mk(o)]||0);                                   // never the exact same match again
         t += stylePen(o[0],o[1]);
         if(t<bs){ bs=t; best=o }
       }
@@ -486,6 +488,43 @@ function showAlerts(list){
   el.hidden=false; try{ navigator.vibrate?.([200,100,200]) }catch{}
   clearTimeout(showAlerts.t); showAlerts.t=setTimeout(()=>{ el.hidden=true }, 25000);
 }
+
+/* ---------- "next up" keeps popping up during each game ---------- */
+// on a player's phone: every 2 minutes while they're next, a "get ready" pop-up (with a buzz)
+// on the court display: every minute, a full-screen "Next up" card for every court, for 12 seconds
+const NAG_MS = 120000, CD_POP_EVERY = 60000, CD_POP_FOR = 12000;
+function nextUps(onlyMe){
+  const list=[];
+  S.sessions.filter(s=>rotInfo(s).live).forEach(s=>courtsOf(s).forEach(c=>{
+    const {games,names,r}=courtPlan(s,c); if(!games.length) return;
+    const {cur}=courtNow(s,c,games,r), nx=games[cur+1]; if(!nx) return;
+    if(onlyMe && (!nx.teams.flat().includes(S.me) || games[cur].teams.flat().includes(S.me))) return;
+    list.push({s,c,cur,nx,names});
+  }));
+  return list;
+}
+function nagNext(){
+  if(!S.loaded || document.body.classList.contains("reception-on") || !S.me) return;
+  const due=nextUps(true).filter(({s,c,cur})=>{ const k=s.id+"|"+c+"|"+cur; if(S.nag?.[k] && Date.now()-S.nag[k]<NAG_MS) return false; (S.nag ||= {})[k]=Date.now(); return true });
+  if(!due.length) return;
+  const team=(t,names)=>t.map(id=>`<span class="pl ${id===S.me?"me":""}">${avatar(id,names[id],"sm")}<span>${esc(names[id]||"Player")}</span></span>`).join("");
+  const el=$("#alert"); if(!el) return;
+  el.querySelector(".al-body").innerHTML = due.map(({c,nx,names})=>`<div class="al-me"><b>🔔 Get ready · you're next on Court ${c}</b><div class="al-match"><div>${team(nx.teams[0],names)}</div><i>vs</i><div>${team(nx.teams[1],names)}</div></div></div>`).join("");
+  el.hidden=false; try{ navigator.vibrate?.([200,100,200]) }catch{} sfx("power",true);
+  clearTimeout(showAlerts.t); showAlerts.t=setTimeout(()=>{ el.hidden=true }, 20000);
+}
+function cdPopNext(){
+  if(!document.body.classList.contains("display-on") || !S.cdisplay) return;
+  const s=S.sessions.find(x=>x.id===S.cdisplay); if(!s || !rotInfo(s).live) return;
+  const ups=nextUps(false).filter(u=>u.s.id===s.id); if(!ups.length) return;
+  const nm=(names,id)=>esc(names[id]||"Player");
+  let el=$("#cdPop"); if(!el){ el=document.createElement("div"); el.id="cdPop"; el.className="cd-pop"; el.setAttribute("role","status"); el.setAttribute("aria-live","polite"); document.body.append(el) }
+  el.innerHTML=`<div class="cd-pop-card"><p class="cd-pop-hd">🔔 Next up · get ready!</p><div class="cd-pop-grid">${ups.map(({c,nx,names})=>`<div class="cd-pop-court" style="--cc:${CLR[c]}"><b>Court ${c}</b><div class="cd-pop-m"><span>${nx.teams[0].map(id=>nm(names,id)).join(" &amp; ")}</span><i>vs</i><span>${nx.teams[1].map(id=>nm(names,id)).join(" &amp; ")}</span></div></div>`).join("")}</div></div>`;
+  el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); sfx("power",true);
+  clearTimeout(cdPopNext.t); cdPopNext.t=setTimeout(()=>el.classList.remove("show"), CD_POP_FOR);
+}
+setInterval(nagNext, 15000);
+setInterval(cdPopNext, CD_POP_EVERY);
 
 /* ---------- little celebrations ---------- */
 function burst(icons=["🏸","🎉","✨","🪶","🎊","🏆"]){

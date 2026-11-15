@@ -289,3 +289,17 @@ body.reception-on .who, body.reception-on .toprow{display:none!important}
 .vn-policy{border:2px dashed var(--stk);border-radius:16px;padding:12px 14px;font-weight:600}
 @media (prefers-reduced-motion:no-preference){.vn-card,.vn-contact,.vn-pay{animation:lgIn .4s ease-out both}.vn-card:nth-child(2){animation-delay:.06s}.vn-contact{animation-delay:.1s}.vn-pay{animation-delay:.15s}}
 .vn-band .vn-ic{font-size:2rem}
+/* "next up" pop-up on the court display */
+.cd-pop{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:20px;background:rgba(43,43,43,.55);opacity:0;pointer-events:none;transition:opacity .3s}
+.cd-pop.show{opacity:1}
+.cd-pop-card{width:min(1100px,100%);background:var(--surface);border:3px solid var(--stk);border-radius:28px;box-shadow:8px 8px 0 var(--stk);padding:24px;display:grid;gap:16px;transform:scale(.85);transition:transform .35s cubic-bezier(.2,1.6,.4,1)}
+.cd-pop.show .cd-pop-card{transform:none}
+.cd-pop-hd{font-family:var(--display);font-weight:800;font-size:clamp(1.8rem,4.5vw,3rem);text-align:center;margin:0}
+.cd-pop-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:14px}
+.cd-pop-court{border:3px solid var(--stk);border-radius:20px;overflow:hidden;background:color-mix(in srgb,var(--cc) 10%,var(--surface))}
+.cd-pop-court b{display:block;background:var(--cc);color:#fff;font-family:var(--display);font-size:1.6rem;padding:8px 16px;border-bottom:3px solid var(--stk)}
+.cd-pop-m{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;padding:14px 16px}
+.cd-pop-m span{font-family:var(--display);font-weight:800;font-size:clamp(1.1rem,2.4vw,1.7rem);line-height:1.15}
+.cd-pop-m i{font-style:normal;font-weight:800;color:var(--cc)}
+/* "next up" on the court display nudges every few seconds */
+@media (prefers-reduced-motion:no-preference){.cd-next:not(.later){animation:cdNudge 6s ease-in-out infinite}@keyframes cdNudge{0%,80%,100%{transform:none}85%{transform:scale(1.03)}90%{transform:scale(.99)}95%{transform:scale(1.02)}}}

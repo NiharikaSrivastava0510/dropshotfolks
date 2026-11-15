@@ -372,12 +372,14 @@ function courtPlan(s,c){
   const pairs=(s.pairs||[]).filter(p=>ids.includes(p.a)&&ids.includes(p.b));
   ids.forEach((a,i)=>ids.slice(i+1).forEach(b=>{ if(mates(a,b) && !pairs.some(p=>[p.a,p.b].includes(a)||[p.a,p.b].includes(b))) pairs.push({a,b}) }));
   // games already played (scored) or edited by the organiser stay as they are
+  // games move on when a score is saved, so a fast court must never run out: always plan at least 6 games past the last score
+  const scored=Object.keys(s.scores?.[c]||{}).map(Number).filter(i=>scoreOf(s,c,i)), total=s.rotMode==="clock" ? r.total : Math.max(r.total, (scored.length?Math.max(...scored):-1)+7);
   const fixed={};
-  for(let i=0;i<r.total;i++){ const sc=scoreOf(s,c,i), o=ov[i];
+  for(let i=0;i<total;i++){ const sc=scoreOf(s,c,i), o=ov[i];
     if(sc) fixed[i]={teams:[sc.a,sc.b]};
     else if(Array.isArray(o) && o.length===4 && new Set(o).size===4 && o.every(id=>ids.includes(id))) fixed[i]={teams:[[o[0],o[1]],[o[2],o[3]]], edited:true} }
-  const ck=JSON.stringify([ids,r.total,style,pairs,gender,fixed]);
-  const games = planCache.get(ck) || (planCache.size>200 && planCache.clear(), planCache.set(ck, rotate(ids, r.total, {gender, style, pairs, fixed})).get(ck));
+  const ck=JSON.stringify([ids,total,style,pairs,gender,fixed]);
+  const games = planCache.get(ck) || (planCache.size>200 && planCache.clear(), planCache.set(ck, rotate(ids, total, {gender, style, pairs, fixed})).get(ck));
   return {roster, r, games, names:Object.fromEntries(roster.map(b=>[b.playerId,b.name]))} }
 
 /* ---------- Court 4 points ---------- */

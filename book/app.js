@@ -625,7 +625,7 @@ function viewCourtDisplay(s){
   const team=(t,names)=>`<div class="cd-team">${t.map(id=>`<span>${nm(names,id)}</span>`).join("")}</div>`;
   const status = r.live ? (s.rotMode==="clock"?`<span class="dot pulse"></span>Live · next game in <span class="cd" data-at="${r.at(r.idx+1).toISOString()}">–</span>`:`<span class="dot pulse"></span>Live · courts move on when the score is saved`)
     : r.free ? `🏸 Rotation finished · free play until ${esc(s.end)}` : r.done ? "Session finished" : `First game at ${hhmm(r.startT)} · starts in <span class="cd" data-at="${r.startT.toISOString()}">–</span>`;
-  const court=(c,big)=>{ const {roster,games,names}=courtPlan(s,c), {cur:gi}=courtNow(s,c,games,r), g=games[gi], nx=games[gi+1], nx2=games[gi+2], sc=scoreOf(s,c,gi);
+  const court=(c,big)=>{ const {roster,games,names}=courtPlan(s,c), {cur:gi}=courtNow(s,c,games,r), g=games[gi], nx=games[gi+1], sc=scoreOf(s,c,gi);
     const head=`<div class="cd-hd" style="--cc:${CLR[c]}"><b>Court ${c}</b><span>${esc(courtName(s,c))} ${courtChips(s,c)}</span><span class="cd-pill">${roster.length} here · ${courtBooked(s,c).length} booked</span></div>`;
     if(!g) return `<div class="cd-court ${big?"big":""}" style="--cc:${CLR[c]}">${head}<div class="cd-body"><p class="cd-empty">Rotation starts once 4 players have checked in at reception · ${roster.length} here so far</p>
       <div class="cl-names" style="justify-content:center">${courtBooked(s,c).map(b=>{ const st=b.checkedIn&&!b.outAt?"in":b.outAt?"left":""; return `<span class="cl-nm ${st}"><span>${esc(b.name)}</span>${st==="in"?" ✓":""}</span>` }).join("")}</div></div></div>`;
@@ -635,7 +635,6 @@ function viewCourtDisplay(s){
       <div class="cd-match">${team(teams[0],names)}<i>${sc?`${sc.sa}–${sc.sb}`:"vs"}</i>${team(teams[1],names)}</div>
       ${S.cdScores && canRun(s) && big ? scoreForm(s,c,gi,sc,"d") : ""}
       ${nx?`<div class="cd-next"><span class="lbl">Next up · get ready</span><div class="cd-match sm">${team(nx.teams[0],names)}<i>vs</i>${team(nx.teams[1],names)}</div></div>`:""}
-      ${big&&nx2?`<div class="cd-next later"><span class="lbl">After that</span><div class="cd-match sm">${team(nx2.teams[0],names)}<i>vs</i>${team(nx2.teams[1],names)}</div></div>`:""}
       ${g.sit.length?`<p class="cd-rest"><b>Resting:</b> ${g.sit.map(id=>nm(names,id)).join(", ")}</p>`:""}
     </div></div>` };
   return `<section class="cdisp">

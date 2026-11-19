@@ -2410,7 +2410,19 @@ document.addEventListener("change", async e=>{
     if(await savePlayer({...p, remind:next})) toast(t.checked?"Reminder on. Add it to your calendar below.":"Reminder off"); return }
   if(t.dataset.status){ const st=t.value; setBooking(t.dataset.status,{status:st},`Status set to ${STATUS[st]?.label||st} by the organiser.`,"Status updated"); return }
   if(t.dataset.regame){ S.rotEdit[t.dataset.regame]=Number(t.value); render(); return }
-  if(t.dataset.court){ const n=Number(t.value); setBooking(t.dataset.court,{court:n},`Moved to Court ${n} by the organiser.`,`Moved to Court ${n}`); return }
+  if(t.dataset.court){ const n=Number(t.value), b=S.bookings.find(x=>x.id===t.dataset.court);
+    // moving someone mid-session: lock the game on now on both courts first, so only the later games change
+    const s=b && S.sessions.find(x=>x.id===b.sessionId);
+    if(s && S.isAdmin && rotInfo(s).on && b.court!==n){
+      const rot={...(s.rot||{})}; let locked=0;
+      for(const c of [b.court,n]){ const {games,r}=courtPlan(s,c); if(!games.length) continue; const {cur}=courtNow(s,c,games,r), g=games[cur];
+        if(!g || scoreOf(s,c,cur) || g.edited) continue;
+        if(c===b.court && g.teams.flat().includes(b.playerId) && !confirm(`${b.name} is playing the game on now on Court ${c}. Move them anyway? That game will be re-planned without them.`)){ t.value=String(b.court); return }
+        if(c===b.court && g.teams.flat().includes(b.playerId)) continue;
+        rot[c]={...(rot[c]||{}), [cur]:g.teams.flat()}; locked++ }
+      if(locked){ const {id,...body}=s; await save("sessions",id,{...body, rot}); s.rot=rot }
+    }
+    setBooking(t.dataset.court,{court:n},`Moved to Court ${n} by the organiser.`,`Moved to Court ${n}`); return }
   if(t.dataset.gamemins){ const s=S.sessions.find(x=>x.id===t.dataset.gamemins); const {id,...body}=s; save("sessions",id,{...body,gameMins:Number(t.value)},"Game length updated"); return }
 });
 document.addEventListener("submit", async e=>{

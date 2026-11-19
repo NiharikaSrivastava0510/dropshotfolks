@@ -655,7 +655,7 @@ function viewCourtDisplay(s){
       ${big && canRun(s) && cdUnlocked() ? cdPlayed(s,c,names) : ""}
       ${big && canRun(s) && cdUnlocked() ? `<details class="cd-played cd-edit" id="cde-${esc(s.id)}-${c}"><summary data-cdsum="1">✏️ Change players for a game</summary>${rotEditor(s,c,games,roster,r,true)}<p class="muted" style="font-size:.85rem;margin:6px 0 0">The games after it are re-planned automatically.</p></details>` : ""}
       ${nx?`<div class="cd-next"><span class="cd-next-pill"><span class="bell" aria-hidden="true">🔔</span> Next up · get ready</span><div class="cd-match sm">${team(nx.teams[0],names,0)}<span class="cd-vs sm"><b>VS</b></span>${team(nx.teams[1],names,1)}</div></div>`:""}
-      ${g.sit.length?`<div class="cd-rest"><span class="lbl">Resting · grab water &amp; make friends 💛</span><div class="cd-rest-list">${g.sit.map(id=>`<span>💧 ${nm(names,id)}</span>`).join("")}</div></div>`:""}
+      ${waitList(g.sit,games,gi,names,nm)}
     </div></div>` };
   return `<section class="cdisp">
     <div class="cd-top"><div><span class="lbl">${esc(fmtLong(s.date))} · ${esc(s.start)}–${esc(s.end)}${venueOf(s).venue?` · ${esc(venueOf(s).venue)}`:""}</span><p class="cd-status">${status}</p></div>
@@ -664,6 +664,14 @@ function viewCourtDisplay(s){
     <div class="cd-stage" id="cdStage">${cur==="all"?`<div class="cd-grid">${courts.map(c=>court(c,false)).join("")}</div>`:court(cur,true)}</div>
     <p class="cd-hint">Swipe left or right${matchMedia("(hover:hover)").matches?", or use the ← → keys,":""} to see the other courts.</p>
   </section>`;
+}
+// separate waiting list on the court display: everyone resting, in the order they go back on
+function waitList(sit,games,gi,names,nm){
+  if(!sit.length) return "";
+  const when=id=>{ for(let j=gi+1;j<games.length;j++) if(games[j].teams.flat().includes(id)) return j-gi; return 99 };
+  const q=sit.map(id=>({id,k:when(id)})).sort((a,b)=>a.k-b.k);
+  const lab=k=>k===1?"Next game":k===99?"Waiting":`In ${k} games`;
+  return `<div class="cd-rest cd-wait"><span class="lbl">⏳ Waiting list · grab water &amp; make friends 💛</span><ol class="cd-wait-list">${q.map((x,i)=>`<li class="${x.k===1?"soon":""}"><b class="n">${i+1}</b><span class="who">${nm(names,x.id)}</span><span class="when">${lab(x.k)}</span></li>`).join("")}</ol></div>`;
 }
 // organiser tools on the court display stay hidden until the PIN or host code is entered (3 minutes)
 const CD_ADMIN_MS = 180000;

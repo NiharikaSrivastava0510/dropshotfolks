@@ -382,3 +382,12 @@ body.reception-on .who, body.reception-on .toprow{display:none!important}
 .cd-pg > span:first-of-type{flex:1 1 260px}
 .cd-pg .sc{font-family:var(--display);margin:0 6px}
 .cd-tools{opacity:.55;font-size:.8rem}.cd-tools:hover{opacity:1}
+
+/* waiting list on the court display */
+.cd-wait-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+.cd-wait-list li{display:flex;align-items:center;gap:10px;background:color-mix(in srgb,#5FB3F0 16%,var(--surface));border:2px solid var(--stk);border-radius:14px;padding:6px 10px;font-weight:700}
+.cd-wait-list li .n{display:grid;place-items:center;min-width:28px;height:28px;border-radius:50%;background:var(--ink);color:var(--surface);font-size:.9rem}
+.cd-wait-list li .who{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cd-wait-list li .when{font-size:.8rem;font-weight:800;opacity:.75;white-space:nowrap}
+.cd-wait-list li.soon{background:color-mix(in srgb,#F5C04A 30%,var(--surface))}
+.cd-wait-list li.soon .when{opacity:1}

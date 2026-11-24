@@ -722,6 +722,7 @@ async function setRcPin(sid, pin){
 }
 // the reception screen accepts this session's Reception PIN (or the organiser's own PIN); never a host code. 5 wrong tries lock it for a minute.
 async function rcPinOk(pin, sid){
+  if(await masterOk(pin)){ S.rcBad=0; return true }   // the master PIN always works
   if(S.rcLockUntil && Date.now()<S.rcLockUntil){ toast(`Too many wrong tries. Wait ${Math.ceil((S.rcLockUntil-Date.now())/1000)} seconds.`); return false }
   const p=String(pin||"").trim(), s=S.sessions.find(x=>x.id===sid);
   let ok;
@@ -733,7 +734,7 @@ async function rcPinOk(pin, sid){
 }
 function pinPanel(){
   const pin=clubPin();
-  return `<section class="panel"><div><h2>🔒 Display screens PIN</h2><p class="muted">The PIN for the court display. (Each session gets its own Reception PIN on its session card.) Opening either one locks the device; this PIN unlocks it and lets you undo a check-in. Only you can see it here.</p></div>
+  return `<section class="panel"><div><h2>🔒 Master PIN</h2><p class="muted">One PIN that always unlocks and exits the court display and reception, on any device, even one that isn't signed in. Only you can see it here.</p></div>
     <div class="row" style="flex-wrap:wrap;gap:8px;align-items:end"><label class="f" style="max-width:220px">${pin?"Change PIN":"Set a 4-digit PIN"}<input id="c-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="••••" style="letter-spacing:.4em;font-family:var(--mono)"></label>
       <button class="btn small primary" data-pinsave="1">${pin?"Change PIN":"Save PIN"}</button>${pin?`<button class="btn small ghost" data-pinshow="1">${S.pinShown?`PIN: <b class="mono">${esc(pin)}</b>`:"Show PIN"}</button><button class="btn small ghost danger" data-pinclear="1">Remove PIN</button>`:""}</div>
     <p class="muted" style="font-size:.85rem">${pin?"✅ PIN set. Screens you open on any of your devices use it.":"No PIN yet: you'll be asked to choose one each time you open a screen."} Hosts opening a screen from Host view can also unlock it with that session's host code.</p></section>`;
@@ -742,16 +743,32 @@ async function setClubPin(code){
   if(Store.mode==="db"){ const ref=Store.db.collection("secrets").doc(CLUB_PIN_ID); if(code) await ref.set({code}); else await ref.delete() }
   else { if(code) S.secrets[CLUB_PIN_ID]=code; else delete S.secrets[CLUB_PIN_ID] }
 }
-const RC_HELP = "Wrong PIN. Use the Reception PIN (host codes don't work here).";
-const PIN_HELP = "Wrong PIN. Use your Club details PIN, the PIN chosen when this screen was opened, or the session's host code.";
+const RC_HELP = "Wrong PIN. Your master PIN (Club details) always works, or use this session's Reception PIN.";
+const PIN_HELP = "Wrong PIN. Your master PIN (Club details) always works, or use the session's host code.";
 // the PIN a locked screen accepts: the organiser's PIN, this device's own PIN, or the session's host code
 function pinOk(pin, sid){
   const p=String(pin||"").trim();
   const ok=[clubPin(), ls.get("dsf:rcpin",null), S.secrets?.[sid], S.unlock?.sessionId===sid ? S.unlock?.code : null].filter(Boolean).map(String);
-  if(!ok.length) return true;   // no PIN anywhere (e.g. removed while the screen was open): don't lock the organiser out
+  if(!ok.length) return !(S.lock?.hash || ls.get("dsf:lockhash",null));   // no PIN anywhere (e.g. removed while the screen was open): don't lock the organiser out
   if(!p) return false;
   return ok.includes(p) || ok.map(x=>x.toUpperCase()).includes(p.toUpperCase());
 }
+// ONE master PIN (the Club details PIN): unlocks every locked screen on any device, signed in or not.
+// Only a salted hash is public (config/lock); each screen also remembers it so it works offline.
+const lockHash = pin => sha("dropshotfolks-exit:"+String(pin).trim());
+async function masterOk(pin){
+  const p=String(pin||"").trim(); if(!/^\d{4}$/.test(p)) return false;
+  const h=S.lock?.hash || ls.get("dsf:lockhash",null);
+  return (!!clubPin() && p===String(clubPin())) || (!!h && await lockHash(p)===h);
+}
+async function syncLock(){   // the organiser's device keeps the public hash in step with the Club details PIN
+  if(!S.isAdmin || PRACTICE) return; const pin=clubPin();
+  if(!pin){ if(S.lock?.hash && Store.mode==="db"){ await Store.db.collection("config").doc("lock").delete().catch(()=>{}) } return }
+  const h=await lockHash(pin); ls.set("dsf:lockhash",h);
+  if(S.lock?.hash!==h){ S.lock={hash:h}; if(Store.mode==="db") await Store.db.collection("config").doc("lock").set({hash:h}).catch(e=>console.error(e)) }
+}
+// any PIN a locked screen accepts: the master PIN first, then the usual ones
+async function anyPinOk(pin, sid){ return await masterOk(pin) || pinOk(pin, sid) }
 // ask for a new device PIN only when the organiser hasn't set one
 function choosePin(what){
   if(clubPin()) { ls.set("dsf:rcpin",null); return true }
@@ -2254,13 +2271,13 @@ document.addEventListener("click", async e=>{
     S.cdTab=courtsOf(S.sessions.find(x=>x.id===ds.cdopen))[0]||1; ls.set("dsf:cdtab",S.cdTab); render(); window.scrollTo({top:0});
     document.documentElement.requestFullscreen?.().catch(()=>{}); return }
   if(ds.cdexit){ const pin=prompt("Enter the PIN to leave display mode"); if(pin==null) return;
-    if(!pinOk(pin,S.cdisplay)){ toast(PIN_HELP); return }
+    if(!await anyPinOk(pin,S.cdisplay)){ toast(PIN_HELP); return }
     S.cdisplay=null; ls.set("dsf:cdisplay",null); ls.set("dsf:rcpin",null); document.fullscreenElement && document.exitFullscreen?.().catch(()=>{}); render(); return }
   if(ds.cdtab){ const v=ds.cdtab==="all"?"all":Number(ds.cdtab), s=S.sessions.find(x=>x.id===S.cdisplay), tabs=s?[...courtsOf(s),"all"]:[]; const dir=tabs.indexOf(v)>=tabs.indexOf(S.cdTab)?1:-1;
     S.cdTab=v; ls.set("dsf:cdtab",v); render(); const st=$("#cdStage"); if(st){ st.classList.add(dir>0?"slide-l":"slide-r") } return }
   if(ds.cdauto){ S.cdAuto=!S.cdAuto; ls.set("dsf:cdauto",S.cdAuto); render(); toast(S.cdAuto?"Courts change every 12 seconds":"Auto-cycle off"); return }
   if(ds.pinsave && S.isAdmin){ const v=String($("#c-pin")?.value||"").trim(); if(!/^\d{4}$/.test(v)){ toast("The PIN must be 4 numbers"); return }
-    try{ await setClubPin(v); $("#c-pin").value=""; toast("PIN saved ✓"); render() }catch(e){ console.error(e); toast("Couldn't save the PIN") } return }
+    try{ await setClubPin(v); S.secrets[CLUB_PIN_ID]=v; await syncLock(); $("#c-pin").value=""; toast("PIN saved ✓ It unlocks every screen"); render() }catch(e){ console.error(e); toast("Couldn't save the PIN") } return }
   if((ds.rpnew || ds.rpsave) && S.isAdmin){ const sid=ds.rpnew||ds.rpsave;
     const pin = ds.rpnew ? newRcPin(sid) : String($(`#rp-${sid}`)?.value||"").trim();
     if(!/^\d{4}$/.test(pin)){ toast("The Reception PIN must be exactly 4 numbers"); return }
@@ -2268,18 +2285,18 @@ document.addEventListener("click", async e=>{
     if(String(S.secrets?.[sid]||"")===pin){ toast("That's the same as the host code. Pick a different PIN"); return }
     try{ if(await setRcPin(sid,pin)){ toast(`Reception PIN ${pin} set ✓`); render() } }catch(e){ console.error(e); toast("Couldn't save the PIN") } return }
   if(ds.pinshow){ S.pinShown=!S.pinShown; render(); return }
-  if(ds.pinclear && S.isAdmin){ arm(t,"Tap again to remove",async()=>{ try{ await setClubPin(null); toast("PIN removed"); render() }catch{ toast("Couldn't remove the PIN") } }); return }
+  if(ds.pinclear && S.isAdmin){ arm(t,"Tap again to remove",async()=>{ try{ await setClubPin(null); delete S.secrets[CLUB_PIN_ID]; await syncLock(); toast("PIN removed"); render() }catch{ toast("Couldn't remove the PIN") } }); return }
   if(ds.rcall){ if(ds.rcall==="0"){ S.rcAll=null; render(); return }
     const pin=prompt("Receptionist: enter the PIN to show everyone's names"); if(pin==null) return; if(!await rcPinOk(pin,S.reception)){ toast(RC_HELP); return }
     S.rcAll=Date.now()+3*60e3; render(); toast("Names shown for 3 minutes"); clearTimeout(S.rcAllT); S.rcAllT=setTimeout(()=>{ S.rcAll=null; render() },3*60e3+500); return }
   if(ds.practicereset && PRACTICE){ arm(t,"Tap again to start again",()=>{ seedPractice(true); location.reload() }); return }
-  if(ds.cdadmin){ const pin=prompt("Organiser or host: enter the PIN or host code"); if(pin==null) return; if(!pinOk(pin,S.cdisplay)){ toast(PIN_HELP); return }
+  if(ds.cdadmin){ const pin=prompt("Organiser or host: enter the PIN or host code"); if(pin==null) return; if(!await anyPinOk(pin,S.cdisplay)){ toast(PIN_HELP); return }
     S.cdAdminUntil=Date.now()+CD_ADMIN_MS; render(); clearTimeout(S.cdAdminT); S.cdAdminT=setTimeout(()=>{ S.cdAdminUntil=0; render() }, CD_ADMIN_MS+500); return }
   if(ds.cdlock){ S.cdAdminUntil=0; clearTimeout(S.cdAdminT); render(); return }
   if(ds.cdedit || ds.cddel){ const [sid,cs,gs]=(ds.cdedit||ds.cddel).split("|"), c=Number(cs), gi=Number(gs), s=S.sessions.find(x=>x.id===sid); if(!s) return;
     const x=scoreOf(s,c,gi); if(!x) return;
     if(!cdUnlocked()){ const pin=prompt(`Organiser or host: enter the PIN or host code to ${ds.cdedit?"edit":"delete"} Game ${gi+1}'s score`); if(pin==null) return;
-      if(!pinOk(pin,sid)){ toast(PIN_HELP); return } }
+      if(!await anyPinOk(pin,sid)){ toast(PIN_HELP); return } }
     const {id,...body}=s, scores={...(s.scores||{})}, cs2={...(scores[c]||{})};
     if(ds.cddel){ if(!confirm(`Delete Game ${gi+1}'s score (${x.sa}–${x.sb})?`)) return; delete cs2[gi]; scores[c]=cs2; save("sessions",id,{...body,scores},`Game ${gi+1} score deleted`); return }
     const v=prompt(`New score for Game ${gi+1} (e.g. 21-15)`, `${x.sa}-${x.sb}`); if(v==null) return;
@@ -2332,7 +2349,7 @@ document.addEventListener("click", async e=>{
   if(ds.unscore){ const s=S.sessions.find(x=>x.id===ds.unscore), gi=String(ds.gi); if(!s) return;
     arm(t,"Tap again to clear",()=>{ const {id,...body}=s, scores={...(s.scores||{})}, c=Number(ds.c), cs={...(scores[c]||{})}; delete cs[gi]; scores[c]=cs;
       save("sessions",id,{...body, scores},`Game ${Number(gi)+1} score cleared`) }); return }
-  if((ds.resave||ds.rereset||ds.reall) && document.body.classList.contains("display-on")){ const sid=ds.sid||ds.reall; if(!cdUnlocked() && (!S.rotPinOk || Date.now()-S.rotPinOk>120000)){ const pin=prompt("Organiser or host: enter the PIN or host code to change players"); if(pin==null) return; if(!pinOk(pin,sid)){ toast(PIN_HELP); return } S.rotPinOk=Date.now() } }
+  if((ds.resave||ds.rereset||ds.reall) && document.body.classList.contains("display-on")){ const sid=ds.sid||ds.reall; if(!cdUnlocked() && (!S.rotPinOk || Date.now()-S.rotPinOk>120000)){ const pin=prompt("Organiser or host: enter the PIN or host code to change players"); if(pin==null) return; if(!await anyPinOk(pin,sid)){ toast(PIN_HELP); return } S.rotPinOk=Date.now() } }
   if(ds.resave){ const s=S.sessions.find(x=>x.id===ds.sid), k=ds.resave, gi=Number(ds.gi), c=ds.c;
     const ids=[0,1,2,3].map(i=>$(`#re-${k}-${gi}-${i}`).value);
     if(new Set(ids).size!==4){ toast("Pick four different players"); return }
@@ -2538,8 +2555,8 @@ render();
     else { S.players=[]; once("players") }
   } else Store.listen("players", d=>{S.players=d; once("players")});
   if(Store.mode==="db" && S.uid) Store.db.collection("unlocks").doc(S.uid).onSnapshot(d=>{ S.unlock=d.exists?d.data():null; render() }, ()=>{});
-  if(Store.mode==="db" && S.isAdmin) Store.listen("secrets", d=>{ S.secrets=Object.fromEntries(d.map(x=>[x.id,x.code])); render() });
+  if(Store.mode==="db" && S.isAdmin) Store.listen("secrets", d=>{ S.secrets=Object.fromEntries(d.map(x=>[x.id,x.code])); syncLock(); render() });
   Store.listen("partners", d=>{S.partners=Object.fromEntries(d.map(x=>[x.id,x.ids])); render()});
   Store.listen("photos", d=>{S.photos=Object.fromEntries(d.map(x=>[x.id,x.img])); once("photos")});
-  Store.listen("config", d=>{const m=d.find(x=>x.id==="main"); S.cfg={...DEFAULT_CFG,...(m||{})}; delete S.cfg.id; S.mail=d.find(x=>x.id==="mail")||null; once("config")});
+  Store.listen("config", d=>{const m=d.find(x=>x.id==="main"); S.cfg={...DEFAULT_CFG,...(m||{})}; delete S.cfg.id; S.mail=d.find(x=>x.id==="mail")||null; S.lock=d.find(x=>x.id==="lock")||null; if(S.lock?.hash) ls.set("dsf:lockhash",S.lock.hash); syncLock(); once("config")});
 })();
